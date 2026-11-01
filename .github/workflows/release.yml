@@ -31,8 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # MSVC links WebView2Loader statically: the exe runs without a DLL beside it.
+      # MSVC links WebView2Loader statically and crt-static the C runtime: the exe needs neither
+      # a DLL beside it nor the Visual C++ redistributable.
       - run: cargo build --release -p ride-app
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
       - name: Name the asset
         shell: bash
         run: |
