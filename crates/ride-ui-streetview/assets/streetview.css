@@ -1,0 +1,158 @@
+/* ride-ui-streetview - the Street View panel. Ruled panel: hairline frame, a header and a
+   footer separated by rules, a ruler strip under the header. No blur, no shadows, no pill
+   chrome - square corners. Tokens only; every class is prefixed `sv`. */
+
+.sv {
+  --sv-w: 340px;
+  position: relative;
+  display: flex; flex-direction: column;
+  width: var(--sv-w); max-width: 100%; min-width: 0;
+  background: var(--bg-1); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-xs);
+  font: 400 var(--fs-md)/1.35 var(--font-ui);
+  overflow: hidden;
+}
+.sv--large { --sv-w: min(720px, 100%); }
+
+/* embedded in a host panel: the host draws the frame, title and close button; the stage takes all the
+   height that is left between the slim toolbar and the credit line */
+.sv--embedded { --sv-w: 100%; width: 100%; height: 100%; max-height: 100%; border: 0; border-radius: 0; }
+.sv--embedded .sv__head { grid-template-columns: minmax(0, 1fr) auto; height: 28px; }
+.sv--embedded .sv__readout { text-align: left; }
+.sv--embedded .sv__stage { flex: 1 1 auto; aspect-ratio: auto; min-height: 0; }
+.sv--embedded .sv__head, .sv--embedded .sv__foot { flex: none; }
+.sv--embedded .sv__head { border-bottom: 1px solid var(--border-strong); }
+
+/* header: title - readout - actions */
+.sv__head {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+  gap: var(--space-3);
+  height: 32px; padding: 0 var(--space-1) 0 var(--space-3);
+}
+.sv__title {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 600 var(--t-13)/1 var(--font-ui);
+  color: var(--text-dim);
+}
+/* square status marker: colour = state, the state is also written in the readout */
+.sv__title::before {
+  content: ""; width: 7px; height: 7px; flex: none;
+  background: var(--sv-state, var(--text-faint));
+}
+.sv[data-state="ok"] { --sv-state: var(--ok); }
+.sv[data-state="checking"] { --sv-state: var(--accent); }
+.sv[data-state="nokey"] { --sv-state: var(--warn); }
+.sv[data-state="none"] { --sv-state: var(--text-faint); }
+.sv[data-state="error"] { --sv-state: var(--crit); }
+.sv[data-state="offline"] { --sv-state: var(--warn); }
+
+.sv__readout {
+  min-width: 0; text-align: right;
+  font: 500 var(--fs-sm)/1.15 var(--font-ui); font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.sv[data-state="ok"] .sv__readout { font-family: var(--font-num); }
+.sv[data-state="ok"] .sv__readout { color: var(--text); font-size: var(--fs-md); }
+
+.sv__actions { display: flex; align-items: center; }
+.sv-btn {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: var(--radius-xs);
+  background: transparent; color: var(--text-dim);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.sv-btn:hover { background: var(--hover); color: var(--text); }
+.sv-btn:focus-visible, .sv-action:focus-visible { outline: 2px solid var(--accent-line); outline-offset: -2px; }
+
+/* ruler strip: tick every 10 px, longer tick every 50 px */
+.sv__ruler {
+  height: 8px;
+  border-top: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong);
+  background:
+    repeating-linear-gradient(90deg, var(--text-faint) 0 1px, transparent 1px 50px) bottom / 100% 8px no-repeat,
+    repeating-linear-gradient(90deg, var(--border-strong) 0 1px, transparent 1px 10px) bottom / 100% 3px no-repeat;
+  background-color: var(--bg-2);
+}
+
+/* stage: two stacked iframes cross-fading, or a message on top */
+.sv__stage { position: relative; aspect-ratio: 16 / 10; background: var(--bg-2); overflow: hidden; }
+.sv__frame {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+  background: var(--bg-2);
+  opacity: 0; pointer-events: none; z-index: 0;
+  transition: opacity var(--dur-slow) var(--ease);
+}
+.sv__frame.is-front { opacity: 1; pointer-events: auto; z-index: 1; }
+
+/* a downloaded image (offline mode) fills the stage like a frame */
+.sv__img {
+  position: absolute; inset: 0; z-index: 1;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  background: var(--bg-2);
+  opacity: 0;
+  animation: sv-fade var(--dur-slow) var(--ease) forwards;
+}
+@keyframes sv-fade { to { opacity: 1; } }
+
+/* download progress: a 2 px rule along the bottom of the header */
+.sv__head { position: relative; }
+.sv__bar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--border-strong);
+}
+.sv__bar > i { display: block; height: 100%; background: var(--accent); transition: width var(--dur) linear; }
+.sv-btn[aria-pressed="true"] { color: var(--accent); }
+.sv-btn--download:disabled { opacity: 0.4; }
+
+.sv__msg {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + 2px);
+  background: var(--bg-1);
+  overflow: hidden;
+}
+/* rule on the left edge in the state colour */
+.sv__msg::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--sv-state, var(--text-faint));
+}
+.sv__msg-title { font: 600 var(--fs-base)/1.25 var(--font-ui); color: var(--text); }
+.sv__msg-hint { max-width: 46ch; font: 400 var(--fs-sm)/1.45 var(--font-ui); color: var(--text-dim); }
+.sv--compact .sv__msg { gap: 6px; padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-3) + 2px); }
+.sv--compact .sv__msg-hint { font-size: var(--t-13); line-height: 1.35; }
+
+.sv-action {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: var(--space-1);
+  height: 28px; padding: 0 12px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-xs);
+  background: transparent; color: var(--text);
+  font: 600 var(--fs-sm)/1 var(--font-ui);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.sv-action:hover { background: var(--hover); border-color: var(--text-faint); }
+
+/* looking-for-a-panorama: a thin rule sweeping along the top of the stage */
+.sv__scan { position: absolute; left: 0; right: 0; top: 0; height: 2px; overflow: hidden; }
+.sv__scan::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 30%;
+  background: var(--accent);
+  animation: sv-scan 1.4s var(--ease) infinite;
+}
+@keyframes sv-scan { from { left: -30%; } to { left: 100%; } }
+
+/* footer */
+.sv__foot {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  height: 24px; padding: 0 var(--space-3);
+  border-top: 1px solid var(--border-strong);
+  font: 500 var(--t-11)/1 var(--font-ui); color: var(--text-faint);
+}
+.sv__note { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.sv__credit { flex: none; }
+
+@media (max-width: 420px) {
+  .sv--large, .sv { --sv-w: 100%; }
+}

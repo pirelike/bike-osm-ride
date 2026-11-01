@@ -1,0 +1,14 @@
+[package]
+name = "ride-ui-map"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure-Rust slippy map (tiles via the app's tile proxy), route layer, rider marker"
+
+[dependencies]
+ride-model = { workspace = true }
+ride-ui-kit = { workspace = true }
+dioxus = { workspace = true }
+
+[dev-dependencies]
+dioxus-ssr = "0.7"

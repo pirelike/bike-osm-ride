@@ -1,0 +1,15 @@
+# `dx` configuration, used for the Android package (`dx bundle --platform android`).
+# The Windows build does not need it: `cargo build -p ride-app` is enough there.
+
+[application]
+name = "bike-osm-ride"
+
+[bundle]
+identifier = "hu.borbelyhuba.bikeosmride"
+publisher = "bike-osm-ride"
+short_description = "Virtuális tekerés GPX-útvonalakon okos trainerrel."
+
+[permissions]
+# Bluetooth LE for the trainer and the sensors; Android 11 and older also ask for location.
+bluetooth = { description = "Okos trainer, pulzusmérő és Zwift váltó csatlakoztatása." }
+location = { precision = "fine", description = "Android 11 és régebbi rendszeren a Bluetooth-kereséshez kell." }

@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pirelike/bike-osm-ride"
+
+[workspace.dependencies]
+ride-model = { path = "crates/ride-model" }
+ride-route = { path = "crates/ride-route" }
+ride-sim = { path = "crates/ride-sim" }
+ride-ble = { path = "crates/ride-ble" }
+ride-ui-kit = { path = "crates/ride-ui-kit" }
+ride-ui-map = { path = "crates/ride-ui-map" }
+ride-ui-profile = { path = "crates/ride-ui-profile" }
+ride-ui-hud = { path = "crates/ride-ui-hud" }
+ride-ui-dialogs = { path = "crates/ride-ui-dialogs" }
+ride-ui-streetview = { path = "crates/ride-ui-streetview" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs", "io-util"] }
+dioxus = "0.7"
+
+# Debug builds of the dependencies are optimised so the UI diffing and the
+# 10 Hz ride loop stay smooth during development; our own crates stay fast to compile.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = true

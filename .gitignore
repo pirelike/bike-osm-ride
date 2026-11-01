@@ -1,0 +1,8 @@
+# build output (cargo, dx)
+/target/
+**/*.rs.bk
+
+# local tooling and logs
+/.claude/
+*.log
+/dist/

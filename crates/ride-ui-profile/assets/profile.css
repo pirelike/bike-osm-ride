@@ -1,0 +1,486 @@
+/* ride-ui-profile - elevation profile + live charts, drawn like a printed race sheet.
+   Structure is drawn with hairlines, the data is flat: opaque grade-bucket fills, a crisp 2 px
+   ink outline, a km ruler along the bottom, climbs as flags with the category numeral, the
+   rider as a solid disc on a vertical hairline. No gradient, no blur, no glow, no soft shadow.
+   Tokens only (the design kit owns the values); every class is prefixed `profile-`.
+   The profile is one SVG of static geometry plus absolutely positioned HTML overlays, so a
+   moving rider only changes a handful of `left` / `top` values at 10 Hz. */
+
+/* ───────────────────────────── elevation profile ───────────────────────────── */
+
+.profile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  overflow: hidden;
+  background: var(--bg-1);
+  color: var(--text);
+}
+
+/* 32 px bar. The shell docks the transport controls over its left edge: --profile-dock is the
+   width kept free for them (the shell may override it). */
+.profile-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  height: 32px;
+  padding: 0 var(--space-3) 0 var(--profile-dock, 296px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.profile-readout {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* label / value pairs separated by hairlines, like the cells of a bike computer */
+.profile-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
+  border-left: 1px solid var(--rule);
+  line-height: 16px;
+}
+.profile-pair:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.profile-pair-label {
+  margin-right: var(--space-1);
+  font: 500 var(--t-11)/1 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.profile-pair-value {
+  font: 600 var(--t-15)/1 var(--font-num);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  color: var(--text);
+}
+
+.profile-pair-unit {
+  font: 500 var(--t-11)/1 var(--font-num);
+  color: var(--text-dim);
+}
+
+.profile-readout-note { margin-left: var(--space-3); }
+
+.profile-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 64px;
+}
+
+.profile-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* elevation hairlines: drawn above the fill, under the ridden-part cover */
+.profile-grid-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--chart-grid);
+  pointer-events: none;
+}
+
+/* the label sits on its rule at the left edge; an opaque backing keeps it readable over the fill */
+.profile-ytick {
+  position: absolute;
+  left: var(--space-2);
+  transform: translateY(-100%);
+  padding: 1px var(--space-1);
+  background: var(--bg-1);
+  font: 500 var(--t-11)/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* what is already ridden is covered by the surface colour: flat, no gradient */
+.profile-done {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--bg-1);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: width 100ms linear;
+}
+
+/* a climb: a flag on a pole standing on the terrain at the climb start */
+.profile-flag {
+  position: absolute;
+  width: 1px;
+  background: var(--chart-ink);
+  pointer-events: none;
+}
+
+.profile-flag-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: stretch;
+  height: 18px;
+}
+
+.profile-flag-box {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  padding: 0 var(--space-1);
+  background: var(--c);
+  border: 1px solid var(--chart-ink);
+  color: var(--ink);
+  font: 700 var(--t-13)/1 var(--font-num);
+}
+
+.profile-flag-label {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  background: var(--bg-1);
+  border: 1px solid var(--chart-ink);
+  border-left: 0;
+  font: 500 var(--t-11)/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* the rider: a vertical hairline and a solid disc with a paper ring */
+.profile-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--chart-ink);
+  pointer-events: none;
+  transition: left 100ms linear;
+}
+
+.profile-guide--hover {
+  background: var(--text-dim);
+  transition: none;
+}
+
+.profile-dot {
+  position: absolute;
+  margin: -8px 0 0 -8px;
+  overflow: visible;
+  pointer-events: none;
+  transition: left 100ms linear, top 100ms linear;
+}
+
+/* read-out: the kit tip class (1 px border, hard offset) plus placement */
+.profile-tip {
+  position: absolute;
+  top: var(--space-2);
+  z-index: 3;
+  min-width: 112px;
+  padding: var(--space-2) var(--space-3);
+  transform: translateX(8px);
+}
+
+.profile-tip--flip { transform: translateX(calc(-100% - 8px)); }
+
+.profile-tip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  line-height: 1.5;
+}
+
+.profile-tip-label {
+  font: 500 var(--t-11)/1.5 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.profile-tip-value {
+  font: 600 var(--t-15)/1.3 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.profile-hit {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.profile-plot-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 500 var(--t-13)/1.3 var(--font-ui);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+/* the km ruler, like a map scale: a rule, a tick per step, a numeral per major step and the
+   climbs as bars in the category colour */
+.profile-ruler {
+  position: relative;
+  flex: none;
+  height: 32px;
+  border-top: 1px solid var(--chart-ink);
+}
+
+.profile-climbbar {
+  position: absolute;
+  top: 1px;
+  height: 4px;
+  background: var(--c);
+}
+
+.profile-tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 4px;
+  background: var(--chart-ink);
+}
+.profile-tick--major { height: 8px; }
+
+.profile-tick-label {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  transform: translateX(-50%);
+  font: 600 var(--t-13)/1 var(--font-num);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  color: var(--text);
+  white-space: nowrap;
+}
+.profile-tick-label--start { transform: translateX(1px); }
+.profile-tick-label--end { transform: translateX(-100%); }
+
+/* ───────────────────────────── empty profile ───────────────────────────── */
+
+.profile--empty {
+  display: grid;
+  place-items: center;
+}
+
+.profile-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.profile-empty-title {
+  font: 600 var(--t-15)/1.2 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.profile-empty-hint {
+  max-width: 46ch;
+  font: 400 var(--t-13)/1.35 var(--font-ui);
+}
+
+/* ───────────────────────────── live chart ───────────────────────────── */
+
+/* a flush rail panel: head row, one flat area with a 2 px ink line, the zone strip, the time scale */
+.profile-chart {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-1);
+  color: var(--text);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.profile-chart-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  height: 36px;
+  padding: var(--space-2) var(--space-3) 0 var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.profile-chart-title {
+  flex: none;
+  font: 600 var(--t-13)/1 var(--font-ui);
+  color: var(--text);
+}
+
+.profile-chart-caption {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 400 var(--t-11)/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.profile-chart-zone {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  flex: none;
+  font: 500 var(--t-11)/1 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.profile-chart-sw {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--c);
+}
+
+.profile-chart-now {
+  display: inline-flex;
+  align-items: baseline;
+  flex: none;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.profile-chart-value {
+  font: 600 var(--t-20)/1 var(--font-num);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  color: var(--text);
+}
+.profile-chart-value.is-dim { color: var(--text-faint); }
+
+.profile-chart-unit {
+  font: 500 var(--t-11)/1 var(--font-num);
+  color: var(--text-dim);
+}
+
+.profile-chart-plot {
+  position: relative;
+  height: 64px;
+  border-bottom: 1px solid var(--chart-ink);
+}
+
+.profile-chart-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.profile-chart-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--chart-grid);
+  pointer-events: none;
+}
+
+/* the scale is written on its rule at the left edge */
+.profile-chart-ytick,
+.profile-chart-ftp {
+  position: absolute;
+  transform: translateY(-100%);
+  padding: 0 var(--space-1);
+  font: 500 var(--t-11)/1.2 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.profile-chart-ytick {
+  left: var(--space-1);
+  background: var(--bg-1);
+}
+.profile-chart-ftp {
+  right: var(--space-1);
+  font-weight: 600;
+  color: var(--text);
+}
+.profile-chart-ftp--below { transform: none; }
+
+.profile-chart-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--text-dim);
+  pointer-events: none;
+}
+
+.profile-chart-hit {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+/* zone colours live here, one cell per run of equal zone, 8 px along the bottom edge */
+.profile-chart-strip {
+  display: block;
+  width: 100%;
+  height: 8px;
+}
+
+.profile-chart-times {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3) var(--space-2) var(--space-4);
+  font: 500 var(--t-11)/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.profile-chart-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 500 var(--t-11)/1.3 var(--font-ui);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.profile-chart-empty {
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  font: 500 var(--t-13)/1.3 var(--font-ui);
+  color: var(--text-faint);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-done,
+  .profile-guide,
+  .profile-dot {
+    transition: none;
+  }
+}

@@ -1,0 +1,11 @@
+[package]
+name = "ride-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cycling physics, ride engine, statistics, recorder and TCX export"
+
+[dependencies]
+ride-model = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

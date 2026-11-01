@@ -1,0 +1,22 @@
+[package]
+name = "ride-ble"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "BLE sensor hub (FTMS trainer, HR, power meter, CSC) + simulated rider backend"
+
+[dependencies]
+ride-model = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+btleplug = "0.13"
+ftms = "0.2"
+futures = "0.3"
+uuid = "1"
+# Zwift Click / Play handshake and AES-CCM (RustCrypto, MIT OR Apache-2.0).
+p256 = { version = "0.13", features = ["ecdh"] }
+hkdf = "0.12"
+sha2 = "0.10"
+aes = "0.8"
+ccm = "0.5"
+rand_core = { version = "0.6", features = ["getrandom"] }

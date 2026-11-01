@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="bike-osm-ride test fixture" xmlns="http://www.topografix.com/GPX/1/1">
+ <trk><name>Csonka letöltés</name><trkseg>
+  <trkpt lat="47.507200" lon="19.028500"><ele>152.0</ele></trkpt>
+  <trkpt lat="47.507256" lon="19.028221"><ele>152.6</ele></trkpt>
+  <trkpt lat="47.507312" lon="19.027941"><ele>153.2</ele></trkpt>
+  <trkpt lat="47.507368" lon="19.027662"><ele>153.8</ele></trkpt>
+  <trkpt lat="47.507424" lon="19.027382"><ele>154.4</ele></trkpt>
+  <trkpt lat="47.507479" lon="19.027103"><ele>154.9</ele></trkpt>
+  <trkpt lat="47.507535" lon="19.026824"><ele>155.5</ele></trkpt>
+  <trkpt lat="47.507591" lon="19.026544"><ele>156.1</ele></trkpt>
+  <trkpt lat="47.507647" lon="19.026265"><ele>156.7</ele></trkpt>
+  <trkpt lat="47.507703" lon="19.025985"><ele>157.3</ele></trkpt>
+  <trkpt lat="47.507759" lon="19.025706"><ele>157.9</ele></trkpt>
+  <trkpt lat="47.507815" lon="19.025426"><ele>158.5</ele></trkpt>
+  <trkpt lat="47.507871" lon="19.025147"><ele>159.1</ele></trkpt>
+  <trkpt lat="47.507926" lon="19.024868"><ele>159.6</ele></trkpt>
+  <trkpt lat="47.507982" lon="19.024588"><ele>160.2</ele></trkpt>
+  <trkpt lat="47.508038" lon="19.024309"><ele>160.8</ele></trkpt>
+  <trkpt lat="47.508094" lon="19.024029"><ele>161.4</ele></trkpt>
+  <trkpt lat="47.508150" lon="19.023750"><ele>162.0</ele></trkpt>
+  <trkpt lat="47.508206" lon="19.023471"><ele>162.6</ele></trkpt>
+  <trkpt lat="47.508262" lon="19.023191"><ele>163.2</ele></trkpt>
+  <trkpt lat="47.508318" lon="19.022912"><ele>163.8</ele></trkpt>
+  <trkpt lat="47.508374" lon="19.022632"><ele>164.4</ele></trkpt>
+  <trkpt lat="47.508429" lon="19.022353"><ele>164.9</ele></trkpt>
+  <trkpt lat="47.508485" lon="19.022074"><ele>165.5</ele></trkpt>
+  <trkpt lat="47.508541" lon="19.021794"><ele>166.1</ele></trkpt>
+  <trkpt lat="47.508597" lon="19.021515"><ele>166.7</ele></trkpt>
+  <trkpt lat="47.508653" lon="19.021235"><ele>167.3</ele></trkpt>
+  <trkpt lat="47.508709" lon="19.020956"><ele>167.9</ele></trkpt>
+  <trkpt lat="47.508765" lon="19.020676"><ele>168.5</ele></trkpt>
+  <trkpt lat="47.508821" lon="19.020397"><ele>169.1</ele></trkpt>
+  <trkpt lat="47.5100" lon="19.0

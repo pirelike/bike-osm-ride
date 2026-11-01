@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-made fixture for ride-route tests: <rte>/<rtept> route with <wpt> waypoints. Not a real track. -->
+<gpx version="1.1" creator="bike-osm-ride test fixture" xmlns="http://www.topografix.com/GPX/1/1">
+ <metadata><name>Moszkva tér - János-hegy (tervezett)</name></metadata>
+ <wpt lat="47.51340" lon="18.98350"><ele>455.0</ele><name>Normafa</name></wpt>
+ <wpt lat="47.50500" lon="18.96500"><ele>500.0</ele><name>Libegő &amp; Zugligeti út</name></wpt>
+ <wpt lat="47.50220" lon="18.96060"><ele>527.0</ele><name>Erzsébet-kilátó</name></wpt>
+ <wpt lat="46.90000" lon="17.90000"><ele>104.0</ele><name>Balaton (túl messze)</name></wpt>
+ <rte>
+  <name>Moszkva tér - János-hegy</name>
+  <rtept lat="47.50720" lon="19.02850"><ele>152.0</ele></rtept>
+  <rtept lat="47.50910" lon="19.01900"><ele>172.0</ele></rtept>
+  <rtept lat="47.51030" lon="19.00800"><ele>215.0</ele></rtept>
+  <rtept lat="47.51150" lon="18.99900"><ele>290.0</ele></rtept>
+  <rtept lat="47.51340" lon="18.98350"><ele>455.0</ele></rtept>
+  <rtept lat="47.51000" lon="18.97400"><ele>480.0</ele></rtept>
+  <rtept lat="47.50400" lon="18.96600"><ele>505.0</ele></rtept>
+  <rtept lat="47.50220" lon="18.96060"><ele>527.0</ele></rtept>
+ </rte>
+</gpx>

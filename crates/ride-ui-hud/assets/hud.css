@@ -1,0 +1,383 @@
+/* ride-ui-hud - the head unit: power hero, 2 x 2 data grid, stats table, next-climb panel and the
+   transport bar. Structure is drawn with hairlines (--rule between cells, --rule-strong between
+   panels), never with floating cards. Tokens only: every colour is a custom property from the
+   design kit, or a palette colour that the component passes inline as the --c property. Numerals
+   are the kit's condensed tabular figures; labels are sentence case. Class names are prefixed
+   `hud-`; the kit's own classes (.cell, .zonebar, .badge, .btn, .progress, .num) are used in the
+   markup and styled by the kit. */
+
+/* ───────────────────────────── shared bits ───────────────────────────── */
+
+.hud-metrics,
+.hud-stats {
+  min-width: 0;
+  background: var(--bg-1);
+  color: var(--text);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.hud-label {
+  font: 500 var(--t-11)/1.2 var(--font-ui);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.hud-label--faint { color: var(--text-faint); }
+
+/* a square data swatch next to a word: the colour never stands alone */
+.hud-sw {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--c, var(--text-faint));
+}
+
+/* a numeral box that reserves its digits, so the unit beside it never moves */
+.hud-n {
+  display: inline-block;
+  min-width: var(--w, 3ch);
+  text-align: left;
+}
+.hud-n.is-dim { color: var(--text-faint); }
+
+/* ───────────────────────────── power hero ───────────────────────────── */
+
+.hud-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.hud-hero__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-hero__state {
+  margin-left: auto;
+  height: 20px;
+  padding: 0 var(--space-2);
+}
+
+.hud-hero__body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.hud-hero__num {
+  display: block;
+  white-space: nowrap;
+}
+.hud-hero__num.is-dim {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.hud-hero__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding-bottom: var(--space-1);
+}
+
+.hud-kv {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.hud-zonebar { margin-top: var(--space-2); }
+
+.hud-zlabels {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  font: 600 var(--t-11)/1 var(--font-num);
+  color: var(--text-faint);
+}
+.hud-zlabels span { text-align: center; }
+.hud-zlabels .is-current { color: var(--text); }
+
+.hud-hero__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.hud-zone {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: 600 var(--t-15)/1 var(--font-ui);
+  color: var(--text);
+}
+.hud-zone--none {
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+/* ───────────────────────────── data grid ───────────────────────────── */
+
+.hud-grid { border-top: 1px solid var(--rule); }
+
+.hud-cell__value { min-width: 0; }
+/* trim the numeral box to cap height and baseline so it aligns with the hairlines (progressive enhancement) */
+.hud-cell__value .hud-n { text-box: trim-both cap alphabetic; }
+
+.hud-aux {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font: 400 var(--t-11)/1.2 var(--font-ui);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.hud-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-2);
+  border-top: 1px solid var(--rule);
+  font: 400 var(--t-11)/1.35 var(--font-ui);
+  color: var(--text-dim);
+}
+.hud-note__title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ───────────────────────────── stats table ───────────────────────────── */
+
+.hud-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-tbl th,
+.hud-tbl td {
+  height: 24px;
+  padding: 0 var(--space-2);
+  border-top: 1px solid var(--rule);
+  border-left: 1px solid var(--rule);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-tbl th:first-child,
+.hud-tbl td:first-child { border-left: 0; }
+.hud-tbl tbody:first-child .hud-tbl__head th { border-top: 0; }
+
+.hud-tbl__corner { width: 120px; }
+
+.hud-tbl .hud-tbl__head th {
+  height: 20px;
+  background: var(--bg-2);
+  font: 500 var(--t-11)/1 var(--font-ui);
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.hud-tbl tbody tr:not(.hud-tbl__head) th {
+  text-align: left;
+  font: 500 var(--t-13)/1 var(--font-ui);
+  color: var(--text);
+}
+
+.hud-tbl__unit {
+  margin-left: var(--space-1);
+  font: 400 var(--t-11)/1 var(--font-ui);
+  color: var(--text-faint);
+}
+
+.hud-tbl td {
+  text-align: right;
+  font: 600 var(--t-15)/1 var(--font-num);
+  color: var(--text);
+}
+.hud-tbl td.is-dim { color: var(--text-faint); }
+
+/* ───────────────────────────── next-climb panel ───────────────────────────── */
+
+.hud-climb {
+  width: 100%;
+  background: var(--bg-1);
+}
+.hud-climb__none {
+  margin: 0;
+  padding: var(--space-3);
+  font: 400 var(--t-13)/1.4 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.hud-climb__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.hud-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* the category as a flag: a square of the category colour with its numeral (4 3 2 1 HC) */
+.hud-flag {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 16px;
+  padding: 0 var(--space-1);
+  background: var(--c);
+  border: 1px solid var(--chart-ink);
+  font: 700 var(--t-11)/1 var(--font-num);
+}
+
+.hud-climb__hero {
+  display: flex;
+  align-items: baseline;
+  padding: var(--space-3);
+  white-space: nowrap;
+}
+
+.hud-climb__cells { border-top: 1px solid var(--rule); }
+
+.hud-climb__bar { border-top: 1px solid var(--rule); }
+
+.hud-climb__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--rule);
+  font: 500 var(--t-11)/1.2 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.hud-climb__pct {
+  font: 600 var(--t-13)/1 var(--font-num);
+  color: var(--text);
+}
+
+/* ───────────────────────────── workout panel ─────────────────────────────
+   The rail's top block while a structured workout drives the trainer (ERG). */
+.hud-workout {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.hud-workout__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+.hud-workout__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--t-13)/1.2 var(--font-ui);
+}
+.hud-workout__count {
+  margin-left: auto;
+  flex: none;
+  font: 600 var(--t-11)/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.hud-workout__body { display: flex; flex-direction: column; }
+.hud-workout__step {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) 0;
+}
+.hud-workout__stepname { font: 600 var(--t-15)/1.25 var(--font-ui); min-width: 0; }
+.hud-workout__kind {
+  flex: none;
+  font: 500 var(--t-11)/1 var(--font-ui);
+  color: var(--text-dim);
+}
+.hud-workout__target {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-2);
+}
+.hud-workout__w { white-space: nowrap; }
+.hud-workout__sub {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font: 500 var(--t-11)/1.3 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  text-align: right;
+}
+.hud-workout__cells { border-top: 1px solid var(--rule); }
+.hud-workout__bar { border-top: 1px solid var(--rule); }
+.hud-workout__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 5px var(--space-4);
+  font: 500 var(--t-11)/1.2 var(--font-ui);
+  color: var(--text-dim);
+}
+.hud-workout__pct {
+  flex: none;
+  font: 600 var(--t-13)/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.hud-workout--done .hud-workout__w { color: var(--ok); }
+
+/* ───────────────────────────── transport bar ───────────────────────────── */
+
+/* a 32 px bar: the shell docks it in the top-left corner of the profile panel */
+.hud-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 32px;
+  padding: 0 0 0 var(--space-3);
+}
+
+.hud-controls__btn {
+  --btn-h: 24px;
+  padding: 0 var(--space-3);
+  font-size: var(--t-13);
+}
+
+/* the panels of the shell are freely resizable: the data grid follows the width of its own panel */
+.hud-metrics { container-type: inline-size; }
+.hud-grid { --cols: 2; }
+@container (min-width: 560px) {
+  .hud-grid { --cols: 4; }
+}

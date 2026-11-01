@@ -1,0 +1,310 @@
+/* ride-ui-map — slippy map: tile grid, grade-coloured route, markers, controls, scale bar.
+   Token names come from ride_ui_kit (`assets/kit.css`), data colours from
+   `ride_ui_kit::palette` (set inline on the route paths). No hard-coded colours here,
+   every colour is a custom-property reference so both themes follow automatically.
+
+   Look: a quiet printed map. The basemap is pushed to near-grey so the route, the rider and
+   nothing else carries colour. Chrome is flat: solid surfaces, 1 px rules, square corners, no
+   blur, no glow, no soft shadow. The only accent on the map is the rider.
+
+   Layout rules that keep the map cheap to move:
+   - `.map__layer` carries the whole camera as one CSS transform; the tiles inside sit at
+     fixed positions (`transform: translate3d(…)`) and are never re-laid out;
+   - the route SVG group carries the same world→screen transform, so the path data is only
+     rebuilt when the route or the integer tile zoom changes;
+   - markers are projected into screen pixels, so their size never scales with the zoom.      */
+
+.map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+  cursor: grab;
+}
+.map:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.map.is-dragging { cursor: grabbing; }
+.map--empty { cursor: default; }
+
+/* the viewport clip: everything that moves with the camera lives in here */
+.map__canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+
+/* the camera: one transform per frame, no layout */
+.map__layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* one tile. Size matches `ride_ui_map::mercator::TILE_PX`; the layer scales it. */
+.map-tile {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* 1 px overlap: fractional zoom resamples every tile, and without it the shared edges show
+     as light seams across the map (the images are painted in order, so the overlap is invisible) */
+  width: 257px;
+  height: 257px;
+  max-width: none;
+  border: 0;
+  display: block;
+  background: var(--bg-2);
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}
+/* a missing or failed tile leaves the map background visible (never a broken-image icon) */
+.map-tile.is-failed { visibility: hidden; }
+
+/* Basemap treatment. Every style downloads the same keyless OpenStreetMap raster tiles; the
+   looks are produced here. The filter sits on the tiles only, never on the route or the
+   markers, so data colours stay exact. Dark = inverted to graphite and drained of colour;
+   light = washed paper-grey. Parks, water and landuse all collapse to a few quiet grey steps,
+   streets stay legible, labels stay readable. OSM = the raw tiles. */
+.map[data-map-style="dark"] .map-tile {
+  filter: invert(1) hue-rotate(180deg) saturate(0.1) sepia(0.12) brightness(0.74) contrast(0.86);
+}
+.map[data-map-style="light"] .map-tile {
+  filter: saturate(0.08) sepia(0.14) brightness(1.04) contrast(0.82);
+}
+
+/* ───────────────────────────── route ───────────────────────────── */
+
+.map-route {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+.map-route__casing,
+.map-route__seg {
+  fill: none;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  /* the group is scaled with the map; the line itself keeps its screen width */
+  vector-effect: non-scaling-stroke;
+}
+/* a solid casing in the opposite ink of the theme: every grade colour keeps >= 1.8:1 on it */
+.map-route__casing {
+  stroke: var(--route-casing);
+  stroke-linecap: round;
+  stroke-width: 8;
+}
+.map-route__seg { stroke-width: 4; }
+
+/* ───────────────────────────── markers ───────────────────────────── */
+
+.map-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.map-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.map-marker__body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* start = hollow ring, finish = solid square, both ringed in the casing colour */
+.map-pin {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  box-sizing: border-box;
+  border: 3px solid var(--chart-ink);
+  background: var(--route-casing);
+  border-radius: 50%;
+  outline: 2px solid var(--route-casing);
+}
+.map-pin--finish {
+  border-radius: 0;
+  background: var(--chart-ink);
+  border-width: 2px;
+  border-color: var(--chart-ink);
+}
+/* flat label plate: 1 px rule, solid surface, sentence case */
+.map-marker__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-1);
+  font: 500 var(--t-11) / 1 var(--font-ui);
+  white-space: nowrap;
+  color: var(--text);
+}
+
+/* rider: solid accent disc inside a paper ring + a heading wedge that points where the
+   rider is going. Nothing pulses. */
+.map-rider__wedge {
+  position: absolute;
+  left: -24px;
+  top: -24px;
+  width: 48px;
+  height: 48px;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+.map-rider__wedge svg { display: block; width: 48px; height: 48px; overflow: visible; }
+.map-rider__wedge path {
+  fill: var(--accent);
+  stroke: var(--marker-ring);
+  stroke-width: 2;
+  stroke-linejoin: miter;
+  paint-order: stroke fill;
+}
+.map-rider__dot {
+  position: absolute;
+  left: -8px;
+  top: -8px;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 2px solid var(--marker-ring);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* ───────────────────────────── controls ───────────────────────────── */
+
+.map-controls {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: var(--layer-overlay);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.map-controls > * { pointer-events: auto; }
+/* the style switcher: one ruled strip, its own border carries the frame */
+.map-controls__style { display: inline-flex; background: var(--bg-1); }
+.map-controls__style .seg { border-radius: 0; background: var(--bg-1); }
+/* zoom / follow / recentre: the kit's ruled vertical button stack, 32 px squares */
+.map-controls .btn-group { border-radius: 0; }
+.map-controls .btn-group > .btn,
+.map-controls .btn-group > .btn:first-child,
+.map-controls .btn-group > .btn:last-child { border-radius: 0; background: var(--bg-1); }
+.map-controls .btn-group > .btn:hover { background: var(--bg-2); }
+.map-controls .btn-group > .btn.is-active,
+.map-controls .btn-group > .btn[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg-1); }
+
+/* ───────────────────────────── scale bar + attribution ───────────────────────────── */
+
+.map-scale {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-6);
+  z-index: var(--layer-overlay);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 4px 8px;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-1);
+  color: var(--text);
+  pointer-events: none;
+}
+.map-scale__label {
+  font: 600 var(--t-11) / 1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.map-scale__bar {
+  height: 4px;
+  border: 2px solid var(--chart-ink);
+  border-top: 0;
+}
+
+.map-attrib {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: var(--layer-overlay);
+  padding: 2px 8px;
+  border-top: 1px solid var(--rule-strong);
+  border-left: 1px solid var(--rule-strong);
+  background: var(--bg-1);
+  color: var(--text-dim);
+  font: 400 var(--t-11) / 1.4 var(--font-ui);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ───────────────────────────── picture-in-picture ─────────────────────────────
+   A small map keeps zoom/follow/recentre and the required attribution, but the style
+   switcher and the printed scale bar would take most of the frame. */
+.map--compact .map-controls__style,
+.map--compact .map-scale { display: none; }
+.map--compact .map-controls { top: var(--space-1); right: var(--space-1); gap: 4px; }
+.map--compact .map-controls .btn-group > .btn { width: 28px; height: 28px; }
+.map--compact .map-attrib { padding: 1px 4px; }
+
+/* ───────────────────────────── empty route ───────────────────────────── */
+
+.map-empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  max-width: min(360px, calc(100% - 2 * var(--space-5)));
+  padding: var(--space-4);
+  border: 1px solid var(--rule-strong);
+  border-top: 2px solid var(--rule-ink);
+  background: var(--bg-1);
+  color: var(--text-dim);
+  text-align: left;
+}
+.map-empty > svg { color: var(--text-dim); }
+.map-empty__title {
+  font: 600 var(--t-20) / 1.15 var(--font-display);
+  color: var(--text);
+}
+.map-empty__hint { font: 400 var(--t-13) / 1.45 var(--font-ui); color: var(--text-dim); }
+
+/* ───────────────────────────── narrow windows ───────────────────────────── */
+
+@media (max-width: 720px) {
+  .map-controls { top: var(--space-2); right: var(--space-2); }
+  .map-scale { right: var(--space-2); bottom: var(--space-6); }
+}

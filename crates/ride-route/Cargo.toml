@@ -1,0 +1,19 @@
+[package]
+name = "ride-route"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "GPX / bikerouter import, route processing (resample, smooth, grade, climbs) and local persistence"
+
+[dependencies]
+ride-model = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+quick-xml = "0.42"
+# Public services (BRouter, Open-Meteo). rustls only, no native-tls / OpenSSL.
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+
+[dev-dependencies]
+tempfile = "3"

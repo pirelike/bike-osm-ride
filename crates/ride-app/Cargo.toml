@@ -1,0 +1,47 @@
+[package]
+name = "ride-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "bike-osm-ride desktop app (Dioxus + WebView2)"
+build = "build.rs"
+
+[[bin]]
+name = "bike-osm-ride"
+path = "src/main.rs"
+
+[dependencies]
+ride-model = { workspace = true }
+ride-route = { workspace = true }
+ride-sim = { workspace = true }
+ride-ble = { workspace = true }
+ride-ui-kit = { workspace = true }
+ride-ui-map = { workspace = true }
+ride-ui-profile = { workspace = true }
+ride-ui-hud = { workspace = true }
+ride-ui-dialogs = { workspace = true }
+ride-ui-streetview = { workspace = true }
+dioxus = { workspace = true, features = ["desktop"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Tile proxy (same feature set as ride-route so the TLS stack is built once).
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+
+[dev-dependencies]
+png = "0.18"
+tempfile = "3"
+
+# The browser panel docks the Firefox window into the app window (Win32 child windows).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
+
+# Native open/save dialogs; same feature set as dioxus-desktop so it is built once.
+# Android has no native file dialog (see `controller::pick_file`).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+
+# On Android the same desktop renderer runs inside the mobile shell `dx` generates.
+[target.'cfg(target_os = "android")'.dependencies]
+dioxus = { workspace = true, features = ["mobile"] }
