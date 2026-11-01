@@ -210,7 +210,6 @@ mod tests {
     fn identity_matches_the_package() {
         assert_eq!(APP_NAME, "bike-osm-ride");
         assert_eq!(APP_VERSION, env!("CARGO_PKG_VERSION"));
-        assert_eq!(APP_VERSION, "0.1.0");
         assert!(PROJECT_LICENSE.contains("MIT") && PROJECT_LICENSE.contains("Apache-2.0"));
     }
 

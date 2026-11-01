@@ -973,7 +973,8 @@ impl Inner {
     // ───── sensor hub ─────
 
     fn start_hub(&mut self) -> Option<UnboundedReceiver<SensorEvent>> {
-        let hex_log = boot().hooks.ble_log.then(paths::ble_log_path);
+        // Always on (rotated at 8 MB): the only evidence when a trainer misbehaves at home.
+        let hex_log = Some(paths::ble_log_path());
         if let Some(dir) = hex_log.as_ref().and_then(|p| p.parent()) {
             let _ = std::fs::create_dir_all(dir);
         }

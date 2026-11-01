@@ -282,6 +282,9 @@ impl Default for ControlConfig {
     }
 }
 
+/// A refused Start / grade / target write is retried this many times in a row.
+const MAX_WRITE_RETRIES: u32 = 40;
+
 /// What the connected trainer told us it can do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrainerCaps {
@@ -384,6 +387,12 @@ pub struct ControlSession {
     control_attempts: u32,
     reclaims: u32,
     retried_start_for_sim: bool,
+    /// The trainer never answered Request Control with an indication: control is assumed and
+    /// writes are not waited for (what other trainer apps do with such trainers).
+    silent: bool,
+    /// Consecutive transport-level write failures of the current target (ATT "insufficient
+    /// resources" from busy trainers); the write is retried while this stays small.
+    failed_streak: u32,
     /// Shutting down: never ask for control any more.
     closing: bool,
     /// Last time each (static) warning text was shown, for the cooldown.
@@ -413,6 +422,8 @@ impl ControlSession {
             control_attempts: 0,
             reclaims: 0,
             retried_start_for_sim: false,
+            silent: false,
+            failed_streak: 0,
             closing: false,
             warned: Vec::new(),
         }
@@ -437,6 +448,8 @@ impl ControlSession {
         self.control_attempts = 0;
         self.reclaims = 0;
         self.retried_start_for_sim = false;
+        self.silent = false;
+        self.failed_streak = 0;
         self.closing = false;
         let mut outs = Vec::new();
         if caps.has_control_point {
@@ -463,6 +476,7 @@ impl ControlSession {
     pub fn set_simulation(&mut self, sim: TrainerSim, _now: Instant) {
         self.sim = Some(sim);
         self.mode = Mode::Sim;
+        self.failed_streak = 0;
         self.after_target_change();
     }
 
@@ -472,6 +486,7 @@ impl ControlSession {
         }
         self.target_power = Some(watts);
         self.mode = Mode::Power;
+        self.failed_streak = 0;
         self.after_target_change();
     }
 
@@ -529,6 +544,7 @@ impl ControlSession {
         let Some(resp) = parse_cp_response(bytes) else {
             return outs;
         };
+        self.failed_streak = 0;
         let Some(inflight) = self.inflight.take_if(|i| i.opcode == resp.request_opcode) else {
             return outs; // unsolicited / duplicate: ignore, keep waiting for ours
         };
@@ -597,11 +613,29 @@ impl ControlSession {
 
     /// A Control Point write failed at the transport level (not a trainer rejection).
     pub fn on_write_failed(&mut self, now: Instant) {
-        if let Some(inflight) = self.inflight.take() {
-            if inflight.intent == Intent::RequestControl {
+        let Some(inflight) = self.inflight.take() else {
+            return;
+        };
+        match inflight.intent {
+            Intent::RequestControl => {
                 self.phase = Phase::NeedControl;
                 self.retry_at = Some(now + self.cfg.retry_delay);
             }
+            // Busy trainers refuse writes now and then (ATT 0x11); try again after the write gap.
+            Intent::Start | Intent::Sim | Intent::Target
+                if self.failed_streak < MAX_WRITE_RETRIES =>
+            {
+                self.failed_streak += 1;
+                if matches!(inflight.intent, Intent::Sim | Intent::Target) {
+                    // the value never arrived: it must not count as sent
+                    self.last_target_bytes = None;
+                    self.last_target_sent = None;
+                }
+                if !self.queue.contains(&inflight.intent) {
+                    self.queue.push_front(inflight.intent);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -613,15 +647,28 @@ impl ControlSession {
         let mut outs = Vec::new();
 
         if let Some(inf) = self.inflight {
-            if now.saturating_duration_since(inf.sent_at) >= self.cfg.response_timeout {
+            let timeout = if self.silent {
+                self.cfg.min_write_gap
+            } else {
+                self.cfg.response_timeout
+            };
+            if now.saturating_duration_since(inf.sent_at) >= timeout {
                 self.inflight = None;
-                self.warn(
-                    now,
-                    "A trainer nem válaszolt időben egy vezérlőparancsra.",
-                    &mut outs,
-                );
-                if inf.intent == Intent::RequestControl {
-                    self.control_failed(now, &mut outs);
+                if inf.intent == Intent::RequestControl
+                    && self.control_attempts >= self.cfg.control_retries
+                {
+                    // Never an answer, not a refusal: drive the trainer without confirmations.
+                    self.silent = true;
+                    self.grant(&mut outs);
+                } else if !self.silent {
+                    self.warn(
+                        now,
+                        "A trainer nem válaszolt időben egy vezérlőparancsra.",
+                        &mut outs,
+                    );
+                    if inf.intent == Intent::RequestControl {
+                        self.control_failed(now, &mut outs);
+                    }
                 }
             } else {
                 return outs;
@@ -867,21 +914,25 @@ impl ControlSession {
                 .is_some_and(|t| now.saturating_duration_since(t) < self.cfg.keepalive)
     }
 
+    /// Control is ours (granted, or assumed for a silent trainer): replay what the app wanted
+    /// before the (re)connect / control loss.
+    fn grant(&mut self, outs: &mut Vec<Out>) {
+        self.phase = Phase::Controlled;
+        self.control_attempts = 0;
+        self.retry_at = None;
+        self.last_target_bytes = None;
+        outs.push(Out::ControlGranted);
+        if !self.user_paused && !self.device_blocked && (self.wants_run || self.mode != Mode::None)
+        {
+            self.push_unique(Intent::Start);
+            self.ensure_target_intent();
+        }
+    }
+
     fn handle_control_response(&mut self, result: CpResult, now: Instant, outs: &mut Vec<Out>) {
         if result == CpResult::Success {
-            self.phase = Phase::Controlled;
-            self.control_attempts = 0;
-            self.retry_at = None;
-            self.last_target_bytes = None;
-            outs.push(Out::ControlGranted);
-            // replay what the app wanted before the (re)connect / control loss
-            if !self.user_paused
-                && !self.device_blocked
-                && (self.wants_run || self.mode != Mode::None)
-            {
-                self.push_unique(Intent::Start);
-                self.ensure_target_intent();
-            }
+            self.silent = false;
+            self.grant(outs);
             return;
         }
         if result == CpResult::ControlNotPermitted {
@@ -1032,6 +1083,75 @@ mod tests {
         assert_eq!(w, vec![vec![0x11, 0x00, 0x00, 0xF4, 0x01, 0x28, 0x33]]);
         s.on_indication(&ok(0x11), now);
         (s, now)
+    }
+
+    #[test]
+    fn a_trainer_that_never_indicates_is_driven_without_confirmations() {
+        // Some cheap FTMS trainers (e.g. a "VE200") accept commands but never indicate.
+        let t = Instant::now();
+        let mut s = ControlSession::new(ControlConfig::default());
+        s.on_connected(TrainerCaps::UNKNOWN, Limits::FALLBACK, t);
+        s.start(t);
+        s.set_target_power(150.0, t);
+        let mut sent = Vec::new();
+        let mut notices = Vec::new();
+        let mut at = t;
+        while at < t + Duration::from_secs(20) {
+            let outs = s.poll(at);
+            sent.extend(writes(&outs));
+            notices.extend(outs.into_iter().filter_map(|o| match o {
+                Out::Notice(m) => Some(m),
+                _ => None,
+            }));
+            at += Duration::from_millis(100);
+        }
+        let requests = sent.iter().filter(|w| **w == vec![0x00]).count();
+        assert_eq!(
+            requests, 3,
+            "three unanswered Request Control attempts: {sent:?}"
+        );
+        assert!(sent.contains(&vec![0x07]), "then Start: {sent:?}");
+        assert!(
+            sent.contains(&vec![0x05, 150, 0]),
+            "then the ERG target: {sent:?}"
+        );
+        assert!(
+            !notices.iter().any(|m| m.contains("nem adta át")),
+            "a silent trainer is not refused: {notices:?}"
+        );
+        assert!(s.has_control());
+    }
+
+    #[test]
+    fn an_explicit_refusal_still_refuses() {
+        let t = Instant::now();
+        let mut s = ControlSession::new(ControlConfig::default());
+        s.on_connected(TrainerCaps::UNKNOWN, Limits::FALLBACK, t);
+        let mut at = t;
+        for _ in 0..3 {
+            assert_eq!(writes(&s.poll(at)), vec![vec![0x00]]);
+            s.on_indication(&[0x80, 0x00, 0x05], at); // control not permitted
+            at += Duration::from_millis(1100);
+        }
+        assert!(!s.has_control());
+        assert!(writes(&s.poll(at + Duration::from_secs(10))).is_empty());
+    }
+
+    #[test]
+    fn a_failed_target_write_is_retried_after_the_write_gap() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+        let at = now + Duration::from_secs(1);
+        s.set_target_power(200.0, at);
+        assert_eq!(writes(&s.poll(at)), vec![vec![0x05, 200, 0]]);
+        // the trainer answers the ATT write with "insufficient resources"
+        s.on_write_failed(at);
+        let again = at + Duration::from_millis(300);
+        assert_eq!(
+            writes(&s.poll(again)),
+            vec![vec![0x05, 200, 0]],
+            "retried instead of waiting for the keep-alive"
+        );
     }
 
     // ── filter ──
