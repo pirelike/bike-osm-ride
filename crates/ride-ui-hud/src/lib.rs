@@ -18,7 +18,8 @@ use dioxus::prelude::*;
 use ride_model::{Climb, ClimbCategory, RideSnapshot, RideState, RiderSettings, Route, Theme};
 use ride_ui_kit::color::ink_on;
 use ride_ui_kit::format::{
-    fmt_duration, fmt_grade, fmt_hm_text, fmt_km, fmt_m, fmt_opt0, fmt_speed_kmh, fmt_step_value,
+    fmt_delta_s, fmt_duration, fmt_grade, fmt_hm_text, fmt_km, fmt_m, fmt_opt0, fmt_speed_kmh,
+    fmt_step_value,
 };
 use ride_ui_kit::palette;
 use ride_ui_kit::{Icon, IconName};
@@ -28,6 +29,9 @@ pub const CSS: &str = include_str!("../assets/hud.css");
 
 /// Placeholder for a value that is not available ("—", U+2014).
 pub const DASH: &str = "—";
+
+mod dash;
+pub use dash::{target_state, RideDash};
 
 // ───────────────────────────── pure helpers ─────────────────────────────
 
@@ -780,6 +784,9 @@ pub fn ClimbCard(
     route: ReadSignal<Option<Arc<Route>>>,
     snapshot: ReadSignal<RideSnapshot>,
     theme: ReadSignal<Theme>,
+    /// The PR time of every climb of the route (indexed like `Route::climbs`): known before the
+    /// ride from the ride log, so the card can show the target even before the first pedal stroke.
+    prs: ReadSignal<Vec<Option<f64>>>,
 ) -> Element {
     let route = route.read().clone();
     let snapshot = snapshot.read().clone();
@@ -790,6 +797,7 @@ pub fn ClimbCard(
     let Some(view) = select_climb(&route, &snapshot) else {
         return climb_placeholder("Nincs több emelkedő az útvonalon.");
     };
+    let known_pr = prs.read().get(view.index).copied().flatten();
 
     let climb = &view.climb;
     let cat = climb.category;
@@ -833,6 +841,14 @@ pub fn ClimbCard(
         )
     };
 
+    // The live segment (while inside this climb) brings the PR time and the difference measured
+    // at the same distance; before the ride only the stored PR time is known.
+    let live = snapshot
+        .segment
+        .filter(|segment| segment.climb == view.index);
+    let pr_s = live.and_then(|segment| segment.pr_s).or(known_pr);
+    let pr_delta = live.and_then(|segment| segment.delta_s);
+
     rsx! {
         section { class: "hud-climb", aria_label: "{summary}",
             div { class: "hud-climb__head",
@@ -849,6 +865,18 @@ pub fn ClimbCard(
             div { class: "num num--xl hud-climb__hero",
                 "{hero_value}"
                 span { class: "unit", "{hero_unit}" }
+            }
+            if let Some(pr_s) = pr_s {
+                div { class: "hud-climb__pr",
+                    span { class: "hud-label", "PR" }
+                    span { class: "hud-climb__pr-time", "{fmt_duration(pr_s)}" }
+                    if let Some(delta) = pr_delta {
+                        span {
+                            class: if delta < 0.0 { "hud-climb__pr-delta is-ahead" } else { "hud-climb__pr-delta" },
+                            "· {fmt_delta_s(delta)} s"
+                        }
+                    }
+                }
             }
             div { class: "cells cells--3 cells--flush hud-climb__cells",
                 div { class: "cell cell--sm",
@@ -980,6 +1008,10 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
                 div { class: "hud-workout__foot",
                     span { class: "hud-workout__pct", "{overall_whole} %" }
                     span { "{next_text}" }
+                }
+                // the coach's message of the moment, in the card (never a separate notification)
+                if let Some(message) = &w.message {
+                    p { key: "{message.id}", class: "hud-dash__coach", role: "status", "{message.text}" }
                 }
             }
         }
@@ -1161,6 +1193,8 @@ mod tests {
             next_climb_in: Some(0.0),
             trainer_grade: 6.6,
             workout: None,
+            ghost: None,
+            segment: None,
         }
     }
 
@@ -1362,7 +1396,7 @@ mod tests {
     #[test]
     fn eta_uses_the_duration_format_or_a_dash() {
         assert_eq!(eta_text(Some(4_200.0)), fmt_hm_text(4_200.0));
-        assert_eq!(eta_text(Some(4_200.0)), "1 ó 10 p");
+        assert_eq!(eta_text(Some(4_200.0)), "1:10 ó");
         assert_eq!(eta_text(Some(600.0)), "10 p");
         assert_eq!(eta_text(None), "—");
         assert_eq!(eta_text(Some(-1.0)), "—");
@@ -1511,7 +1545,7 @@ mod tests {
         assert_eq!(get("Megtett táv").unit, "km");
         assert_eq!(get("Hátralévő táv").value, fmt_km(15_800.0));
         assert_eq!(get("Eltelt idő").value, "21:04");
-        assert_eq!(get("Hátralévő idő").value, "1 ó 10 p");
+        assert_eq!(get("Hátralévő idő").value, "1:10 ó");
         assert_eq!(get("Megtett szint").value, "312");
         assert_eq!(get("Hátralévő szintemelkedés").value, "268");
         assert_eq!(get("Átlagsebesség").value, fmt_speed_kmh(7.1));
@@ -1752,6 +1786,8 @@ mod tests {
     struct HarnessProps {
         snapshot: RideSnapshot,
         route: Option<Arc<Route>>,
+        /// PR times of the climbs, indexed like `Route::climbs`.
+        prs: Vec<Option<f64>>,
     }
 
     #[component]
@@ -1760,12 +1796,14 @@ mod tests {
         let snapshot = use_signal(move || snapshot0);
         let route0 = props.route.clone();
         let route = use_signal(move || route0);
+        let prs0 = props.prs.clone();
+        let prs = use_signal(move || prs0);
         let settings = use_signal(rider);
         let theme = use_signal(|| Theme::Dark);
         rsx! {
             MetricTiles { snapshot, rider: settings, theme }
             StatsPanel { snapshot }
-            ClimbCard { route, snapshot, theme }
+            ClimbCard { route, snapshot, theme, prs }
             WorkoutCard { snapshot }
             RideControls {
                 snapshot,
@@ -1779,7 +1817,22 @@ mod tests {
     }
 
     fn render(snapshot: RideSnapshot, route: Option<Arc<Route>>) -> String {
-        let mut vdom = VirtualDom::new_with_props(Harness, HarnessProps { snapshot, route });
+        render_with_prs(snapshot, route, Vec::new())
+    }
+
+    fn render_with_prs(
+        snapshot: RideSnapshot,
+        route: Option<Arc<Route>>,
+        prs: Vec<Option<f64>>,
+    ) -> String {
+        let mut vdom = VirtualDom::new_with_props(
+            Harness,
+            HarnessProps {
+                snapshot,
+                route,
+                prs,
+            },
+        );
         vdom.rebuild_in_place();
         dioxus_ssr::render(&vdom)
     }
@@ -1815,6 +1868,61 @@ mod tests {
         assert!(html.contains("badge badge--ok"), "riding state badge");
         assert!(!html.contains("NaN"), "no NaN reaches the markup");
         assert!(!html.contains("text-transform"), "no inline caps");
+    }
+
+    /// A snapshot in the middle of the first climb with a live segment running against a 4:32 PR.
+    fn segment_snapshot() -> RideSnapshot {
+        let mut snapshot = mid_climb_snapshot();
+        snapshot.segment = Some(ride_model::SegmentLive {
+            climb: 0,
+            elapsed_s: 272.0,
+            pr_s: Some(280.0),
+            delta_s: Some(-6.0),
+        });
+        snapshot
+    }
+
+    #[test]
+    fn the_climb_card_shows_the_pr_and_the_live_difference() {
+        // before the ride only the stored PR is known
+        let mut ready = RideSnapshot::empty();
+        ready.state = RideState::Ready;
+        ready.next_climb = Some(0);
+        ready.next_climb_in = Some(1_500.0);
+        let html = render_with_prs(ready, Some(Arc::new(two_climb_route())), vec![Some(272.0)]);
+        assert!(html.contains("hud-climb__pr"), "PR line missing: {html}");
+        assert!(html.contains("hud-climb__pr-time"));
+        assert!(html.contains("4:32"), "the PR time, formatted");
+        assert!(
+            !html.contains("hud-climb__pr-delta"),
+            "no difference before the ride"
+        );
+
+        // inside the climb: the live difference, green when the rider is ahead
+        let html = render_with_prs(
+            segment_snapshot(),
+            Some(Arc::new(two_climb_route())),
+            vec![Some(280.0)],
+        );
+        assert!(html.contains("hud-climb__pr-delta"), "difference missing");
+        assert!(html.contains("is-ahead"), "ahead is green");
+        assert!(html.contains("-6 s"), "signed seconds");
+
+        // behind: red, no modifier class
+        let mut behind = segment_snapshot();
+        behind.segment = Some(ride_model::SegmentLive {
+            climb: 0,
+            elapsed_s: 292.0,
+            pr_s: Some(280.0),
+            delta_s: Some(12.0),
+        });
+        let html = render_with_prs(behind, Some(Arc::new(two_climb_route())), vec![]);
+        assert!(html.contains("+12 s"));
+        assert!(!html.contains("is-ahead"), "behind is not green");
+
+        // no PR at all: the card stays as it was
+        let html = render(mid_climb_snapshot(), Some(Arc::new(two_climb_route())));
+        assert!(!html.contains("hud-climb__pr"));
     }
 
     #[test]
@@ -1889,6 +1997,7 @@ mod tests {
             finished: false,
             next_step_name: Some("Pihenő".into()),
             next_target_w: Some(120.0),
+            message: None,
         }
     }
 

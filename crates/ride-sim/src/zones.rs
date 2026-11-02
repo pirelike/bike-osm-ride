@@ -6,22 +6,7 @@ pub fn power_zone(power_w: f64, ftp_w: f64) -> u8 {
     if !ftp_w.is_finite() || ftp_w <= 0.0 || !power_w.is_finite() {
         return 0;
     }
-    let pct = (power_w.max(0.0) / ftp_w) * 100.0;
-    if pct < 55.0 {
-        1
-    } else if pct < 76.0 {
-        2
-    } else if pct < 91.0 {
-        3
-    } else if pct < 106.0 {
-        4
-    } else if pct < 121.0 {
-        5
-    } else if pct < 151.0 {
-        6
-    } else {
-        7
-    }
+    ride_model::power_zone_of_pct((power_w.max(0.0) / ftp_w) * 100.0)
 }
 
 /// 5-zone HR model (% of max HR) 1..=5; `0` when max HR is unusable.

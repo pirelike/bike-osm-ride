@@ -6,9 +6,10 @@ Virtuális tekerés GPX-útvonalakon, okos trainerrel (vagy anélkül). Betölte
 magasságprofillal és a trainerek által küldött összes adattal. Nincs 3D, csak gyors,
 modern, 2D-s felület.
 
-**Rust** alkalmazás: [Dioxus](https://dioxuslabs.com) desktop (HTML/CSS felület WebView2-ben),
-Bluetooth LE a [`btleplug`](https://github.com/deviceplug/btleplug) crate-tel.
-Fejlesztési környezet: Windows 10/11, Rust (GNU vagy MSVC toolchain), WebView2 runtime.
+**Rust** alkalmazás: [Dioxus](https://dioxuslabs.com) desktop (HTML/CSS felület a rendszer
+webview-jában: WebView2 Windowson, WKWebView macOS-en, WebKitGTK Linuxon), Bluetooth LE a
+[`btleplug`](https://github.com/deviceplug/btleplug) crate-tel. Windows 10/11, Linux és macOS
+(Intel és Apple Silicon) alatt ugyanaz a kód fut.
 
 A felület egy kerékpáros fedélzeti számítógép / nyomtatott versenylap nyelvét követi: vonalakkal
 tagolt, éltől élig érő panelek, nagy kondenzált számjegyek (Barlow, beágyazva), egyetlen narancsvörös
@@ -24,28 +25,46 @@ kiemelőszín, a sötét (meleg grafit) és a világos (papírfehér) téma egye
   stílus, drag-pan, görgős nagyítás az egér körül, követő mód, emelkedő szerint színezett
   útvonal, rajt/cél és bringás jelölő.
 - **Magasságprofil** – teljes vagy „előretekintő" ablak, szintén emelkedő szerinti színezéssel,
-  km-beosztás, emelkedő-sávok kategóriával, kattintásra ugrás (seek), egérre adatkiolvasás.
+  km-beosztás, emelkedő-sávok kategóriával, kattintásra ugrás (seek), egérre adatkiolvasás. Az
+  előretekintő ablak skálája csak akkor vált, ha muszáj (és egy ablaknyit előre is számol), így
+  tekerés közben nem ugrál. Ha edzés van kiválasztva, a **Magasság | Edzés** kapcsolóval a profil
+  helyén az edzés blokkjai látszanak: zónaszínes blokkok, az FTP-vonal, hol tartasz, mennyi van
+  hátra a blokkból és milyen blokk következik (visszaszámlálóval).
+- **Szegmensek a GPX-ből** – ha a GPX-ben a fő track mellett van egy rövidebb track, amely az
+  útvonalon fekszik (pl. egy Strava-szegmens GPX-e beletéve a fájlba), vagy egy track
+  `<type>segment</type>` jelöléssel, az nem toldódik az útvonalhoz, hanem nevesített szegmens lesz:
+  a profilon sávként látszik, tekerés közben pedig a „Szegmens: … X km hátra” kiírás. (A Strava
+  saját GPX-exportja szegmenst nem tartalmaz.)
 - **Élő műszerek** – teljesítmény (3 s átlag, W/kg, zóna), kadencia, pulzus (zóna), sebesség,
   emelkedő; statisztika (táv, hátralévő, idő, ETA, szintemelkedés, átlag/NP/max, kJ, kcal, pulzus).
 - **Tiling elrendezés** – a felület panelekből áll (térkép, profil, vezérlés, váltó, teljesítmény,
   következő emelkedő, statisztika, grafikonok, edzés, szimulált tekerő, böngésző), amelyek úgy
   működnek, mint egy tiling ablakkezelőben: nincs átfedés és nincs lyuk. A panelek közti
-  **elválasztót húzva** méretezhetsz (a vonal egész rácscellákra ugrik, a panelek minimális méretét
-  tiszteletben tartva). Egy panel **fejlécénél fogva** egy másik panel szélére húzva kettéosztja
+  **elválasztót húzva** méretezhetsz (a vonal egy 96 × 64-es rács celláira ugrik, a panelek
+  minimális méretét tiszteletben tartva). Egy panel **fejlécénél fogva** egy másik panel szélére húzva kettéosztja
   azt, a közepére húzva helyet cserélnek (szellemkeret mutatja, mi lesz). A panel **× gombja**
   bezárja: a szomszédja kitölti a helyét, a panel pedig chipként a felső sávba kerül; a chipre
   kattintva oda tér vissza, ahol volt, a felületre húzva oda, ahová ejted. Minden mentődik; a
   *Beállítások → Elrendezés* egy gombbal visszaállítja az alaphelyzetet.
 - **Telefon és tablet** – 1000 px-nél keskenyebb ablakban (telefon, álló tablet) a csempék helyett
-  füles nézet jelenik meg: alul a **Térkép · Tekerés · Profil · Adatok** fülek, fölöttük mindig a
-  Kezdés/Szünet sáv; álló tableten a panelek két oszlopban. A párbeszédablakok telefonon teljes
+  füles nézet jelenik meg: alul a **Tekerés · Térkép · Grafikonok · Adatok** fülek, fölöttük mindig
+  a nagy Kezdés/Szünet/Befejezés gombsor (bekapcsolt virtuális váltónál, edzésen kívül a váltó
+  gombjaival; Zwift Click/Play esetén csak a fokozat látszik). A **Tekerés** fülön egy képernyőn
+  van minden, ami tekerés közben kell: az edzés blokkja (hátralévő idő, következő blokk, az edző
+  üzenete), a teljesítmény a célhoz mérve (célban / kevés / sok), a zónasáv, kadencia, pulzus,
+  sebesség, meredekség, alatta a profil. A **Térkép** fülön ugyanez a műszerfal, a térkép és a
+  szintgrafikon. A profil nézetei telefonon **oldalra húzással** váltanak (pöttyök mutatják, hol
+  vagy; az első húzásig egy „húzd oldalra” tipp segít). A párbeszédablakok telefonon teljes
   képernyősek. Fekvő tableten (≥ 1000 px) a megszokott csempés elrendezés marad.
 - **Android** – ugyanez az alkalmazás APK-ként is elkészül (lásd *Android* lent). Androidon nincs
   fájlválasztó: útvonalat bikerouter-linkkel, a legutóbbiak közül vagy a bemutató útvonallal
   töltesz be, a TCX-mentés a *Letöltések* mappába kerül.
 - **Automatikus frissítés** – induláskor a program megnézi a GitHub legújabb kiadását; ha újabb
-  van, a felső sávban megjelenik a **Frissítés** gomb. Windowson letölti az új exe-t, kicseréli
-  magát és újraindul; Androidon megnyitja az új APK letöltését, a telepítést a rendszer kéri.
+  van, a felső sávban megjelenik a **Frissítés** gomb. Windowson letölti az új exe-t, Linuxon
+  pedig — ha AppImage-ként indult — az új AppImage-t, kicseréli magát és újraindul. Androidon az
+  új APK letöltését nyitja meg (a telepítést a rendszer kéri), .deb-es telepítésnél és macOS-en
+  pedig a kiadás oldalát nyitja meg a böngészőben, mert ezeket a csomagkezelő, illetve a Finder
+  telepíti, nem a program.
 - **Edzés** – Coggan zónák, NP/TSS/IF, 1 Hz-es felvétel, összegzés zóna-bontással, **TCX export**
   (Garmin séma: pozíció, magasság, pulzus, kadencia, watt, sebesség) Strava/Intervals/TrainingPeaks
   kompatibilisen.
@@ -59,12 +78,38 @@ kiemelőszín, a sötét (meleg grafit) és a világos (papírfehér) téma egye
   gombjával (vagy `W`-vel) nyílik a választó; a célok %FTP-ből számolódnak, és tekerés közben
   a trainer **ERG-módban** tartja a célwattot. A HUD az aktuális blokkot, a hátralévő időt és a
   következő blokkot mutatja; a szünet/kilépés itt is semlegesre állítja a trainert.
+  A választóban a kijelölt edzés **zónaszínes blokkvázlata** látszik (minden blokk magassága a
+  %FTP, színe a Coggan-zóna, a rámpa trapéz), a **blokklista** alatta pedig blokkonként az időt,
+  a célt és az edzői instrukciót. **Saját edzés importálható**: a *Beállítások* melletti
+  *Edzés importálása…* gomb MyWhoosh- vagy Zwift-fájlt (`.xml`, `.zwo`) és a MyWhoosh JSON-
+  exportját is beolvassa, elmenti a `workouts/` mappába, és onnantól ugyanúgy választható, mint
+  a beépített edzések (a „Legutóbbi” és a címkék is működnek vele). Az **edzői üzenetek**
+  (a fájlok `textevent`-jei, illetve a beépített edzések blokk-instrukciói és időzített
+  megjegyzései) a megfelelő pillanatban az Edzés kártyán jelennek meg, 12 másodpercig.
 - **Virtuális váltó** – *Beállítások → Trainer → Virtuális váltó*. 2×12-es hajtás (50/34 lánctányér,
   11–34 fogaskoszorú, 23 különböző fokozat); a `←` / `→` billentyűvel vagy a Váltó panelen váltasz.
   Egy okos trainernek nincs saját váltója, ezért a fokozat a trainerre küldött lejtőt módosítja
   (a legkönnyebb ~−5 %, a legnehezebb ~+5 %): ugyanazon az úton könnyebb vagy nehezebb a letekerés,
   a panel a fokozat áttételét, a kadenciából adódó sebességet és az ellenállás-eltolást mutatja.
-  Edzés (ERG) közben a célwatt a döntő, a váltó ilyenkor nem módosít semmit.
+  Edzés (ERG) közben a célwatt a döntő: a váltó ilyenkor el sincs, és a váltás nem hat.
+- **Tekerés-napló, szellem és szegmensek** – minden befejezett menet automatikusan elmentődik az
+  útvonalhoz (1 Hz-es felvétel, összegzés, szegmensidők), és ugyanezen az útvonalon a korábbi
+  menet **szellemként** visszajátszható: már a rajt előtt ott vár a rajtvonalon, tekerés közben
+  pedig a térképen és a profilon egy áttetsző, saját színű jelölő mutatja, hol járt akkor, amikor
+  te most; az előny/hátrány másodpercben (a profilon és az összegzésben is). A *Beállítások →
+  Térkép és profil → Szellem* alatt választható **Ki / Az útvonal ideje / Legutóbbi menet /
+  Legjobb (PR)**: az „Az útvonal ideje” a betöltött GPX saját időbélyegeit játssza vissza, tehát a
+  Strava/Garmin exportból származó track már a legelső menet előtt szellemként versenyez (a
+  BRouter-útvonalakban nincs idő, ott ez a mód üres). A „Legjobb” a legkisebb idejű **teljes**
+  menet; ha még egy menet sem ért célba, a legtovább jutott (részleges) menetet játssza vissza, és
+  a szellem a saját végénél megáll — így az első menet után sem maradsz szellem nélkül. A választó
+  alatti sor megmondja, miért nincs éppen szellem: nincs még menet, csak szimulált menet van,
+  nincs időbélyeg a GPX-ben, vagy egyik menet sem indult a rajtból. A felismert emelkedők **helyi
+  szegmensek**: a rajt előtt a legjobb idő (PR) látszik, benne tekerve pedig a másodpercre mért
+  különbség; az összegzés szegmenstáblája menetenként mutatja az időt, a korábbi PR-t és az „Új
+  PR!” jelvényt. A PR-idők a mentett menetekből jönnek; a szimulált tekerővel (vagy a `RIDE_DEMO`
+  / `RIDE_SIM` hookkal) mentett menet is megmarad, de nem lesz belőle PR és nem lesz „Legjobb”
+  szellem.
 - **Zwift Click / Play váltó** – a Zwift Click kontrollerrel Bluetoothon léptetheted a virtuális
   váltót: a `+` gomb egy fokozattal nehezebbre, a `−` gomb könnyebbre kapcsol. A Zwift Play
   kontrollereknél a jobb kontroller `Shift` vagy `Y` gombja a nehezebb, a bal kontrolleré a
@@ -76,10 +121,11 @@ kiemelőszín, a sötét (meleg grafit) és a világos (papírfehér) téma egye
 - **Böngésző (Firefox)** – a `Böngésző` panel a gépre telepített **Firefoxot** építi be az ablakba,
   hogy sorozatot vagy bármilyen tartalmat nézhess tekerés közben (a Firefox saját,
   `%LOCALAPPDATA%\bike-osm-ride\firefox-profile` profilt használ, így a bejelentkezéseid
-  megmaradnak, és a rendes Firefoxodhoz nem nyúl). Windowson működik; a panel bezárása a
-  Firefoxot is bezárja. A Firefoxnak min. ~500 px szélesség kell, ezért a panel nem húzható
-  ennél keskenyebbre. Párbeszédablak megnyitásakor vagy panel húzásakor a Firefox ideiglenesen
-  elrejtőzik (a natív ablak fölé a felület nem tud rajzolni).
+  megmaradnak, és a rendes Firefoxodhoz nem nyúl). **Csak Windowson érhető el:** a panel a Firefox
+  ablakát Win32 gyerekablakként építi be, ezért macOS-en és Linuxon nem is jelenik meg (sem
+  csempeként, sem chipként). A panel bezárása a Firefoxot is bezárja. A Firefoxnak min. ~500 px
+  szélesség kell, ezért a panel nem húzható ennél keskenyebbre. Párbeszédablak megnyitásakor vagy
+  panel húzásakor a Firefox ideiglenesen elrejtőzik (a natív ablak fölé a felület nem tud rajzolni).
 - **Szenzorok** – FTMS okos trainer (ellenállás-vezérlés bemelegítéssel, keep-alive-val,
   biztonsági szűrővel, szünetnél/kilépésnél semleges beállítással), teljesítménymérő (CPS),
   sebesség/kadencia (CSC), pulzus (HR), és egy **szimulált tekerő**, amivel hardver nélkül is
@@ -115,11 +161,17 @@ kiemelőszín, a sötét (meleg grafit) és a világos (papírfehér) téma egye
 
 ## Követelmények
 
-- Windows 10/11, [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
-  (Windows 11-en alapból ott van).
+- **Windows 10/11** – [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+  (Windows 11-en alapból ott van). A debug/release exe mellé a `WebView2Loader.dll` kerül (a
+  `ride-app/build.rs` másolja oda).
+- **Linux** – 64 bites rendszer glibc 2.35 vagy újabb (Ubuntu 22.04+), GTK 3 és WebKitGTK 4.1
+  (`libwebkit2gtk-4.1-0`, `libgtk-3-0`), valamint BlueZ a Bluetooth-hoz. Az AppImage ezeket
+  magával hozza, a .deb függőségként kéri. NVIDIA-kártyán vagy Wayland alatt a program maga
+  állítja be a `WEBKIT_DISABLE_DMABUF_RENDERER=1`-et (az ismert üres-ablak hiba ellen).
+- **macOS 11 (Big Sur) vagy újabb** – Intel és Apple Silicon is (a kiadás univerzális bináris).
+  Az első Bluetooth-keresésnél a rendszer engedélyt kér.
 - Bluetooth LE adapter csak akkor kell, ha valódi szenzort/trainert használsz.
 - Fejlesztéshez Rust (a projekt GNU toolchainen készült és tesztelt, MSVC-vel is fordul).
-- A debug/release exe mellé a `WebView2Loader.dll` kerül (a `ride-app/build.rs` másolja oda).
 
 ## Futtatás
 
@@ -129,6 +181,11 @@ cargo run -p ride-app                 # debug build + indítás
 .\scripts\run.ps1 -Demo -Sim 250      # demo útvonal + szimulált tekerő 250 W-on
 cargo build --release -p ride-app     # kész exe: target\release\bike-osm-ride.exe
 ```
+
+Linuxon és macOS-en ugyanez `cargo run -p ride-app` (a `scripts\*.ps1` szkriptek PowerShellt
+kérnek). Linuxon a fejlesztéshez kell a
+`libwebkit2gtk-4.1-dev libgtk-3-dev libdbus-1-dev pkg-config` csomag (Debian/Ubuntu:
+`sudo apt install …`), macOS-en a Xcode Command Line Tools.
 
 ### Android
 
@@ -148,12 +205,75 @@ származó alkalmazások telepítését), vagy USB-n: `adb install -r <apk>`. An
 egyelőre nem működik (a btleplug Android-háttere Java-kiegészítést igényel), ott a szimulált
 tekerővel lehet tekerni.
 
+### Linux (AppImage és .deb)
+
+A kiadás két csomagot tartalmaz, mindkettő Ubuntu 22.04-en (glibc 2.35) épül, hogy régebbi
+disztribúciókon is elinduljon.
+
+```bash
+# AppImage: egyetlen futtatható fájl, nem kell telepíteni
+chmod +x bike-osm-ride-0.2.0-linux-x86_64.AppImage
+./bike-osm-ride-0.2.0-linux-x86_64.AppImage
+
+# .deb: a rendszer csomagkezelőjével
+sudo apt install ./bike-osm-ride-0.2.0-linux-amd64.deb
+```
+
+A .deb a `libwebkit2gtk-4.1-0`, `libgtk-3-0` és `bluez` csomagokat kéri; az AppImage ezeket
+magában hozza. Ha az AppImage-t letöltés után közvetlenül futtatod, és a rendszer nem engedné,
+a `chmod +x` a megoldás.
+
+Helyi build:
+
+```bash
+cargo build --release -p ride-app     # target/release/bike-osm-ride
+cd crates/ride-app
+dx bundle --platform linux --package-types appimage --package-types deb --release
+```
+
+Ha a `dx` linuxos bundlere nem működik, a `packaging/linux/fallback.sh <verzió>` ugyanezt a két
+fájlt állítja elő `dpkg-deb`-bel és `linuxdeploy`-jal (GTK plugin).
+
+### macOS (univerzális .app, .dmg-ben)
+
+A `.dmg` egy univerzális (Intel + Apple Silicon), **aláíratlan** alkalmazást tartalmaz, ezért az
+első indítás így megy:
+
+1. Másold a `bike-osm-ride.app`-ot az *Alkalmazások* mappába.
+2. Nyisd meg **jobb klikk → Megnyitás → Megnyitás**. (A Gatekeeper karanténja miatt a dupla
+   kattintás elutasítja; utána már rendesen indul.) Parancssorból ugyanez:
+   `xattr -dr com.apple.quarantine /Applications/bike-osm-ride.app`
+3. Az első Bluetooth-keresésnél macOS engedélyt kér a Bluetooth használatára — engedélyezd
+   (*Rendszerbeállítások → Adatvédelem és biztonság → Bluetooth*). Engedély nélkül a program a
+   szenzorokat nem látja.
+
+Helyi build (a szkript Apple Siliconon az Intel felét is keresztfordítja, majd `lipo`-val összefűzi):
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+packaging/macos/bundle.sh 0.2.0
+# dist/bike-osm-ride.app és dist/bike-osm-ride-0.2.0-macos-universal.dmg
+```
+
 ### Kiadás (GitHub)
 
-A `.github/workflows/release.yml` (egyelőre kézzel indítva: *Actions → release → Run workflow*, egy `v*` címkén) futtatja a
-folyamatot: tesztek, Windows exe (MSVC, DLL nélkül futtatható) és Android APK, majd GitHub Release
-`bike-osm-ride-<verzió>-windows-x64.exe` és `bike-osm-ride-<verzió>-android.apk` fájlokkal; ezeket
-keresi a beépített frissítő. A frissítő a `Cargo.toml` `repository` mezőjéből tudja a repót.
+A `.github/workflows/release.yml` (egyelőre kézzel indítva: *Actions → release → Run workflow*, egy
+`v*` címkén) futtatja a folyamatot: tesztek mindhárom platformon (Windows, Linux, macOS), majd a
+csomagok, végül GitHub Release az alábbi fájlokkal — pontosan ezeket keresi a beépített frissítő,
+ezért az átnevezésük az `updater.rs`-t is érinti:
+
+| Fájl | Platform | Telepítés |
+|---|---|---|
+| `bike-osm-ride-<verzió>-windows-x64.exe` | Windows | MSVC, DLL nélkül futtatható exe |
+| `bike-osm-ride-<verzió>-android.apk` | Android | APK |
+| `bike-osm-ride-<verzió>-linux-x86_64.AppImage` | Linux | AppImage (ezt frissíti magától) |
+| `bike-osm-ride-<verzió>-linux-amd64.deb` | Linux | Debian-csomag |
+| `bike-osm-ride-<verzió>-macos-universal.dmg` | macOS | univerzális .app DMG-ben |
+
+A Linuxos feladat a csomagolás előtt egy 20 másodperces füsttesztet is futtat (`xvfb` alatt,
+`RIDE_DEMO=1`-gyel): ha az alkalmazás magától kilép, a kiadás elbukik. A macOS-es feladat
+ellenőrzi, hogy az `Info.plist`-ben ott van-e a Bluetooth-engedély szövege, és hogy a bináris
+valóban univerzális-e. A frissítő a `Cargo.toml` `repository` mezőjéből tudja a repót.
 
 ## Használat
 
@@ -171,7 +291,9 @@ keresi a beépített frissítő. A frissítő a `Cargo.toml` `repository` mezőj
    azonnal érvényes. Tekerés közben a trainer ERG-módban tartja a célwattot; a jobb sáv tetején
    jelenik meg az aktuális blokk, a cél és a hátralévő idő. Az FTP-t a *Beállítások → Versenyző*
    alatt állítsd be, a %FTP-s célok abból számolódnak.
-4. **Tekerés.** `Kezdés` (vagy `Space`): a fizika a mért teljesítményből számol sebességet, a
+4. **Tekerés.** `Kezdés` (vagy `Space`): a fizika a mért teljesítményből számol sebességet (Martin
+   és mtsai. 1998-as, közúti mérésekkel validált modellje: gravitáció, gördülés, csapágysúrlódás,
+   légellenállás küllőkkel, tehetetlenség; a nyílt forrású `rouleur` implementációval tesztelve), a
    trainer megkapja az emelkedést. Szünetnél a trainer semlegesre áll, az idő áll.
 5. **Street View (opcionális).** A felső sáv `Street View` gombja (vagy `V`) be-/kikapcsolja a panelt;
    a panel fejlécében a cserélő, a letöltés, a beállítások és a bezárás gombja van. A **cserélő
@@ -188,6 +310,17 @@ keresi a beépített frissítő. A frissítő a `Cargo.toml` `repository` mezőj
    törölhetők.
 6. **Vége.** Az útvonal végén automatikusan zárul a túra; az összegzőből `Mentés TCX-ként`
    gombbal exportálhatsz (a javasolt fájlnév dátumból és útvonalnévből áll), vagy jöhet új út.
+   Az összegzőben kitöltheted, amit a Strava is kér (cím, leírás, virtuális túra vagy sima
+   kerékpározás, hogy esett, privát jegyzet, ki láthatja, hírfolyam-némítás), alul pedig kétféleképp
+   zárhatod: `Csak mentés TCX-ként`, vagy `Feltöltés Stravára`. A cím üresen a napszakból lesz
+   (pl. „Délutáni edzés").
+   Asztali gépen a feltöltés a háttérben megy a Strava saját feltöltő oldalán át (API-kulcs és
+   Strava-előfizetés nem kell): egyszer be kell jelentkezned a Stravába (a program a jelszavadat
+   nem látja, a belépés megmarad), utána egy rejtett ablak tölti fel a túrát a megadott adatokkal.
+   Ha a Strava oldala megváltozik és valami nem megy, az ablak megjelenik, a TCX-másolat pedig
+   a `%LOCALAPPDATA%\bike-osm-ride\strava` mappában marad (a hibanapló is ott van).
+   Androidon a gomb a Strava appnak adja át a TCX-et (Android 10+), a címet és a többit ott
+   kell megadni.
 
 ### Billentyűparancsok
 
@@ -209,36 +342,56 @@ A szövegmezőkben gépelt billentyűk nem váltanak parancsot (kivéve `Esc`, `
 
 ## Adatok helye
 
-Minden a `%LOCALAPPDATA%\bike-osm-ride\` alatt: `settings.json` (beállítások), `recent.json`
-(legutóbbi útvonalak), `routes\` (a megnyitott útvonalak feldolgozott geometriája, hogy legközelebb
-ne kelljen újra feldolgozni), `tiles\` (csempe-gyorsítótár, 30 nap), `streetview\<útvonal-azonosító>.json`
-(csak ha bekapcsoltad a panoráma-azonosítók mentését: ~25 m-es útvonalszakaszonként az azonosító, az
-irány és az időbélyeg; a kulcs nincs benne), `streetview\img\<útvonal-azonosító>\` (csak a letöltött
-Street View képek és a hozzájuk tartozó `manifest.json`; a képek 30 napig érvényesek, a Beállításokban
-törölhetők), `ble.log` (ha kéred),
-`webview\` (WebView2 profil). A Google API-kulcs a `settings.json`-ban van, csak ezen a gépen. A `RIDE_DATA_DIR` környezeti változóval áthelyezhető.
+Minden egyetlen mappában van — a beállítások, a legutóbbi útvonalak, a csempe-gyorsítótár és a
+webview profilja is:
+
+| Platform | Mappa |
+|---|---|
+| Windows | `%LOCALAPPDATA%\bike-osm-ride\` |
+| macOS | `~/Library/Application Support/bike-osm-ride/` |
+| Linux | `$XDG_DATA_HOME/bike-osm-ride/`, alapból `~/.local/share/bike-osm-ride/` |
+| Android | `/data/data/<csomagnév>/files/` (az app privát mappája) |
+
+Alatta: `settings.json` (beállítások), `recent.json` (legutóbbi útvonalak), `routes/` (a megnyitott
+útvonalak feldolgozott geometriája, hogy legközelebb ne kelljen újra feldolgozni), `rides/`
+(a tekerés-napló: útvonalanként egy mappa, benne menetenként egy `<kezdés>.json` a teljes 1 Hz-es
+felvétellel és egy `index.json` az összegzésekkel; a menetek nem törlődnek), `workouts/`
+(az importált edzések, edzésenként egy JSON), `tiles/`
+(csempe-gyorsítótár, 30 nap), `streetview/<útvonal-azonosító>.json` (csak ha bekapcsoltad a
+panoráma-azonosítók mentését: ~25 m-es útvonalszakaszonként az azonosító, az irány és az időbélyeg;
+a kulcs nincs benne), `streetview/img/<útvonal-azonosító>/` (csak a letöltött Street View képek és
+a hozzájuk tartozó `manifest.json`; a képek 30 napig érvényesek, a Beállításokban törölhetők),
+`ble.log` (ha kéred) és `webview/` (a webview profilja). A Google API-kulcs a `settings.json`-ban
+van, csak ezen a gépen. A `RIDE_DATA_DIR` környezeti változóval az egész mappa áthelyezhető.
 
 ## Fejlesztés
 
 ```
 crates/
   ride-model        a közös adatmodell (Route, RideSnapshot, Settings, …)
-  ride-route        GPX/bikerouter → Route, emelkedők, perzisztencia
-  ride-sim          fizika, RideEngine, statisztika, felvétel, TCX
+  ride-route        GPX/bikerouter → Route, emelkedők, perzisztencia, tekerés-napló
+  ride-sim          fizika, RideEngine, statisztika, felvétel, szellem, szegmensek, TCX
   ride-ble          BLE hub (FTMS/CPS/CSC/HR) + szimulált tekerő
-  ride-ui-kit       design system: tokenek, paletta, ikonok, formázás
+  ride-ui-kit       design system: tokenek, paletta, ikonok, formázás, protokoll-URL-ek
   ride-ui-map       csempés térkép, útvonal, bringás jelölő
   ride-ui-profile   magasságprofil + élő grafikonok
   ride-ui-hud       műszercsempék, statisztika, emelkedő- és edzéskártya, vezérlők
   ride-ui-dialogs   nyitóképernyő, eszközök, beállítások, edzésválasztó, összegzés, névjegy
   ride-ui-streetview Street View panel: metadata-lekérdezés, azonosító-gyorsítótár, offline képletöltés
   ride-app          shell: állapot, vezérlőciklus, csempe-proxy, elrendezés
+packaging/
+  icons/            a program ikonjai (32…1024 px), a src/icon.rs-ből generálva
+  linux/            .desktop fájl és a `dx` helyetti tartalék csomagoló szkript
+  macos/            Info.plist és bundle.sh (univerzális .app + .dmg)
 ```
 
 - `cargo test --workspace` – a teljes tesztkészlet (fizika-referenciaértékek, GPX-pipeline,
   BLE-parserek differenciáltesztjei a `ftms` crate-pel szemben, hub-viselkedés fake átvitellel,
   UI-segédfüggvények).
 - `cargo check -p <crate>` / `cargo clippy -p <crate>` – crate-enként.
+- `cargo run -p ride-app --example export_icon` – újrarajzolja a `packaging/icons/*.png` ikonokat
+  a `crates/ride-app/src/icon.rs` kódjából (ugyanaz a függvény, ami az ablak ikonját rajzolja).
+  A PNG-k commitolva vannak; csak akkor kell futtatni, ha az ikon rajzolása változik.
 - `.\scripts\screenshot.ps1` – elindítja az appot és PNG-t ment a főablakról (a `RIDE_*`
   változókkal vezérelhető: `RIDE_DEMO`, `RIDE_SIM`, `RIDE_GPX`, `RIDE_THEME`, `RIDE_WINDOW`,
   `RIDE_DIALOG`, `RIDE_TIMESCALE`, `RIDE_TILE_PROBE`, `RIDE_BLE_LOG`, `RIDE_STREETVIEW_BASE`). Részletek:
@@ -301,12 +454,17 @@ a kutatás részletei: [`docs/PRIOR_ART.md`](docs/PRIOR_ART.md).
 build 373 külső crate-je mind megengedő licencű (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode, CC0, Unlicense, 0BSD);
 copyleft vagy ismeretlen licenc nincs közöttük.
 
+**Ugyanez Linuxon és macOS-en.** Ezek a buildek ugyanazt a kódot fordítják, egyetlen különbséggel:
+a `wry` a nem-Windowsos célokon a `kuchikiki` HTML-parseolón keresztül behúzza a **MPL-2.0**
+licencű `cssparser`, `selectors` és `dtoa-short` crate-eket, a `tray-icon` → `dirs` láncon pedig az
+`option-ext`-et. A Windowsos buildbe ezek nem kerülnek be, a Linuxba és a macOS-be igen. Ez a
+projekt licencét nem érinti: az MPL-2.0 **fájlszintű** copyleft, a crate-eket módosítás nélkül,
+a crates.io-ról vesszük (nem vendoroljuk őket), és a saját kódunk továbbra is `MIT OR
+Apache-2.0`. Az MPL csak a módosított MPL-fájlok közzétételét írná elő; ilyen nincs.
+
 A `Cargo.lock` minden platform függőségét tartalmazza (635 csomag, ezt listázza a
-[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)). Ezek között néhány **MPL-2.0** licencű crate
-is szerepel: `cssparser`, `selectors`, `dtoa-short` (a `wry` → `kuchikiki` láncon) és `option-ext`
-(a `tray-icon` → `dirs` láncon). A cargo szerint ezek csak nem-Windowsos célplatformok buildjébe
-kerülnek be, a Windowsos programba nem. Ha mégis más platformra fordítod: az MPL-2.0 fájlszintű
-copyleft, módosítatlan könyvtárként használva nem érinti a projekt saját licencét.
+[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)); a lista újragenerálása:
+`.\scripts\third_party_licenses.ps1`.
 
 ### Térkép- és adatforrások (attribúció)
 

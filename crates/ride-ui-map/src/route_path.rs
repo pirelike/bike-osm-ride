@@ -268,6 +268,8 @@ mod tests {
             climbs: vec![],
             waypoints: vec![],
             has_elevation: true,
+            segments: Vec::new(),
+            timeline: Vec::new(),
         }
     }
 

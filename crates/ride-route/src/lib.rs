@@ -4,9 +4,10 @@
 //! resample ~10 m → smooth elevation → grade → ascent/descent → bounds/waypoints/id),
 //! [`climbs`] (climb detection and categories), [`bikerouter`] (link parsing, BRouter
 //! API; the exact supported link formats are documented there), [`elevation`]
-//! (Open-Meteo fallback for tracks without elevation), [`demo`] (built-in route) and
+//! (Open-Meteo fallback for tracks without elevation), [`demo`] (built-in route),
 //! [`store`] (settings / recent routes under `%LOCALAPPDATA%\bike-osm-ride`, or
-//! `$RIDE_DATA_DIR`).
+//! `$RIDE_DATA_DIR`) and [`rides`] (the ride log: one record per finished ride, with the
+//! segment times the ghost and the PRs are built from).
 //!
 //! The async entry points below are what `ride-app` calls. Network access happens only
 //! in [`load_route_from_bikerouter`] and, when requested and needed, for missing
@@ -25,6 +26,7 @@ pub mod elevation;
 pub mod geo;
 pub mod gpx;
 mod http;
+pub mod rides;
 pub mod store;
 
 pub use demo::demo_route;

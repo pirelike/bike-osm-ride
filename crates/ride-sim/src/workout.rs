@@ -10,7 +10,10 @@
 
 use std::sync::Arc;
 
-use ride_model::{RiderSettings, StepKind, Workout, WorkoutProgress};
+use ride_model::{CoachMessage, RiderSettings, StepKind, Workout, WorkoutProgress};
+
+/// How long a coaching message stays on screen after it is due, seconds of riding time.
+pub const MESSAGE_SHOW_S: f64 = 12.0;
 
 /// The running workout of one ride.
 #[derive(Debug, Clone)]
@@ -71,6 +74,46 @@ impl WorkoutSession {
         (0, 0.0, &self.workout.steps[last])
     }
 
+    /// The coaching message due in the last [`MESSAGE_SHOW_S`] seconds (the latest one when
+    /// several are). A step's note is due when the step starts, its timed messages at their own
+    /// second (an imported file's first message is also its note: it is not shown twice).
+    /// Nothing after the end of the workout.
+    pub fn coach_message(&self) -> Option<CoachMessage> {
+        if self.is_finished() {
+            return None;
+        }
+        let mut start = 0.0;
+        let mut id = 0usize;
+        let mut due: Option<CoachMessage> = None;
+        for step in &self.workout.steps {
+            if start > self.elapsed_s {
+                break;
+            }
+            let note = step
+                .note
+                .as_deref()
+                .filter(|note| !step.messages.iter().any(|m| m.text == *note))
+                .map(|note| (0.0, note));
+            let timed = note.into_iter().chain(
+                step.messages
+                    .iter()
+                    .map(|m| (f64::from(m.at_s), m.text.as_str())),
+            );
+            for (at, text) in timed {
+                let when = start + at;
+                if when <= self.elapsed_s && self.elapsed_s - when < MESSAGE_SHOW_S {
+                    due = Some(CoachMessage {
+                        id,
+                        text: text.to_string(),
+                    });
+                }
+                id += 1;
+            }
+            start += f64::from(step.duration_s);
+        }
+        due
+    }
+
     /// Power the trainer should hold right now; `None` in a free step or after the end.
     pub fn target_w(&self, rider: &RiderSettings) -> Option<f64> {
         if self.is_finished() {
@@ -122,6 +165,7 @@ impl WorkoutSession {
             next_step_name: next.map(|s| s.name.clone()),
             next_target_w: next
                 .and_then(|s| s.target.watts_at(0.0, f64::from(s.duration_s), rider.ftp_w)),
+            message: self.coach_message(),
         }
     }
 
@@ -165,6 +209,7 @@ mod tests {
             target,
             cadence: None,
             note: None,
+            messages: Vec::new(),
         }
     }
 
@@ -289,5 +334,64 @@ mod tests {
         s.advance(f64::NAN);
         s.advance(-5.0);
         assert_eq!(s.elapsed_s(), 0.0);
+    }
+
+    #[test]
+    fn coaching_messages_show_for_a_while_when_they_are_due() {
+        let mut w = (*workout()).clone();
+        w.steps[0].note = Some("Lazán indulj.".into());
+        w.steps[1].messages = vec![
+            ride_model::StepMessage {
+                at_s: 0,
+                text: "Most jön a küszöb.".into(),
+            },
+            ride_model::StepMessage {
+                at_s: 40,
+                text: "Még 20 mp!".into(),
+            },
+        ];
+        let mut s = WorkoutSession::new(Arc::new(w));
+        // the note of a step without timed messages shows at its start
+        s.advance(1.0);
+        assert_eq!(s.coach_message().unwrap().text, "Lazán indulj.");
+        s.advance(15.0);
+        assert!(s.coach_message().is_none(), "gone after {MESSAGE_SHOW_S} s");
+        s.advance(45.0); // 61 s: 1 s into the second step
+        let first = s.coach_message().unwrap();
+        assert_eq!(first.text, "Most jön a küszöb.");
+        s.advance(40.0); // 101 s: the 40 s message of the second step
+        let second = s.coach_message().unwrap();
+        assert_eq!(second.text, "Még 20 mp!");
+        assert_ne!(first.id, second.id);
+        assert_eq!(s.progress(&rider(200.0)).message, Some(second));
+        s.advance(100.0);
+        assert!(s.coach_message().is_none(), "nothing after the end");
+    }
+
+    #[test]
+    fn a_note_and_timed_messages_both_show_but_never_twice() {
+        let mut w = (*workout()).clone();
+        // the library: a note at the start, a coach's message later in the block
+        w.steps[0].note = Some("Indulj lazán.".into());
+        w.steps[0].messages = vec![ride_model::StepMessage {
+            at_s: 30,
+            text: "Félúton a bemelegítésben.".into(),
+        }];
+        // an imported file: its first message is also the note
+        w.steps[1].note = Some("Most jön.".into());
+        w.steps[1].messages = vec![ride_model::StepMessage {
+            at_s: 0,
+            text: "Most jön.".into(),
+        }];
+        let mut s = WorkoutSession::new(Arc::new(w));
+        s.advance(1.0);
+        assert_eq!(s.coach_message().unwrap().text, "Indulj lazán.");
+        s.advance(30.0);
+        assert_eq!(s.coach_message().unwrap().text, "Félúton a bemelegítésben.");
+        s.advance(30.0); // 61 s
+        let imported = s.coach_message().unwrap();
+        assert_eq!(imported.text, "Most jön.");
+        // ids are dense: note, message, imported message
+        assert_eq!(imported.id, 2);
     }
 }

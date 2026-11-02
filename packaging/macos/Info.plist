@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template of `bike-osm-ride.app/Contents/Info.plist`. `packaging/macos/bundle.sh` replaces
+  __VERSION__ with the release version and lints the result with `plutil -lint`.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>hu</string>
+    <key>CFBundleDisplayName</key>
+    <string>bike-osm-ride</string>
+    <key>CFBundleExecutable</key>
+    <string>bike-osm-ride</string>
+    <key>CFBundleIdentifier</key>
+    <string>hu.borbelyhuba.bikeosmride</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>bike-osm-ride</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+    <key>CFBundleVersion</key>
+    <string>__VERSION__</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.healthcare-fitness</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- iOS/macOS 11+ ask the rider before the app may use Bluetooth LE (btleplug/CoreBluetooth). -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>A bike-osm-ride Bluetoothon csatlakozik az okos trainerhez, a pulzusmérőhöz, a teljesítménymérőhöz, a kadenciaszenzorhoz és a Zwift váltóhoz. Enélkül nem lehet szenzort keresni.</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>bike-osm-ride — MIT OR Apache-2.0</string>
+</dict>
+</plist>

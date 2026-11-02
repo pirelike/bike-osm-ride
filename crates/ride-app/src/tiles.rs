@@ -1,5 +1,7 @@
 //! Tile proxy: the Dioxus custom protocol `tiles` (the webview sees
-//! `http://tiles.localhost/<style>/<z>/<x>/<y>.png` on Windows).
+//! `http://tiles.localhost/<style>/<z>/<x>/<y>.png` on Windows, `tiles://localhost/...` on
+//! macOS and Linux and `https://tiles.localhost/...` on Android — see `ride_ui_kit::protocol`;
+//! the handler only reads the path, so one registration serves all three).
 //!
 //! Request path: `ride_ui_map::parse_tile_path` -> disk cache
 //! (`<data>/tiles/<style>/<z>/<x>/<y>.png`, 30 days) -> otherwise one `reqwest` GET of

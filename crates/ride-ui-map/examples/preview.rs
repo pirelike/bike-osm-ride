@@ -5,7 +5,7 @@
 //!
 //! The map is rendered with a realistic fake ride: a ~24 km Budapest-area loop with rolling
 //! hills and a 4.3 km / ~6.6 % climb, a rider 11.4 km into the ride. The tiles point at the
-//! app's local proxy (`http://tiles.localhost/...`), so they simply fail to load in a static
+//! app's local proxy (the `tiles` custom protocol), so they simply fail to load in a static
 //! page: nothing here touches the network and the preview asserts nothing about tiles.
 
 use std::path::PathBuf;
@@ -170,6 +170,8 @@ fn fake_route() -> Route {
         climbs,
         waypoints: vec![],
         has_elevation: true,
+        segments: Vec::new(),
+        timeline: Vec::new(),
         points,
     }
 }
@@ -209,6 +211,12 @@ fn fake_snapshot(route: &Route) -> RideSnapshot {
         next_climb_in: Some((18_000.0 - dist).max(0.0)),
         trainer_grade: -2.4,
         workout: None,
+        ghost: Some(ride_model::GhostLive {
+            dist: (dist + 240.0).min(route.total_dist),
+            pos: route.locate((dist + 240.0).min(route.total_dist)),
+            delta_s: Some(12.0),
+        }),
+        segment: None,
     }
 }
 

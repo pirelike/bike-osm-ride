@@ -170,6 +170,36 @@
   color: var(--text);
 }
 
+/* ghost: the same wedge as the rider, hollow and translucent, in its own aqua. It marks where
+   an earlier ride on this route was at the same moment, so it must read as a memory, not as a
+   second rider. Nothing pulses. */
+.map-ghost__wedge {
+  position: absolute;
+  left: -24px;
+  top: -24px;
+  width: 48px;
+  height: 48px;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+.map-ghost__wedge svg { display: block; width: 48px; height: 48px; overflow: visible; }
+.map-ghost__wedge path {
+  fill: var(--ghost);
+  stroke: var(--ghost);
+  stroke-linejoin: miter;
+  paint-order: stroke fill;
+}
+.map-ghost__dot {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid var(--ghost);
+  border-radius: 50%;
+  background: var(--bg-1);
+}
 /* rider: solid accent disc inside a paper ring + a heading wedge that points where the
    rider is going. Nothing pulses. */
 .map-rider__wedge {
@@ -203,18 +233,19 @@
 
 /* ───────────────────────────── controls ───────────────────────────── */
 
+/* spread over the corners instead of one stack in the top right: the style switch top left,
+   zoom top right, follow and recentre bottom left (the scale and the attribution own the bottom
+   right) */
 .map-controls {
   position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
+  inset: 0;
   z-index: var(--layer-overlay);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
   pointer-events: none;
 }
-.map-controls > * { pointer-events: auto; }
+.map-controls > * { position: absolute; pointer-events: auto; }
+.map-controls__style { top: var(--space-3); left: var(--space-3); }
+.map-controls__zoom { top: var(--space-3); right: var(--space-3); }
+.map-controls__follow { left: var(--space-3); bottom: var(--space-3); }
 /* the style switcher: one ruled strip, its own border carries the frame */
 .map-controls__style { display: inline-flex; background: var(--bg-1); }
 .map-controls__style .seg { border-radius: 0; background: var(--bg-1); }

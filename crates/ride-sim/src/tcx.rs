@@ -275,6 +275,7 @@ mod tests {
     fn summary() -> RideSummary {
         RideSummary {
             route_name: "Budapest-körút <&>".into(),
+            route_id: "abcdef0123456789".into(),
             started_unix_s: 1_790_000_000.0, // 2026-09-21T14:13:20Z
             elapsed_s: 3725.4,
             dist: 24_120.0,

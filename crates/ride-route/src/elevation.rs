@@ -221,6 +221,7 @@ mod tests {
                 lat: 47.5,
                 lon: 19.0 + i as f64 * step_deg,
                 ele: None,
+                time: None,
             })
             .collect()
     }

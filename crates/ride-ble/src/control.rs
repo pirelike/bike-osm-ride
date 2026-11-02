@@ -266,6 +266,14 @@ pub struct ControlConfig {
     pub reclaim_limit: u32,
     /// The same warning is shown at most this often.
     pub notice_cooldown: Duration,
+    /// A Fitness Machine Status op code repeating within this window is the device's steady
+    /// state, not a fresh event (see [`Storm`]).
+    pub status_storm_window: Duration,
+    /// A status this soon after control was granted is firmware chatter, not a user action.
+    pub grant_grace: Duration,
+    /// A trainer that reports itself stopped while the ride runs is started again at most
+    /// this often.
+    pub restart_interval: Duration,
 }
 
 impl Default for ControlConfig {
@@ -278,12 +286,63 @@ impl Default for ControlConfig {
             retry_delay: Duration::from_secs(1),
             reclaim_limit: 3,
             notice_cooldown: Duration::from_secs(30),
+            status_storm_window: STATUS_STORM_WINDOW,
+            grant_grace: GRANT_GRACE,
+            restart_interval: RESTART_INTERVAL,
         }
     }
 }
 
 /// A refused Start / grade / target write is retried this many times in a row.
 const MAX_WRITE_RETRIES: u32 = 40;
+
+/// A Fitness Machine Status op code that repeats within this window is the device's steady
+/// state, not a fresh event: some FTMS firmware (a captured trainer does it) reports "Reset"
+/// after every control write and every few hundred milliseconds.
+const STATUS_STORM_WINDOW: Duration = Duration::from_secs(5);
+/// A status this soon after control was granted is firmware chatter, not a user action.
+const GRANT_GRACE: Duration = Duration::from_secs(2);
+/// While the ride is running, a trainer that reports itself stopped is started again at
+/// most this often (so a repeated status never turns into a write storm).
+const RESTART_INTERVAL: Duration = Duration::from_secs(3);
+
+/// Counts repetitions of one Fitness Machine Status op code.
+///
+/// A trainer that repeats a status every few hundred milliseconds is describing its idle
+/// state (its firmware has no other way to say "not running"), not reporting a new event.
+/// Reacting to every repetition would drop the control permission in an endless loop — the
+/// target writes then never reach the device, which is exactly the "the trainer ignores ERG
+/// and the hills" symptom such firmware produces.
+#[derive(Debug, Default)]
+struct Storm {
+    last: Option<Instant>,
+    /// The current run of repeats was already written to the BLE log.
+    reported: bool,
+}
+
+impl Storm {
+    /// Records the event; `true` when it repeats the previous one within `window`.
+    fn repeats(&mut self, now: Instant, window: Duration) -> bool {
+        let repeats = self
+            .last
+            .is_some_and(|at| now.saturating_duration_since(at) <= window);
+        self.last = Some(now);
+        if !repeats {
+            self.reported = false;
+        }
+        repeats
+    }
+
+    /// `true` once per run of repeats, so a 4 Hz status storm writes one log line, not 240.
+    fn report(&mut self) -> bool {
+        !std::mem::replace(&mut self.reported, true)
+    }
+
+    fn clear(&mut self) {
+        self.last = None;
+        self.reported = false;
+    }
+}
 
 /// What the connected trainer told us it can do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -311,6 +370,9 @@ pub enum Out {
     Notice(String),
     ControlGranted,
     ControlLost,
+    /// A repeated device status the session deliberately ignored: it belongs in the BLE log
+    /// (the only evidence when a trainer misbehaves), not in a toast.
+    StatusIgnored(&'static str),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -387,6 +449,14 @@ pub struct ControlSession {
     control_attempts: u32,
     reclaims: u32,
     retried_start_for_sim: bool,
+    /// When the control permission was last granted (a status right after it is not an event).
+    granted_at: Option<Instant>,
+    /// Repeating "Reset" (0x01) statuses.
+    resets: Storm,
+    /// Repeating "stopped / paused by the user" (0x02) statuses.
+    stops: Storm,
+    /// Earliest next automatic Start/Resume while the trainer reports itself stopped.
+    restart_at: Option<Instant>,
     /// The trainer never answered Request Control with an indication: control is assumed and
     /// writes are not waited for (what other trainer apps do with such trainers).
     silent: bool,
@@ -422,6 +492,10 @@ impl ControlSession {
             control_attempts: 0,
             reclaims: 0,
             retried_start_for_sim: false,
+            granted_at: None,
+            resets: Storm::default(),
+            stops: Storm::default(),
+            restart_at: None,
             silent: false,
             failed_streak: 0,
             closing: false,
@@ -448,6 +522,10 @@ impl ControlSession {
         self.control_attempts = 0;
         self.reclaims = 0;
         self.retried_start_for_sim = false;
+        self.granted_at = None;
+        self.resets.clear();
+        self.stops.clear();
+        self.restart_at = None;
         self.silent = false;
         self.failed_streak = 0;
         self.closing = false;
@@ -555,7 +633,11 @@ impl ControlSession {
                 if ok || resp.result == CpResult::OperationFailed {
                     // "operation failed" on Start means it is already running
                     self.device_started = true;
+                    self.device_blocked = false;
                     self.last_target_bytes = None;
+                    self.restart_at = None;
+                    // the permission demonstrably works: earlier losses were spurious
+                    self.reclaims = 0;
                 } else if resp.result == CpResult::ControlNotPermitted {
                     self.lose_control(now, true, &mut outs);
                 }
@@ -585,30 +667,89 @@ impl ControlSession {
                 self.lose_control(now, true, &mut outs);
             }
             MachineStatus::Reset => {
-                // a Reset (e.g. from the trainer's own UI) invalidates the control permission
-                self.lose_control(now, false, &mut outs);
+                // Per the specification a Reset invalidates the control permission. Firmware
+                // that repeats it after every control write is describing its idle state
+                // instead (see [`Storm`]); dropping control for that would make ERG and the
+                // grade simulation impossible on such a trainer, so only a first, isolated
+                // Reset is taken as a permission loss.
+                let storm = self.resets.repeats(now, self.cfg.status_storm_window);
+                let just_granted = self
+                    .granted_at
+                    .is_some_and(|at| now.saturating_duration_since(at) <= self.cfg.grant_grace);
+                if storm || just_granted {
+                    self.keep_control_alive(now);
+                    if self.resets.report() {
+                        outs.push(Out::StatusIgnored(
+                            "a trainer ismételten reset-állapotot jelez",
+                        ));
+                    }
+                } else {
+                    self.lose_control(now, false, &mut outs);
+                }
             }
-            MachineStatus::StoppedByUser
-            | MachineStatus::PausedByUser
-            | MachineStatus::StoppedBySafetyKey => {
+            MachineStatus::StoppedByUser | MachineStatus::PausedByUser => {
+                if self.user_paused {
+                    return outs;
+                }
+                // A repeated "stopped" is the device's steady state, not a new user action:
+                // it must not latch the targets off for the rest of the ride.
+                if self.stops.repeats(now, self.cfg.status_storm_window) {
+                    self.device_blocked = false;
+                    self.keep_control_alive(now);
+                    if self.stops.report() {
+                        outs.push(Out::StatusIgnored(
+                            "a trainer ismételten leállt állapotot jelez",
+                        ));
+                    }
+                    return outs;
+                }
+                self.device_started = false;
+                self.device_blocked = true;
+                self.warn(
+                    now,
+                    "A trainert magán a készüléken állították le; amíg újra nem indítod a tekerést, nem avatkozunk bele.",
+                    &mut outs,
+                );
+            }
+            MachineStatus::StoppedBySafetyKey => {
                 if !self.user_paused {
                     self.device_started = false;
                     self.device_blocked = true;
-                    let text = if status == MachineStatus::StoppedBySafetyKey {
-                        "A trainer a biztonsági kulccsal leállt; ha újraindítod a tekerést, a vezérlés is folytatódik."
-                    } else {
-                        "A trainert magán a készüléken állították le; amíg újra nem indítod a tekerést, nem avatkozunk bele."
-                    };
-                    self.warn(now, text, &mut outs);
+                    self.warn(
+                        now,
+                        "A trainer a biztonsági kulccsal leállt; ha újraindítod a tekerést, a vezérlés is folytatódik.",
+                        &mut outs,
+                    );
                 }
             }
             MachineStatus::StartedOrResumed => {
                 self.device_started = true;
                 self.device_blocked = false;
+                self.stops.clear();
+                self.restart_at = None;
             }
             MachineStatus::Other(_) => {}
         }
         outs
+    }
+
+    /// The trainer says it is not running: keep the control permission, and — while the ride
+    /// is running — ask it to start again at a bounded rate instead of giving up. The active
+    /// target stays queued, so the next write carries the grade or the ERG wattage.
+    fn keep_control_alive(&mut self, now: Instant) {
+        if self.phase != Phase::Controlled
+            || self.user_paused
+            || self.device_blocked
+            || self.closing
+        {
+            return;
+        }
+        let wants_to_ride = self.wants_run || self.mode != Mode::None;
+        if wants_to_ride && !self.device_started && self.restart_at.is_none_or(|at| now >= at) {
+            self.restart_at = Some(now + self.cfg.restart_interval);
+            self.push_unique(Intent::Start);
+        }
+        self.ensure_target_intent();
     }
 
     /// A Control Point write failed at the transport level (not a trainer rejection).
@@ -659,7 +800,7 @@ impl ControlSession {
                 {
                     // Never an answer, not a refusal: drive the trainer without confirmations.
                     self.silent = true;
-                    self.grant(&mut outs);
+                    self.grant(now, &mut outs);
                 } else if !self.silent {
                     self.warn(
                         now,
@@ -916,11 +1057,13 @@ impl ControlSession {
 
     /// Control is ours (granted, or assumed for a silent trainer): replay what the app wanted
     /// before the (re)connect / control loss.
-    fn grant(&mut self, outs: &mut Vec<Out>) {
+    fn grant(&mut self, now: Instant, outs: &mut Vec<Out>) {
         self.phase = Phase::Controlled;
         self.control_attempts = 0;
         self.retry_at = None;
         self.last_target_bytes = None;
+        self.granted_at = Some(now);
+        self.restart_at = None;
         outs.push(Out::ControlGranted);
         if !self.user_paused && !self.device_blocked && (self.wants_run || self.mode != Mode::None)
         {
@@ -932,7 +1075,7 @@ impl ControlSession {
     fn handle_control_response(&mut self, result: CpResult, now: Instant, outs: &mut Vec<Out>) {
         if result == CpResult::Success {
             self.silent = false;
-            self.grant(outs);
+            self.grant(now, outs);
             return;
         }
         if result == CpResult::ControlNotPermitted {
@@ -963,6 +1106,8 @@ impl ControlSession {
         self.inflight = None;
         self.device_started = false;
         self.last_target_bytes = None;
+        self.granted_at = None;
+        self.restart_at = None;
         outs.push(Out::ControlLost);
         if hostile {
             self.reclaims += 1;
@@ -995,7 +1140,10 @@ impl ControlSession {
         outs: &mut Vec<Out>,
     ) {
         match result {
-            CpResult::Success => {}
+            CpResult::Success => {
+                // a target was accepted: the control permission is real, not being fought over
+                self.reclaims = 0;
+            }
             CpResult::ControlNotPermitted => self.lose_control(now, true, outs),
             CpResult::OpCodeNotSupported => {
                 if intent == Intent::Sim {
@@ -1021,11 +1169,14 @@ impl ControlSession {
                 );
             }
             CpResult::OperationFailed | CpResult::Other(_) => {
-                // some trainers refuse targets until they are started: start once, then retry
-                if !self.device_started && !self.retried_start_for_sim {
+                // Some trainers refuse targets until they are started: keep the target queued
+                // and ask for Start again — at a bounded rate, so a device that always refuses
+                // does not turn into a write storm.
+                if !self.retried_start_for_sim {
                     self.retried_start_for_sim = true;
-                    self.push_unique(Intent::Start);
-                    self.ensure_target_intent();
+                    self.device_started = false;
+                    self.restart_at = None;
+                    self.keep_control_alive(now);
                 } else {
                     self.warn(
                         now,
@@ -1804,6 +1955,148 @@ mod tests {
             now + Duration::from_millis(600),
         );
         assert!(outs.is_empty());
+    }
+
+    // ── status storms (captured firmware behaviour) ──
+
+    /// A status right after the grant is firmware chatter, not a permission loss.
+    #[test]
+    fn a_reset_right_after_the_grant_keeps_the_control() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+        let outs = s.on_machine_status(MachineStatus::Reset, now + Duration::from_millis(10));
+        assert!(!outs.contains(&Out::ControlLost), "{outs:?}");
+        assert!(s.has_control());
+    }
+
+    /// The captured trainer sends `Machine Status 0x01 (Reset)` four times a second, also
+    /// right after every control grant. Honouring each one as a permission loss produced an
+    /// endless Request Control loop in which no target was ever written: 55 requests and not
+    /// a single simulation or target write in one session (ble.log, 2026-11-01).
+    #[test]
+    fn a_reset_storm_does_not_stop_the_targets() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+        // A grade change is queued …
+        let at0 = now + Duration::from_millis(1200);
+        s.set_simulation(sim(9.0), at0);
+        let mut wrote: Vec<Vec<u8>> = Vec::new();
+        let mut at = at0;
+        for _ in 0..40 {
+            // … while the trainer chatters: 4 statuses per second
+            s.on_machine_status(MachineStatus::Reset, at);
+            wrote.extend(writes(&s.poll(at)));
+            at += Duration::from_millis(250);
+        }
+        assert!(s.has_control(), "the control permission survives the storm");
+        assert!(
+            wrote.iter().any(|b| b.first() == Some(&op::SET_SIMULATION)),
+            "the grade reaches the trainer: {wrote:?}"
+        );
+        assert!(
+            !wrote
+                .iter()
+                .any(|b| b.first() == Some(&op::REQUEST_CONTROL)),
+            "no Request Control ping-pong: {wrote:?}"
+        );
+        assert_eq!(
+            s.cfg.grant_grace,
+            Duration::from_secs(2),
+            "the production grace is seconds, not milliseconds"
+        );
+    }
+
+    /// A lone Reset far from any grant is still the permission loss the specification means.
+    #[test]
+    fn a_lone_reset_still_loses_the_control() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+        let at = now + Duration::from_secs(6);
+        let outs = s.on_machine_status(MachineStatus::Reset, at);
+        assert!(outs.contains(&Out::ControlLost), "{outs:?}");
+        assert!(!s.has_control());
+        // … and the permission is asked for again, so the ride recovers by itself
+        assert_eq!(
+            writes(&s.poll(at + Duration::from_secs(2))),
+            vec![vec![0x00]]
+        );
+    }
+
+    /// If the chatter pauses long enough for a Reset to count as a real loss, the app recovers
+    /// by itself: it asks for the permission again and replays Start and the active grade.
+    #[test]
+    fn the_permission_is_reclaimed_and_the_grade_replayed_after_a_reset() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+        let at = now + Duration::from_secs(3);
+        let outs = s.on_machine_status(MachineStatus::Reset, at);
+        assert!(outs.contains(&Out::ControlLost), "{outs:?}");
+
+        let ask = at + Duration::from_secs(2);
+        assert_eq!(writes(&s.poll(ask)), vec![vec![0x00]], "asks again");
+        s.on_indication(&ok(0x00), ask);
+        assert_eq!(
+            writes(&s.poll(ask + Duration::from_millis(300))),
+            vec![vec![0x07]],
+            "Start is replayed"
+        );
+        s.on_indication(&ok(0x07), ask + Duration::from_millis(300));
+        assert_eq!(
+            writes(&s.poll(ask + Duration::from_millis(600))),
+            vec![vec![0x11, 0x00, 0x00, 0xF4, 0x01, 0x28, 0x33]],
+            "and so is the 5 % grade"
+        );
+        s.on_indication(&ok(0x11), ask + Duration::from_millis(600));
+
+        // The chatter returns; it is ignored and a new grade still reaches the trainer.
+        let mut at = ask + Duration::from_millis(900);
+        s.set_simulation(sim(7.5), at);
+        let mut wrote = Vec::new();
+        for _ in 0..8 {
+            s.on_machine_status(MachineStatus::Reset, at);
+            wrote.extend(writes(&s.poll(at)));
+            at += Duration::from_millis(250);
+        }
+        assert!(s.has_control(), "the permission is kept");
+        assert!(
+            wrote.iter().any(|b| b.first() == Some(&op::SET_SIMULATION)),
+            "the new grade is written: {wrote:?}"
+        );
+    }
+
+    /// A device that keeps repeating "stopped by the user" is describing its idle state; it
+    /// must not latch the targets off for the rest of the ride.
+    #[test]
+    fn a_stop_status_storm_does_not_latch_the_targets_off() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+        let at = now + Duration::from_millis(1200);
+        // the first one is the rider's own stop button: respected
+        let outs = s.on_machine_status(MachineStatus::StoppedByUser, at);
+        assert!(outs
+            .iter()
+            .any(|o| matches!(o, Out::Notice(m) if m.contains("állították le"))));
+        // … a repeat 200 ms later is not: no warning, no permission loss, only a log line
+        let at = at + Duration::from_millis(200);
+        let outs = s.on_machine_status(MachineStatus::StoppedByUser, at);
+        assert!(!outs.contains(&Out::ControlLost), "{outs:?}");
+        assert!(
+            !outs.iter().any(|o| matches!(o, Out::Notice(_))),
+            "{outs:?}"
+        );
+        assert!(s.has_control());
+        // the machine is started again (the ride is running) …
+        assert_eq!(
+            writes(&s.poll(at + Duration::from_millis(300))),
+            vec![vec![0x07]]
+        );
+        s.on_indication(&ok(0x07), at + Duration::from_millis(300));
+        // … and the grade follows instead of waiting for the keep-alive
+        assert_eq!(
+            writes(&s.poll(at + Duration::from_millis(600))),
+            vec![vec![0x11, 0x00, 0x00, 0xF4, 0x01, 0x28, 0x33]],
+            "the 5 % grade is re-sent after the restart"
+        );
     }
 
     #[test]

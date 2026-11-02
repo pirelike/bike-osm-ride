@@ -53,8 +53,35 @@ pub fn fmt_m(m: f64) -> String {
     format!("{}", m.round() as i64)
 }
 
+/// A signed difference in seconds, whole seconds: `+12`, `-6`, `0`. Used for the ghost and the
+/// segment read-outs (positive = behind). NaN or an infinity yields an em dash.
+pub fn fmt_delta_s(delta: f64) -> String {
+    if !delta.is_finite() {
+        return "—".into();
+    }
+    let rounded = delta.round();
+    if rounded == 0.0 {
+        "0".into()
+    } else {
+        format!("{rounded:+.0}")
+    }
+}
+
+/// A signed difference as a clock time: `-0:32`, `+1:05:09`, `0:00`. Positive = behind.
+pub fn fmt_delta_duration(delta: f64) -> String {
+    if !delta.is_finite() {
+        return "—".into();
+    }
+    let rounded = delta.round();
+    if rounded == 0.0 {
+        return fmt_duration(0.0);
+    }
+    let sign = if rounded < 0.0 { "-" } else { "+" };
+    format!("{sign}{}", fmt_duration(rounded.abs()))
+}
+
 /// Seconds → `±h:mm` style clock time of arrival is the caller's job; this renders
-/// "remaining" like `1 ó 23 p` / `23 p`.
+/// "remaining" like `1:23 ó` / `23 p`.
 pub fn fmt_hm_text(secs: f64) -> String {
     if !secs.is_finite() || secs < 0.0 {
         return "—".into();
@@ -62,7 +89,9 @@ pub fn fmt_hm_text(secs: f64) -> String {
     let total_min = (secs / 60.0).round() as u64;
     let (h, m) = (total_min / 60, total_min % 60);
     if h > 0 {
-        format!("{h} ó {m:02} p")
+        // `h:mm ó`, not `h ó mm p`: in the condensed numeral font a lone "ó" between two numbers
+        // reads as a 6 ("1 ó 23 p" looks like 16 23)
+        format!("{h}:{m:02} ó")
     } else {
         format!("{m} p")
     }
@@ -190,6 +219,20 @@ mod tests {
         assert_eq!(fmt_grade(4.23), "+4.2");
         assert_eq!(fmt_grade(-3.16), "-3.2");
         assert_eq!(fmt_grade(0.01), "0.0");
-        assert_eq!(fmt_hm_text(4980.0), "1 ó 23 p");
+        assert_eq!(fmt_hm_text(4980.0), "1:23 ó");
+    }
+
+    #[test]
+    fn signed_differences() {
+        assert_eq!(fmt_delta_s(12.4), "+12");
+        assert_eq!(fmt_delta_s(-6.0), "-6");
+        assert_eq!(fmt_delta_s(0.4), "0");
+        assert_eq!(fmt_delta_s(-0.4), "0", "no negative zero");
+        assert_eq!(fmt_delta_s(f64::NAN), "—");
+        assert_eq!(fmt_delta_duration(-32.0), "-0:32");
+        assert_eq!(fmt_delta_duration(65.0), "+1:05");
+        assert_eq!(fmt_delta_duration(3909.0), "+1:05:09");
+        assert_eq!(fmt_delta_duration(-0.4), "0:00");
+        assert_eq!(fmt_delta_duration(f64::INFINITY), "—");
     }
 }

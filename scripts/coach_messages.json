@@ -1,0 +1,4903 @@
+{
+ "a-recovery-spin-30": [
+  {
+   "step": 0,
+   "at_s": 30,
+   "text": "Ne siettesd a ritmust, a bemelegítés most csak a lábak átmozgatásáról szól."
+  },
+  {
+   "step": 0,
+   "at_s": 180,
+   "text": "Ma a cél a regeneráció: a mozgás a lényeg, nem a watt."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Félúton jársz: a felsőtested legyen ellazult, a vállad ne húzd fel."
+  },
+  {
+   "step": 1,
+   "at_s": 1140,
+   "text": "Még egy perc ebből, utána lassan levezetünk."
+  },
+  {
+   "step": 2,
+   "at_s": 30,
+   "text": "Most már csak gurulj, a nyakad és a válladat is engedd el."
+  },
+  {
+   "step": 2,
+   "at_s": 200,
+   "text": "Szép munka, ma nem kellett keményen dolgoznod, és ez is számít az edzésben."
+  }
+ ],
+ "a-recovery-spin-45": [
+  {
+   "step": 0,
+   "at_s": 240,
+   "text": "Ez csak a bemelegítés, a mai cél a lazaság. A vállad maradjon elengedett, a kormányt ne szorítsd."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Az első könnyű szakasz jön: a watt alacsony, a cél most a frissülés és a lazaság."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Jó úton haladsz, a rövid pörgetések már átmozgatták a lábad. Most csak tartsd a laza ritmust."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Még egy rövid pörgetés jön, utána a hosszabb könnyű szakasz következik. A watt maradjon ugyanaz."
+  },
+  {
+   "step": 9,
+   "at_s": 240,
+   "text": "Nyolc perc ugyanaz a könnyű tempó. Ha a combod nehéznek érződik, egyszerűen lassíts egy kicsit."
+  },
+  {
+   "step": 9,
+   "at_s": 420,
+   "text": "Még egy perc, aztán jön a levezetés. Ezt a szakaszt élvezd, mert a regeneráció ebből lesz."
+  },
+  {
+   "step": 10,
+   "at_s": 200,
+   "text": "Szép munka volt, a mai edzés a pihenésedet szolgálta. Most lassan engedd le a pulzust és lélegezz mélyen."
+  }
+ ],
+ "a-recovery-easy-60": [
+  {
+   "step": 0,
+   "at_s": 120,
+   "text": "Ma nincs watt-hajsza, a cél a regeneráció. Érezd meg, hogy a lábad könnyedén forog."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Ez a tempó legyen beszélgetős: ha már nehéz a levegővétel, vedd vissza a wattot."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Még öt perc ebből a blokkból. A vállad maradjon lent, a kulcsod ne feszüljön."
+  },
+  {
+   "step": 2,
+   "at_s": 400,
+   "text": "Most pörgetősebb a láb, de a pulzusnak ugyanolyan nyugodtnak kell maradnia."
+  },
+  {
+   "step": 2,
+   "at_s": 1140,
+   "text": "Utolsó perc ebből a blokkból. Hagyd, hogy a kadencia magától lassuljon."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Ez már a harmadik könnyű blokk. Lazítsd meg a kezed a kormányon, és lélegezz mélyen."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Félidő. Igyál egy kortyot, és nézd meg, hogy a légzésed még mindig könnyű-e."
+  },
+  {
+   "step": 4,
+   "at_s": 60,
+   "text": "A levezetésben most az a dolgod, hogy kényelmesen tekerj tovább, és ne ugorj le hirtelen."
+  },
+  {
+   "step": 4,
+   "at_s": 120,
+   "text": "Szép munka, a regeneráció is munka. Igyál vizet, és nyújtózz ki a végén."
+  }
+ ],
+ "a-endurance-beginner-45": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A bemelegítés a hosszabb, egyenletes munkára készít elő, a lábad lassan melegedjen."
+  },
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Ma a folyamatos tekerés megszokása a cél, nem a sebesség."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Most kezdődik az igazi munka, keresd a nyugodt, egyenletes ritmust."
+  },
+  {
+   "step": 1,
+   "at_s": 450,
+   "text": "Félúton vagy, figyelj a légzésedre, és ne feszítsd meg a kezedet a kormányon."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Most egy kicsit emelhetsz, de a kadencia maradjon 90 körül, ne kapkodj."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Az utolsó tempós szakasz jön, hat perc, utána már csak lazítás van hátra."
+  },
+  {
+   "step": 4,
+   "at_s": 120,
+   "text": "Remekül kitartottál, ez volt az első igazi állóképességi edzésed, és ez nagy dolog."
+  }
+ ],
+ "a-endurance-beginner-60": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A bemelegítés a mai egyórás munkára készít fel. A cél, hogy a légzésed végig nyugodt maradjon."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Most jön a hosszabb egyenletes rész. Figyeld, hogy a lábad kerek mozgása egyenletes legyen."
+  },
+  {
+   "step": 1,
+   "at_s": 420,
+   "text": "Keresd a ritmust: a kadencia 90 körül, a vállad lazán, a csípőd nyugodt a nyeregben."
+  },
+  {
+   "step": 2,
+   "at_s": 150,
+   "text": "Most egy kicsit többet adsz, de még tudnál beszélgetni. Ez a jó tempó, így kell lennie."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Vissza az alapszintre. Ez a rész adja a hosszú állóképesség alapját, nem kell tolni."
+  },
+  {
+   "step": 3,
+   "at_s": 450,
+   "text": "Igyál pár kortyot, a hosszabb munkához kell a folyadék. Közben ellenőrizd a tartásodat."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Az utolsó emelt szakasz jön. Tartsd meg a kadenciát, és a vállad ne feszüljön meg."
+  },
+  {
+   "step": 5,
+   "at_s": 200,
+   "text": "Egy órát tekertél végig szépen. Most hagyd, hogy a légzésed és a pulzusod lassan lecsillapodjon."
+  }
+ ],
+ "a-endurance-base-75": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Ez az alapozó a 2-es zónáról szól: kényelmes tempó, nem kell bizonyítanod semmit."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Ha a légzésed szaggatottá válik, vedd vissza egy picit, a cél most a kitartás."
+  },
+  {
+   "step": 1,
+   "at_s": 1200,
+   "text": "Még öt perc, aztán jön a zóna felső része. Addig a kadencia maradjon egyenletes."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Most kicsit erősebb a tempó, de a váll és a kar maradjon lazán a kormányon."
+  },
+  {
+   "step": 2,
+   "at_s": 840,
+   "text": "Utolsó perc ebből a blokkból, a csípőd ne billegjen a nyereg felett."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Visszaesünk a 2-es zóna könnyebb részébe, a pedálozás legyen sima és kerek."
+  },
+  {
+   "step": 3,
+   "at_s": 600,
+   "text": "Félidő, most egy kis víz jól jön. Két-három korty, és vissza a ritmusba."
+  },
+  {
+   "step": 3,
+   "at_s": 1080,
+   "text": "Még két perc, aztán jön a levezetés. Tartsd a kerek pedálozást a végéig."
+  },
+  {
+   "step": 4,
+   "at_s": 120,
+   "text": "Most a könnyű tekerés a lényeg, a nyújtás majd később jön."
+  },
+  {
+   "step": 4,
+   "at_s": 200,
+   "text": "Szép alapozó munka volt, az aerob alapod ma tovább épült. Igyál, és lazíts."
+  }
+ ],
+ "a-endurance-base-90": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Most a motort melegítjük, a hosszú munka előtt a lábad szokja meg a ritmust."
+  },
+  {
+   "step": 0,
+   "at_s": 420,
+   "text": "Még pár perc, utána jön a hosszú, egyenletes Zóna 2 szakasz."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Megvan a ritmus, a lábad már megszokta a terhelést, most csak tartsd."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Félidő: ülj egyenesen, nyújtózz egyet, és igyál egy kortyot."
+  },
+  {
+   "step": 1,
+   "at_s": 1740,
+   "text": "Még egy perc ebből, utána egy kicsit lazábban zárunk."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Most egy hajszállal erősebben dolgozol, de a kilégzés legyen hosszú és nyugodt."
+  },
+  {
+   "step": 2,
+   "at_s": 720,
+   "text": "Még három perc ebből, utána vissza a könnyebb tempóra."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Az utolsó nagy blokk jön, harminc perc egyenletes Zóna 2 munka."
+  },
+  {
+   "step": 3,
+   "at_s": 900,
+   "text": "Ilyen hosszan a kisebb hibák nőnek, ellenőrizd a vállad és a fejed tartását."
+  },
+  {
+   "step": 3,
+   "at_s": 1740,
+   "text": "Utolsó perc a blokkból, utána már csak a levezetés vár."
+  },
+  {
+   "step": 4,
+   "at_s": 60,
+   "text": "Szép, hosszú munka volt, az aerob alapod most egy kicsit erősebb lett."
+  }
+ ],
+ "a-endurance-120": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai két óra hosszú, egyenletes munka. Most csak melegedj be, és keresd meg a kényelmes ritmust."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Az első negyedórában a légzésed legyen mély és egyenletes, a pulzusod pedig nyugodt maradjon."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Igyál pár kortyot most, a két órához a folyadék és az energia is kell."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Öt perc van hátra ebből a blokkból, a lábad még jól bírja."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Második blokk: a watt egy kicsit magasabb, a kadencia 90 körül. Ugyanaz a nyugodt légzés."
+  },
+  {
+   "step": 2,
+   "at_s": 900,
+   "text": "Még öt perc, és jön a következő kadenciaváltás. Addig figyelj a testtartásodra."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Hosszú, egyenletes munka: a magasabb, 95-ös kadencia frissíti a lábad, ne a wattot kergesd."
+  },
+  {
+   "step": 3,
+   "at_s": 600,
+   "text": "Félúton az egész edzésen. Most a jó testtartásra figyelj, és ne görnyedj a kormány fölé."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Lassabb lábbal, nagyobb erővel tekersz, de a pulzusod maradjon a 2-es zónában."
+  },
+  {
+   "step": 4,
+   "at_s": 600,
+   "text": "Igyál még egy kortyot, és ellenőrizd, hogy a vállad nem feszül-e meg."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Az utolsó nagy blokk. Tartsd a légzést és a testtartást, a nyeregben ülj nyugodtan."
+  },
+  {
+   "step": 5,
+   "at_s": 900,
+   "text": "Öt perc múlva vége ennek is, utána jön a levezetés. Jól bírod, ez a hosszú állóképesség."
+  },
+  {
+   "step": 6,
+   "at_s": 200,
+   "text": "Két óra tekerés van a lábadban, ez komoly alap. Most lassan engedd le a pulzust és nyújtózkodj egyet."
+  }
+ ],
+ "a-endurance-long-150": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Ez a leghosszabb alapozód, ezért most a tempó a fontos, nem a sebesség."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Az első negyedórában a lábad szokja a hosszú terhelést, ne siess."
+  },
+  {
+   "step": 1,
+   "at_s": 1800,
+   "text": "Most van itt az ideje egy kis szénhidrátnak és víznek, mielőtt a fáradtság jönne."
+  },
+  {
+   "step": 1,
+   "at_s": 2280,
+   "text": "Még két perc, és jön a felső zóna. A kadenciád maradjon ugyanaz."
+  },
+  {
+   "step": 2,
+   "at_s": 600,
+   "text": "Érezhetően erősebb a tempó, de a légzésed még kontrollált és egyenletes."
+  },
+  {
+   "step": 2,
+   "at_s": 1200,
+   "text": "Félidő a blokkban: a vállad süllyedjen le, és a kezed ne szorítsa a kormányt."
+  },
+  {
+   "step": 2,
+   "at_s": 1740,
+   "text": "Utolsó perc ebből a blokkból, most egy kicsit engedd vissza a tempót."
+  },
+  {
+   "step": 3,
+   "at_s": 800,
+   "text": "Visszaesünk a könnyebb tempóba, a pedálozás legyen sima és gömbölyű."
+  },
+  {
+   "step": 3,
+   "at_s": 1600,
+   "text": "Két-három korty víz most jól jön, és mozgasd meg a nyakad és a vállad."
+  },
+  {
+   "step": 4,
+   "at_s": 600,
+   "text": "Az utolsó blokk közepén vagy: a formádat tartsd, hogy a végére se fáradj el."
+  },
+  {
+   "step": 4,
+   "at_s": 1140,
+   "text": "Utolsó perc a leghosszabb alapozón, már csak ez az egy perc van hátra."
+  },
+  {
+   "step": 5,
+   "at_s": 300,
+   "text": "Komoly munka volt ez a több órás alap. Most csak gurulj, és élvezd a nyugalmat."
+  }
+ ],
+ "a-endurance-long-180": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Ez a hosszú edzés az aerob volumenről szól, a bemelegítés legyen türelmes."
+  },
+  {
+   "step": 0,
+   "at_s": 420,
+   "text": "Még három perc, és jön az első hosszú Zóna 2 blokk."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Most rendeződik be a ritmus, a kadencia maradjon 90 körül."
+  },
+  {
+   "step": 1,
+   "at_s": 1200,
+   "text": "Félidő: a vállad legyen lazán lefelé, a kilégzésed hosszú."
+  },
+  {
+   "step": 1,
+   "at_s": 2340,
+   "text": "Utolsó perc a blokkból, a következő szakasz egy kicsit erősebb lesz."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Negyven perc egyenletes munka következik, most a kitartásról szól."
+  },
+  {
+   "step": 2,
+   "at_s": 1200,
+   "text": "Félidő, a lábfejed lazuljon, ne szorítsd a pedált, és tekerj kerekebben."
+  },
+  {
+   "step": 2,
+   "at_s": 2340,
+   "text": "Még egy perc ebből, a következő blokk ugyanilyen legyen."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Harmadik hosszú blokk, ugyanaz a nyugodt tempó, most a figyelmed a fontos."
+  },
+  {
+   "step": 3,
+   "at_s": 1200,
+   "text": "Félúton, igyál egy kortyot, és ellenőrizd, hogy a vállad nem feszül-e."
+  },
+  {
+   "step": 3,
+   "at_s": 2340,
+   "text": "Egy perc van hátra ebből, a végén ne lassulj le hirtelen."
+  },
+  {
+   "step": 4,
+   "at_s": 400,
+   "text": "Ilyenkor is ugyanúgy tekerj, a térdedet tartsd egy vonalban a pedállal."
+  },
+  {
+   "step": 4,
+   "at_s": 1800,
+   "text": "Tíz perc van hátra ebből, már csak kitartás kell."
+  },
+  {
+   "step": 5,
+   "at_s": 120,
+   "text": "Csaknem három órát tekertél, ez hihetetlen aerob alap, amire később is építhetsz."
+  }
+ ],
+ "a-endurance-cadence-60": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai edzés a fordulatszámról szól: egy órán át váltogatjuk a pedálritmust, hogy a lábad minden tartományt megtanuljon."
+  },
+  {
+   "step": 1,
+   "at_s": 150,
+   "text": "A 90-es kadencia most a referencia. Jegyezd meg ezt a ritmust, mert a következő szakaszok erre épülnek."
+  },
+  {
+   "step": 2,
+   "at_s": 120,
+   "text": "Félidőben a gyors szakasz. Csak a bokádtól és a térdedtől dolgozz, a felső tested legyen laza."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Vissza az alap kadenciára. Figyeld meg a különbséget a lábadban a gyors és a lassabb ritmus között."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Második gyors szakasz. Tartsd a fordulatot, de a watt ne legyen több a kelleténél."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Most lassíts vissza 88-ra, és lazítsd el a kézfejedet a kormányon."
+  },
+  {
+   "step": 6,
+   "at_s": 120,
+   "text": "Lassú láb, nagy erő. Figyeld, hogy a térded ne rángasson, a csípőd maradjon stabil."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "A nehezebb rész után visszatérünk a könnyebb ritmusra. Lélegezz mélyen, és engedd el a feszültséget."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Utolsó lassú blokk. Ugyanaz a technika: teljes kör, nyugodt felsőtest, és ne rángasd a kormányt."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Öt perc van hátra az utolsó egyenletes szakaszból, utána jön a levezetés."
+  },
+  {
+   "step": 10,
+   "at_s": 200,
+   "text": "Egy órát végigtekertél, ami szép munka a fordulatszám-érzékeléshez. Most lassan pörögj tovább, és lélegezz mélyen."
+  }
+ ],
+ "a-endurance-sprints-90": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A bemelegítés a sprintekre készít: a lábad teljesen átmelegedjen, mert hamarosan rövid sprintek jönnek."
+  },
+  {
+   "step": 1,
+   "at_s": 450,
+   "text": "Olyan tempó ez, hogy közben még beszélgetni is tudnál, ezt tartsd."
+  },
+  {
+   "step": 1,
+   "at_s": 800,
+   "text": "Kicsit több mint egy perc, és jön az első sprint. Kezdj el figyelni a kadenciádra."
+  },
+  {
+   "step": 3,
+   "at_s": 150,
+   "text": "Sprint után a légzésed lassuljon le, a watt maradjon a 2-es zónában."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Második sprint kész. Most visszatérünk a 2-es zónába, és a légzésed lassuljon."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Harmadik sprint kész. Ülj vissza a nyeregbe, és a 2-es zóna tempóját tartsd."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Negyedik sprint után félidő van: még két sprint, és utána a záró blokk."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Utolsó sprint kész, jöhet a hosszabb záró 2-es blokk. Lélegezz mélyen."
+  },
+  {
+   "step": 14,
+   "at_s": 600,
+   "text": "Félúton a záró blokkban, lazán vedd a levegőt, és hagyd lassulni a pulzust."
+  },
+  {
+   "step": 14,
+   "at_s": 1140,
+   "text": "Utolsó perc a záró blokkból, a kadencia legyen egyenletes."
+  },
+  {
+   "step": 15,
+   "at_s": 300,
+   "text": "Szép munka, a sprintek és az alap is megvolt. Lassíts le és igyál vizet."
+  }
+ ],
+ "a-endurance-lt1-3x20": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A mai szakasz az aerob küszöb körüli munka, a bemelegítés ehhez készít elő."
+  },
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Még két és fél perc, és az első tempós blokk jön."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Megvan a ritmus, a kadencia maradjon 90 körül, a kilégzésed legyen hosszú."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Még öt perc, figyelj, hogy a tempó ne csússzon felfelé a végére."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Most nyújtózkodj és lazíts a válladdal, a következő blokk előtt."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk, húsz perc a küszöb alatt, ugyanaz a tempó, mint az elsőnél."
+  },
+  {
+   "step": 3,
+   "at_s": 600,
+   "text": "Félidő, ellenőrizd a tartásodat, a felsőtested ne dőljön előre."
+  },
+  {
+   "step": 3,
+   "at_s": 1140,
+   "text": "Egy perc van hátra, a kadenciát tartsd végig egyenletesen."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Második pihenő jön, öt perc lazítás, utána az utolsó blokk következik."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Az utolsó húsz perc jön, a tempó ugyanaz, az elején ne égesd el magad."
+  },
+  {
+   "step": 5,
+   "at_s": 600,
+   "text": "Félidő, a légzésed legyen mély és ritmusos, a lábad nyugodt."
+  },
+  {
+   "step": 5,
+   "at_s": 1140,
+   "text": "Az utolsó perc, és utána már csak lazítás vár."
+  },
+  {
+   "step": 6,
+   "at_s": 120,
+   "text": "Három blokkot megcsináltál, ez a küszöb körüli munka építi az aerob teljesítményedet."
+  }
+ ],
+ "a-endurance-tempo-finish-120": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai hosszú munka végén fáradt lábbal kell tempót tartanod, ezért most ne fogyaszd el az energiád."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Tíz perc telt el a blokkból. Nézd meg a kezed, nem fárad-e el a kormányon."
+  },
+  {
+   "step": 1,
+   "at_s": 1200,
+   "text": "Húsz perc telt el, félúton a blokkban. Igazítsd a testtartásod, ne görnyedj a kormány fölé."
+  },
+  {
+   "step": 1,
+   "at_s": 1800,
+   "text": "Tíz perc múlva jön a következő blokk, addig a pulzusod maradjon nyugodt."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Második hosszú blokk. Itt már érezni fogod a fáradtságot, de a watt maradjon ugyanaz."
+  },
+  {
+   "step": 2,
+   "at_s": 600,
+   "text": "Ez a blokk az alap része: a lábad már megszokta a ritmust, most csak tartsd."
+  },
+  {
+   "step": 2,
+   "at_s": 1200,
+   "text": "Húsz perc van hátra ebből a blokkból, a lábad még friss."
+  },
+  {
+   "step": 2,
+   "at_s": 1800,
+   "text": "Tíz perc múlva jön a tempó, ezért most spórolj az energiával."
+  },
+  {
+   "step": 3,
+   "at_s": 600,
+   "text": "A szakasz közepe jön: a fáradt lábak ellenére tartsd a 85%-ot, és ne gyorsíts el."
+  },
+  {
+   "step": 3,
+   "at_s": 900,
+   "text": "Öt perc van hátra, most már csak fegyelem kell. Ne rángasd meg a tempót."
+  },
+  {
+   "step": 4,
+   "at_s": 200,
+   "text": "Két óra munka van a hátad mögött. Most lassan lazíts, és lélegezz mélyen."
+  }
+ ],
+ "b-tempo-3x15": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai három tempóblokk a 3-as zónában lesz, a bemelegítésben már pörögj könnyedén."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "A 3-as zónában a légzésed legyen erőteljes, de még kontrollált."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Öt perc van hátra, a tempó ne lassuljon a végére."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Pihenő: lazítsd el a vállad, de a kadencia maradjon forgó, ne állj meg."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második tempóblokk. Ugyanaz a watt és ugyanaz a légzés, ne gyorsíts az elején."
+  },
+  {
+   "step": 3,
+   "at_s": 450,
+   "text": "Félidő a második blokkban, a törzsed maradjon stabil, a csípőd ne billegjen."
+  },
+  {
+   "step": 3,
+   "at_s": 840,
+   "text": "Utolsó perc a második tempóból, már csak ez az egy perc van hátra."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Pihenő: igyál egy kortyot, és figyeld, hogyan csökken a légzésed."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Az utolsó tempóblokk jön, most a fejednek kell kitartania."
+  },
+  {
+   "step": 5,
+   "at_s": 450,
+   "text": "Félúton a harmadik blokkban, a lábad legyen kerek, a kezed laza."
+  },
+  {
+   "step": 5,
+   "at_s": 840,
+   "text": "Még egy perc, és utána jöhet a levezetés. Csak még egy kicsit."
+  },
+  {
+   "step": 6,
+   "at_s": 300,
+   "text": "Három tempóblokk van mögötted, ez komoly munka. Most lassan lazíts."
+  }
+ ],
+ "b-tempo-2x40": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A mai edzés hosszú tempó-kitartásról szól, a bemelegítés most ezt készíti elő."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, és utána indul az első nagy tempóblokk."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Most rendeződik be a tempó, a kadencia 88 körül legyen, a lábad lazán mozogjon."
+  },
+  {
+   "step": 1,
+   "at_s": 1200,
+   "text": "Félidő, ülj egyenesen, a vállad ne húzd fel, és figyeld a légzésedet."
+  },
+  {
+   "step": 1,
+   "at_s": 2340,
+   "text": "Utolsó perc az első blokkból, utána rövid pihenő jön."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Rövid pihenő jön, lazíts, és készülj a második, még fáradtabb blokkra."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Még öt perc, és utána indulunk újra, a tartásodat ellenőrizd."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Most a fáradtság jön, de a lábfejed legyen nyugodt, ne szorítsd a pedált."
+  },
+  {
+   "step": 3,
+   "at_s": 1200,
+   "text": "Félidő, nyújtózz egyet, és igyál, hogy a második fele is erős legyen."
+  },
+  {
+   "step": 3,
+   "at_s": 1800,
+   "text": "Tíz perc van hátra, a tempó legyen egyenletes, ne a sprintre gondolj."
+  },
+  {
+   "step": 3,
+   "at_s": 2340,
+   "text": "Még egy perc, és jön a levezetés, a legnehezebb rész mögötted van."
+  },
+  {
+   "step": 4,
+   "at_s": 300,
+   "text": "Majdnem két órát tekertél, ez a hosszú tempó a kitartásodat építi, nagyon jól csináltad."
+  }
+ ],
+ "b-tempo-piramis": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Félúton a bemelegítésben. A mai piramis fokozatosan nehezedik, most csak a lábad ébredjen fel."
+  },
+  {
+   "step": 1,
+   "at_s": 150,
+   "text": "Ez az első rövid tempó: még friss vagy, tartsd egyenletesen, és ne gyorsíts a kezdésen."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Pihenő, de ne állj meg. Lazán tekerj, és lélegezz ki hosszan."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Most jön a tízperces tempó. Keresd a stabil érzést, a lábad és a légzésed legyen összhangban."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Félidőben vagy a tízperces blokkon. A légzésed legyen mély és kontrollált."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Három perc pihenő. Nézd meg a pulzusodat, és igyál egy kortyot."
+  },
+  {
+   "step": 5,
+   "at_s": 300,
+   "text": "Félúton a csúcson: a vállad lazán, a csípőd nyugodt, a tempó ugyanaz maradjon."
+  },
+  {
+   "step": 5,
+   "at_s": 600,
+   "text": "Öt perc van hátra a legnehezebb blokkból. Ne lazíts, ez a szakasz hozza a legtöbbet."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Négy perc pihenő, de a pedál forogjon végig, ne álljon le a láb."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Második tízperces tempó. A fáradtság már ott van, ezért a kadenciát tartsd 86 körül."
+  },
+  {
+   "step": 9,
+   "at_s": 150,
+   "text": "Ez a piramis legerősebb rövid blokkja. A végén még legyen egy kis tartalék benned."
+  },
+  {
+   "step": 9,
+   "at_s": 270,
+   "text": "Még harminc másodperc, add meg a maradékot, aztán vége a munkának."
+  },
+  {
+   "step": 10,
+   "at_s": 200,
+   "text": "Egy óra tempó után ez a lazítás jól esik. Lassan csökkentsd a tempót, és dicsérd meg magad a munkáért."
+  }
+ ],
+ "b-tempo-60": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai feladat a kitartás: a bemelegítésben állítsd be a légzésed ritmusát."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Az első percek a fejben dőlnek el, ne gyorsíts, csak tartsd a 80%-ot."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Nézd meg a vállad: ha felhúzódott, engedd le, és lélegezz mélyebben."
+  },
+  {
+   "step": 1,
+   "at_s": 1800,
+   "text": "Félidő van, és most a fejed a nehezebb, nem a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 2400,
+   "text": "Húsz perc van hátra, a tempó legyen ugyanaz, a légzésed stabil."
+  },
+  {
+   "step": 1,
+   "at_s": 3000,
+   "text": "Tíz perc van hátra, most jön a legnehezebb mentális szakasz."
+  },
+  {
+   "step": 1,
+   "at_s": 3540,
+   "text": "Utolsó perc a tempóból. Ülj egyenesen, és tarts ki még egy kicsit."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Egy órán át tartottad a tempót, ez nagy teljesítmény. Most lassíts le."
+  }
+ ],
+ "b-tempo-bursts-3x15": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Ez a bemelegítés a tempóra és a gyorsításokra készít elő, a lábad lassan melegedjen."
+  },
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Négy perc, és jön az első tempóblokk, a kadenciát 88 körül tartsd."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Első kör, a tempó legyen kényelmesen kemény, és a légzésed maradjon mély."
+  },
+  {
+   "step": 11,
+   "at_s": 60,
+   "text": "Öt perc lazítás jön, most a légzés nyugodjon le, és igyál egy kortyot."
+  },
+  {
+   "step": 12,
+   "at_s": 0,
+   "text": "Második szett, a gyorsítások után mindig térj vissza ugyanarra a wattra."
+  },
+  {
+   "step": 16,
+   "at_s": 0,
+   "text": "Félúton vagy a második szettben, a tempó maradjon ugyanaz, a gyorsításban se szakadj el."
+  },
+  {
+   "step": 22,
+   "at_s": 60,
+   "text": "Második pihenő, lazíts, és készülj az utolsó, harmadik szettre."
+  },
+  {
+   "step": 23,
+   "at_s": 0,
+   "text": "Harmadik szett, a lábad fárad, de a gyorsítások után ugyanúgy térj vissza a tempóra."
+  },
+  {
+   "step": 31,
+   "at_s": 0,
+   "text": "Utolsó kör, a tempó maradjon ugyanaz, a végén jön az utolsó gyorsítás."
+  },
+  {
+   "step": 33,
+   "at_s": 120,
+   "text": "Három szett, összesen tizenöt gyorsítás, ez a tempóállóságot edzi, szép volt."
+  }
+ ],
+ "b-sweetspot-4x8-intro": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Ez az első alkalom a küszöb alatti munkára. A bemelegítésben ne fáradj el, hagyj erőt a blokkokra."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Félidő a blokkban. Tartsd a 87%-ot, a légzésed legyen mély, a vállad lent maradjon."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Négy perc pihenő következik. Ne üldögélj, pörögj könnyen, és lazítsd el a kézfejed."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk. Ugyanaz a tempó, mint az elsőnél, ne a kezdeti lendületre építs."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Még három perc van hátra, és a kadenciád maradjon 90 körül."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Egy kis levegő, és igyál egy kortyot. A harmadik blokk már közelebb lesz a küszöbhöz."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik blokk. Ilyenkor a legnagyobb a csábítás, hogy gyorsíts. Ne tedd."
+  },
+  {
+   "step": 5,
+   "at_s": 360,
+   "text": "Két perc van hátra. Hozd a stabil tempót, ne a végét sietsd el."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Az utolsó sweet spot blokk. Mostantól a fáradtság jön, de a watt legyen ugyanaz."
+  },
+  {
+   "step": 7,
+   "at_s": 360,
+   "text": "Két perc van hátra, tartsd a stabil lábcsapást."
+  },
+  {
+   "step": 7,
+   "at_s": 450,
+   "text": "Harminc másodperc, utána jön a levezetés."
+  },
+  {
+   "step": 8,
+   "at_s": 200,
+   "text": "Négy blokkot csináltál, ez a küszöb alatti munka alapja. Most lassan lazíts, és lélegezz nyugodtan."
+  }
+ ],
+ "b-sweetspot-2x12-quick": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A sweet spot a küszöb alatti, mégis érdemi munka. A bemelegítés most a lábadat készíti elő."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Ez nem sprint és nem pihenő, hanem állandó nyomás a pedálon, ezt tartsd."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Még két perc, és jöhet a pihenő. Tartsd a formát, ne fáradj el a kezeddel."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Pihenő: rázd ki a lábad, igyál egy kortyot, aztán jön a második blokk."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk: ugyanaz a watt, mint az elsőnél. Ne szaladj előre a tempóval."
+  },
+  {
+   "step": 3,
+   "at_s": 360,
+   "text": "Félidő van, a lábad már ismeri a ritmust, tartsd egyenletesen."
+  },
+  {
+   "step": 3,
+   "at_s": 660,
+   "text": "Utolsó perc, most a csípőd nyugalmára figyelj, aztán jön a levezetés."
+  },
+  {
+   "step": 4,
+   "at_s": 200,
+   "text": "Kész a munka, a sweet spot most szépen beépül. Lazíts, és nyújtózz egy kicsit."
+  }
+ ],
+ "b-sweetspot-3x12": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A bemelegítés a sweet spotra készít elő, vagyis az erős, de kezelhető munkára."
+  },
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Két perc, és jön az első tizenkét perces blokk, készülj."
+  },
+  {
+   "step": 1,
+   "at_s": 360,
+   "text": "Félidő, a kadencia maradjon 90 körül, ne gyorsítsd fel a lendülettel."
+  },
+  {
+   "step": 1,
+   "at_s": 660,
+   "text": "Egy perc van hátra, a végén se lazulj el, tartsd a wattot."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Most lazíts, a második tizenkét perc előtt a légzésed álljon vissza."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk, ugyanaz a tempó, mint az elején, a kezdésnél ne siess."
+  },
+  {
+   "step": 4,
+   "at_s": 60,
+   "text": "Még egy pihenő, aztán jön a harmadik, utolsó sweet spot."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Az utolsó tizenkét perc, a fáradtság ellenére a minőségen dolgozz."
+  },
+  {
+   "step": 5,
+   "at_s": 600,
+   "text": "Két perc van hátra, a végén mindent a tempóba."
+  },
+  {
+   "step": 6,
+   "at_s": 120,
+   "text": "Három erős blokk van mögötted, ez a munka az FTP-dnek is sokat ad."
+  }
+ ],
+ "b-sweetspot-2x20": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Ez a mai két húszperces munka, a bemelegítésben spórolj az energiával. Lassan ébreszd fel a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "A tempó most a sweet spot felső része. Keresd a stabil érzést, és ne ugorj előre."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Tíz perc telt el, még tíz van hátra. A kadenciád maradjon 90 körül."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Öt perc van hátra az első blokkból. A vállad maradjon lazán, a légzésed kontrolált."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Öt perc pihenő. Igyál, és készülj a második húszperces blokkra."
+  },
+  {
+   "step": 3,
+   "at_s": 30,
+   "text": "Második húszperces blokk. Az első jól ment, most ugyanígy folytasd, ne hajts többet."
+  },
+  {
+   "step": 3,
+   "at_s": 600,
+   "text": "Tíz perc van hátra az egyenletes munkából. A pulzusod ne ugorjon meg, tartsd a tempót."
+  },
+  {
+   "step": 3,
+   "at_s": 1020,
+   "text": "Utolsó három perc: a végén még egy kicsit tarthatod a tempót, ne lazíts."
+  },
+  {
+   "step": 4,
+   "at_s": 200,
+   "text": "Két húszperces blokk, a sweet spot munka értékes. Most lassan lazíts, és lélegezz mélyen."
+  }
+ ],
+ "b-sweetspot-3x20": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "A nagy volumenű munka előtt most ne fárassz magadon, lazán pörögj, hogy a lábad melegedjen."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Húsz perces blokk: az első percekben tudatosan vedd vissza, hogy a végére is maradjon erő."
+  },
+  {
+   "step": 1,
+   "at_s": 720,
+   "text": "Félúton az első blokkban, a légzésed legyen ritmikus, ne szaggatott."
+  },
+  {
+   "step": 1,
+   "at_s": 1140,
+   "text": "Utolsó perc az első blokkból, a tempó ugyanaz, készülj a rövid pihenőre."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Pihenő: igyál és lazítsd a kezed, de a pedál maradjon forgásban."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második húsz perc: a csípő és a váll maradjon nyugodt, a watt ugyanaz."
+  },
+  {
+   "step": 3,
+   "at_s": 600,
+   "text": "Tíz perc telt el, ne emeld a wattot, csak tartsd."
+  },
+  {
+   "step": 3,
+   "at_s": 1140,
+   "text": "Utolsó perc a második blokkból, most már csak ez az egy perc van hátra."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Pihenő: lazítsd meg a kulcsot, nézz előre, a harmadik blokk jön."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Az utolsó húsz perc jön, a fejed már ismeri a ritmust, a lábad is."
+  },
+  {
+   "step": 5,
+   "at_s": 600,
+   "text": "Tíz perc van hátra, nem kell gyorsítani, csak tartani."
+  },
+  {
+   "step": 5,
+   "at_s": 1140,
+   "text": "Utolsó perc a versenykitartás blokkjából, tartsd a ritmust a végéig."
+  },
+  {
+   "step": 6,
+   "at_s": 450,
+   "text": "Három nagy sweet spot blokk van mögötted, ez versenykitartás. Lazíts, büszke lehetsz."
+  }
+ ],
+ "b-sweetspot-1x45": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A bemelegítés most a 45 perces blokkra készít, ami hosszú, de kontrollált munka."
+  },
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Hét perc van hátra, utána indul a nagy blokk, a légzésed legyen nyugodt."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Megvan a ritmus, a kadenciát tartsd 88 körül, a lábad lazán mozogjon."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Ilyen hosszú blokknál a figyelmed a légzésedre maradjon, ne a teljesítményre."
+  },
+  {
+   "step": 1,
+   "at_s": 1350,
+   "text": "Félidő, a vállad lazán, a törzsed egyenes, a fejed nyugodt."
+  },
+  {
+   "step": 1,
+   "at_s": 1800,
+   "text": "Tizenöt perc van hátra, a végén se gyorsulj, ugyanaz a tempó kell."
+  },
+  {
+   "step": 1,
+   "at_s": 2280,
+   "text": "Hét perc van hátra a blokkból, ilyenkor sokan szorítani kezdenek, te lazíts."
+  },
+  {
+   "step": 2,
+   "at_s": 240,
+   "text": "Szép, egyenletes munka volt, a sweet spot pont ezt építi."
+  }
+ ],
+ "b-sweetspot-progressziv": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. Most a kadenciát figyeld, a progresszív blokkok fokozatosan nehezítenek."
+  },
+  {
+   "step": 1,
+   "at_s": 400,
+   "text": "Az elején a 84%-ot tartsd, ne próbálj többet adni. A végén még lesz erőd."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Tíz perc van hátra az első blokkból, a watt már közel van a 89-hez."
+  },
+  {
+   "step": 1,
+   "at_s": 1380,
+   "text": "Két perc van hátra. Lélegezz mélyen, és tartsd a kadenciát a végéig."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Négy perc pihenő. Ez nem kényelmes, de a második blokkhoz szükséged lesz a friss lábra."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Ez a blokk magasabbról indul, ezért a légzésedre figyelj, ne az órára."
+  },
+  {
+   "step": 3,
+   "at_s": 720,
+   "text": "A blokk közepén vagy. A lábad fáradhat, de a tartás és a légzés maradjon jó."
+  },
+  {
+   "step": 3,
+   "at_s": 1320,
+   "text": "Két perc van hátra. Most nem kell tartalékolni, a végén adj bele."
+  },
+  {
+   "step": 4,
+   "at_s": 200,
+   "text": "Két tartós blokk, a tempóérzéked ezzel sokat fejlődik. Most lazítsd a lábad és vidd le a pulzust."
+  }
+ ],
+ "b-sweetspot-4x10-kadencia": [
+  {
+   "step": 0,
+   "at_s": 360,
+   "text": "A mai ülés a kadenciával játszik: a bemelegítés alatt próbáld ki a különböző fordulatokat."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Itt a kényelmes ritmust keresd, ez lesz a viszonyítási pont a többi blokkhoz."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Pihenő: lazíts, és készülj, hogy a következő blokkban lassabb fordulattal dolgozol."
+  },
+  {
+   "step": 3,
+   "at_s": 240,
+   "text": "Lassú fordulat, több erő: a térded ne forduljon ki, a bokád maradjon nyugodt."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Pihenő: a következő blokk gyors lesz, a kezed és a vállad lazítsd el."
+  },
+  {
+   "step": 5,
+   "at_s": 240,
+   "text": "Gyors fordulat, a légzésed szaporábbá válik, ez normális, a 89%-os teljesítményt tartsd."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Az utolsó blokk előtt igyál pár kortyot, és lazítsd ki a kezed."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Utolsó sweet spot blokk: a természetes fordulat jó, de a watt a fontos."
+  },
+  {
+   "step": 7,
+   "at_s": 300,
+   "text": "Félúton, a 89%-os wattot tartsd, a kadenciát már nem kell változtatni."
+  },
+  {
+   "step": 7,
+   "at_s": 540,
+   "text": "Utolsó perc, a lábad már kész, csak még egy kicsit."
+  },
+  {
+   "step": 8,
+   "at_s": 300,
+   "text": "Négy blokk, négy különböző kadencia, szép munka volt. Most lazíts, és nézd meg, mennyit tanultál."
+  }
+ ],
+ "b-sweetspot-over-under": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A mai edzés az intenzitásváltásról szól, a bemelegítés most a lábakat készíti elő."
+  },
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Négy perc, és jön az első sorozat, a váltásokra figyelj."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Az első körben a váltás a lényeg, a kadencia 88 körül, a tempó ne csússzon."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Az első sorozat közepén jársz, a légzésed legyen hosszú, a váltások ugyanolyanok."
+  },
+  {
+   "step": 13,
+   "at_s": 60,
+   "text": "Öt perc lazítás, nyújtózz, és készülj a második, még nehezebb sorozatra."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "Második sorozat, a könnyebb részek most is nehezek, de a tempó maradjon ugyanaz."
+  },
+  {
+   "step": 20,
+   "at_s": 0,
+   "text": "Félúton a második sorozatban, a kilégzésed legyen erős, és ne kapkodj."
+  },
+  {
+   "step": 25,
+   "at_s": 0,
+   "text": "Utolsó erősebb szakasz, most mindent bele, de a kadencia maradjon 95 körül."
+  },
+  {
+   "step": 26,
+   "at_s": 300,
+   "text": "Tizenkét váltást csináltál végig, ez a tejsavtűrésed építi, szépen csináltad."
+  }
+ ],
+ "b-sweetspot-sorozatok": [
+  {
+   "step": 0,
+   "at_s": 360,
+   "text": "Félúton a bemelegítésben. Ma rövid, éles gyorsítások jönnek, ezért a lábad most legyen meleg."
+  },
+  {
+   "step": 1,
+   "at_s": 90,
+   "text": "Félidőben a blokkban. A légzésed legyen mély, a kezed ne feszüljön a kormányon."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Négy perc pihenő. Lazíts, ne állj meg, és készülj, hogy a második sorozat már nehezebb lesz."
+  },
+  {
+   "step": 10,
+   "at_s": 0,
+   "text": "Második sorozat. Az első után a lábad már tudja a ritmust, ne a kezdéssel versenyezz."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "A második sorozat második fele jön. A rákapcsolások most fáradtabb lábbal jönnek, a légzés legyen erős."
+  },
+  {
+   "step": 18,
+   "at_s": 0,
+   "text": "Második pihenő, utána jön az utolsó sorozat. Igyál egyet, és nyújtsd meg a hátad."
+  },
+  {
+   "step": 19,
+   "at_s": 0,
+   "text": "Harmadik és utolsó sorozat. Most 90% körül kell tartanod, a rákapcsolások pedig erősebbek lesznek."
+  },
+  {
+   "step": 25,
+   "at_s": 0,
+   "text": "Az utolsó sweet spot blokk, utána már csak egy rákapcsolás van. Tartsd meg a kadenciát."
+  },
+  {
+   "step": 25,
+   "at_s": 150,
+   "text": "Harminc másodperc van hátra, és jön az utolsó rákapcsolás. Készülj."
+  },
+  {
+   "step": 26,
+   "at_s": 0,
+   "text": "Az utolsó rákapcsolás. Állva indulj, teljes erővel, és utána már csak a levezetés jön."
+  },
+  {
+   "step": 27,
+   "at_s": 200,
+   "text": "Három sorozat, sok rákapcsolás: ezt most komolyan megdolgoztad. Lassan engedd le a pulzust."
+  }
+ ],
+ "c-threshold-2x20": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "A küszöbön a bemelegítés a kulcs: érezd meg a lábad, mert hamarosan erős munka jön."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "A küszöbön a mondataid legyenek rövidek, ez jó jel, ha így érzed."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Félidő: maradj a 97%-on, a felsőtested legyen nyugodt."
+  },
+  {
+   "step": 1,
+   "at_s": 1140,
+   "text": "Utolsó perc az első blokkból, készülj a rövid pihenőre."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Pihenő: igyál egy kortyot, és lazítsd meg a vállad, a második blokk jön."
+  },
+  {
+   "step": 3,
+   "at_s": 600,
+   "text": "Félúton vagy, a lábad fáradhat, de a légzésed maradjon kontrollált."
+  },
+  {
+   "step": 3,
+   "at_s": 1140,
+   "text": "Utolsó perc, a csípő stabil, a kulcsod ne feszüljön."
+  },
+  {
+   "step": 4,
+   "at_s": 300,
+   "text": "Két húszperces küszöbblokk, ez komoly munka volt. Most lassíts, és nyújtózz."
+  }
+ ],
+ "c-threshold-2x30": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A bemelegítés a küszöbre készít, a lábad lassan melegedjen fel."
+  },
+  {
+   "step": 0,
+   "at_s": 420,
+   "text": "Még nyolc perc, és indul az első, harminc perces küszöbblokk."
+  },
+  {
+   "step": 0,
+   "at_s": 780,
+   "text": "Két perc van hátra, a légzésed legyen már ritmusos."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Ülj egyenesen, a vállad lazán, a tempó legyen egyenletes a 93 százalékon."
+  },
+  {
+   "step": 1,
+   "at_s": 900,
+   "text": "Félidő, nyújtózz a kormányon, és nézd meg, hogy a kilégzésed hosszú-e."
+  },
+  {
+   "step": 1,
+   "at_s": 1500,
+   "text": "Öt perc van hátra, ne gyorsulj be a lendületbe, tartsd a wattot."
+  },
+  {
+   "step": 1,
+   "at_s": 1740,
+   "text": "Utolsó perc, a végén ne zuhanj vissza, és ne lendülj előre."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Öt perc pihenő, most csak lazíts, és készülj a második küszöbre."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Második blokk, most a fáradtság jön, de a kadencia legyen 86 körül."
+  },
+  {
+   "step": 3,
+   "at_s": 900,
+   "text": "Félidő, a tartásod maradjon, a kilégzés legyen hosszú és erős."
+  },
+  {
+   "step": 3,
+   "at_s": 1500,
+   "text": "Ilyenkor a legtöbben lassulnak, te tartsd a tempót, a kilégzésed ne hagyd el."
+  },
+  {
+   "step": 3,
+   "at_s": 1740,
+   "text": "Egy perc, és vége a kemény résznek, tartsd végig."
+  },
+  {
+   "step": 4,
+   "at_s": 240,
+   "text": "Ez volt a küszöb két nagy blokkja, a lábad most lassan lazuljon."
+  }
+ ],
+ "c-threshold-3x15": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. A mai három küszöbblokk hosszú, ezért most csak ébreszd a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 450,
+   "text": "Félúton az első blokkban. A légzésed legyen ritmusos, a vállad maradjon lazán."
+  },
+  {
+   "step": 1,
+   "at_s": 780,
+   "text": "Két perc van hátra az első küszöbblokkból, most jön a legnehezebb rész."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Öt perc pihenő. Igyál, lazítsd a vállad, és készülj a második küszöbre."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második küszöbblokk. Ugyanaz a tempó, mint az elsőnél, ne a kezdéssel versenyezz."
+  },
+  {
+   "step": 3,
+   "at_s": 450,
+   "text": "Félúton a második blokk. A lábad fáradt lehet, de a watt maradjon ugyanaz."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Öt perc pihenő. Ezt használd a légzéssel, hogy kicsit leeresszed a pulzust."
+  },
+  {
+   "step": 5,
+   "at_s": 450,
+   "text": "Félidőben a harmadik blokk. Erre már fáradtan készülsz, ezért a légzésed legyen mély."
+  },
+  {
+   "step": 5,
+   "at_s": 780,
+   "text": "Két perc, és az utolsó küszöb is kész. Mindent bele, de a formát tartsd."
+  },
+  {
+   "step": 6,
+   "at_s": 200,
+   "text": "Három nagy küszöbblokk, szép kitartás. Most lassan lazíts, és nézz vissza büszkén."
+  }
+ ],
+ "c-threshold-4x10": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "A bemelegítés végén érezd a lábad, ez lesz a mai FTP-munka alapja."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Félidőben nyomj egyenletesen, és a fejedben ne kezdj el gyorsítani."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Pihenő: rázd ki a lábad és igyál, a következő blokk ugyanilyen erős lesz."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk: ugyanaz a watt, mint az elsőnél. Ne igyekezz többet."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Félidő. Csak a következő percre figyelj, a többi most nem számít."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "A harmadik blokk előtt lazíts a kezedben, a vállad maradjon lent."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik küszöbblokk: most a fejed dolgozik, a lábad már megszokta."
+  },
+  {
+   "step": 5,
+   "at_s": 300,
+   "text": "Félidő a harmadikban, tartsd a ritmust, a mondataid még legyenek rövidek."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Az utolsó blokk jön, lazítsd a vállad, mert erre szükséged lesz."
+  },
+  {
+   "step": 7,
+   "at_s": 300,
+   "text": "Félúton az utolsó blokkban, tartsd a plusz wattot, a légzésed kontrollált."
+  },
+  {
+   "step": 7,
+   "at_s": 540,
+   "text": "Utolsó perc: most már mindent beleadhatsz, de a forma maradjon."
+  },
+  {
+   "step": 8,
+   "at_s": 240,
+   "text": "Négy küszöbblokk, szép munka volt. Most lassíts, és jöhet a nyújtás."
+  }
+ ],
+ "c-threshold-ladder-3x12": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A mai edzés emelkedő küszöbterhelés, a bemelegítés most a lábadat melegítse."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, a teher lassan emelkedni fog."
+  },
+  {
+   "step": 1,
+   "at_s": 200,
+   "text": "Az elején nyugodt légzés, a kadencia 90 körül, és ne rángasd a pedált."
+  },
+  {
+   "step": 1,
+   "at_s": 500,
+   "text": "Félidő, a teher már magasabb, de a tartásod maradjon egyenes."
+  },
+  {
+   "step": 1,
+   "at_s": 690,
+   "text": "Fél perc van hátra, most a légzésed legyen mély, és tartsd a ritmust."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Pihenő, az első lépcső után a légzésed álljon vissza, aztán jön a második."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "A második lépcső fáradt lábakkal indul, ne lőj ki az elején."
+  },
+  {
+   "step": 3,
+   "at_s": 480,
+   "text": "Félidő, a tempó már az FTP-n van, a kilégzés legyen hosszú."
+  },
+  {
+   "step": 5,
+   "at_s": 240,
+   "text": "Harmadik lépcső, a lábad fáradt, de a légzésed legyen nyugodt."
+  },
+  {
+   "step": 5,
+   "at_s": 600,
+   "text": "Két perc van hátra, most a végén ne lazíts, ez a legfontosabb rész."
+  },
+  {
+   "step": 6,
+   "at_s": 120,
+   "text": "Három lépcső, mindegyiknél emelkedtél, ez igazi küszöbmunka volt, szépen csináltad."
+  }
+ ],
+ "c-threshold-overunder-3x5": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. A mai over-under blokkok a tejsavkezelést gyakorolják, most ébreszd a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 25,
+   "text": "Az első over alatt: a kadenciát tartsd 95 fölött, a légzésed legyen erős."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Félidőben az under: lélegezz hosszan, a légzés segít lebontani a tejsavat."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Négy perc pihenő az első sorozat után. Igyál, lazítsd a kezed, és engedd le a pulzust."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "Félúton a második sorozatban. Az over után jön az under, ezért most ne állj meg."
+  },
+  {
+   "step": 22,
+   "at_s": 0,
+   "text": "Második pihenő, utána jön a harmadik sorozat, a legnehezebb rész. Lélegezz mélyen."
+  },
+  {
+   "step": 23,
+   "at_s": 0,
+   "text": "Az utolsó sorozat. Ugyanaz a ritmus, mint eddig, de a lábad most fáradtabb lesz."
+  },
+  {
+   "step": 31,
+   "at_s": 0,
+   "text": "Utolsó over, lendülettel. A légzésed legyen erőteljes, de a kadenciát ne engedd."
+  },
+  {
+   "step": 32,
+   "at_s": 0,
+   "text": "Az utolsó under. Utána már csak a levezetés következik, tartsd meg a tempót végig."
+  },
+  {
+   "step": 33,
+   "at_s": 200,
+   "text": "Három sorozat over-under után ez a levezetés megérdemelt. Lassan csökkentsd a wattot és lélegezz mélyen."
+  }
+ ],
+ "c-threshold-overunder-2x20": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Ma változó terhelés jön: a bemelegítés alatt lazán, de fókuszáltan pörögj."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Rövid, de erős rész, a 110%-nál a légzésed szapora lesz, ez teljesen normális."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Az első blokk közepén járunk. A váltásokat most légzéssel vezesd, ne a lábaddal."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Az első blokk utolsó overje jön, most mutasd meg, mit bírsz még."
+  },
+  {
+   "step": 16,
+   "at_s": 0,
+   "text": "Utolsó under az első blokkban, utána öt perc pihenő következik."
+  },
+  {
+   "step": 17,
+   "at_s": 0,
+   "text": "Öt perc pihenő: igyál, lazítsd a vállad, a második blokk ugyanilyen figyelmet kér."
+  },
+  {
+   "step": 18,
+   "at_s": 0,
+   "text": "Második blokk, most a lábad már ismeri a ritmust, a váltásokat légzésre tervezd."
+  },
+  {
+   "step": 26,
+   "at_s": 0,
+   "text": "Félidő a második blokkban: a váltások most nehezebbek, de a légzés segít."
+  },
+  {
+   "step": 32,
+   "at_s": 0,
+   "text": "Az utolsó overunk jön, most tedd bele, amit tudsz, és tartsd a formát."
+  },
+  {
+   "step": 33,
+   "at_s": 0,
+   "text": "Utolsó under, csak még ez az egy perc, aztán jön a levezetés."
+  },
+  {
+   "step": 34,
+   "at_s": 300,
+   "text": "Két blokk over-under után nagy munka van a hátad mögött. Lassíts és nyújts."
+  }
+ ],
+ "c-threshold-surges-3x12": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A bemelegítés a versenyszerű ritmusváltásokra készít, a lábad most melegedjen."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, az első küszöbblokk után jönnek a rövid gyorsítások."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Első kör, a tempó maradjon stabil, a gyorsítás előtt a kadenciát emeld 90-re."
+  },
+  {
+   "step": 9,
+   "at_s": 60,
+   "text": "Első szett kész, a légzésed álljon vissza, a második szett már nehezebb lesz."
+  },
+  {
+   "step": 10,
+   "at_s": 0,
+   "text": "Második szett, a gyorsítások után vissza a küszöbre, ne lazíts."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "Félúton a második szettben, a kadencia maradjon 90 körül, a gyorsítás után se kapkodj."
+  },
+  {
+   "step": 18,
+   "at_s": 60,
+   "text": "Második szett kész, lazíts egy kicsit, az utolsó szett előtt van idő levegőt venni."
+  },
+  {
+   "step": 21,
+   "at_s": 0,
+   "text": "Harmadik szett, a tempó 98 százalék, a légzésed legyen nyugodt."
+  },
+  {
+   "step": 26,
+   "at_s": 0,
+   "text": "Utolsó gyorsítás, most add ki mindent húsz másodpercre, aztán vissza a tempóra."
+  },
+  {
+   "step": 27,
+   "at_s": 120,
+   "text": "Három szett, sok gyorsítás, ez a küszöb tartóképességét edzi, szép volt."
+  }
+ ],
+ "c-threshold-fatigued-blocks": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. Előbb egy erős előfárasztás jön, ezért most ne pazarold a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Félidő az előfárasztásban. Ne sietsd el, de a watt maradjon egyenletes."
+  },
+  {
+   "step": 1,
+   "at_s": 540,
+   "text": "Egy perc van hátra az előfárasztásból, most már csak tartsd ki."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Három perc pihenő. Ez után jön a fáradt küszöb, ezért lélegezz mélyen."
+  },
+  {
+   "step": 3,
+   "at_s": 450,
+   "text": "Félúton az első fáradt blokk. A légzésed legyen erős és ritmusos, a tested már fáradt."
+  },
+  {
+   "step": 3,
+   "at_s": 780,
+   "text": "Két perc van hátra az első fáradt blokkból, most még tartsd a wattot."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Három perc pihenő, és mégis fáradtnak érzed magad. Ez normális, a következő blokkra készülj."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "A második fáradt blokk. Ha nehéznek tűnik, a kadenciát 86 körül tartva könnyebb lesz."
+  },
+  {
+   "step": 5,
+   "at_s": 450,
+   "text": "Félúton a második fáradt blokk. A watt nem lesz könnyebb, csak egyenletesebb."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Most pihenő jön: igyál, és készülj a harmadik, legnehezebb blokkra."
+  },
+  {
+   "step": 7,
+   "at_s": 450,
+   "text": "Félidőben: a légzésed és a testtartásod legyen stabil, a vállad ne húzd fel."
+  },
+  {
+   "step": 7,
+   "at_s": 780,
+   "text": "Két perc van hátra, most minden erődet add ide."
+  },
+  {
+   "step": 8,
+   "at_s": 200,
+   "text": "Egy nehéz edzés után ez a levezetés jól jön. Lassan engedd le a pulzust, és nézz vissza, mennyit bírtál."
+  }
+ ],
+ "c-threshold-seiler-4x16": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Ez a Seiler-protokoll: hosszú, kontrollált blokkok. A bemelegítés most ne fárasszon."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Érezd meg a 95%-ot: ez hosszan kitartható, ne tolj rá plusz wattot."
+  },
+  {
+   "step": 1,
+   "at_s": 720,
+   "text": "Még négy perc van hátra, utána rövid pihenő jön. Ne lazíts most."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Engedd le a vállad, és figyeld meg, hogy a légzésed lassuljon."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk, ugyanaz a watt. Most tudatosan tartsd a ritmust."
+  },
+  {
+   "step": 3,
+   "at_s": 480,
+   "text": "Félúton a második blokkban: a felsőtested maradjon nyugodt, a csuklód laza."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Lazíts egy kicsit, és figyeld, hogy a pulzusod hogyan csökken."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik blokk: most jön a próba, de a tempó ugyanaz marad."
+  },
+  {
+   "step": 5,
+   "at_s": 600,
+   "text": "Még hat perc, aztán rövid pihenő, és jön az utolsó blokk."
+  },
+  {
+   "step": 7,
+   "at_s": 480,
+   "text": "Félúton az utolsó blokkban, most már csak a végéig kell kitartani."
+  },
+  {
+   "step": 7,
+   "at_s": 900,
+   "text": "Utolsó perc, ne gyorsíts, csak tartsd a 95%-ot a végéig."
+  },
+  {
+   "step": 8,
+   "at_s": 300,
+   "text": "Négy tizenhat perces küszöbblokk, ez komoly munka volt. Most lassíts, és nyugodj meg egy kicsit."
+  }
+ ],
+ "c-threshold-norwegian-5x8": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A norvég módszer kontrollált munka, a bemelegítés most a lábadat készíti elő."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, az első nyolc perces blokk után jön a sorozat."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Félidő, a kadencia maradjon 90 körül, a légzésed legyen ritmusos."
+  },
+  {
+   "step": 1,
+   "at_s": 420,
+   "text": "Egy perc van hátra, ne engedj a tempóból."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk, ugyanúgy kezd, mint az elsőt, nyugodt, de kitartó tempóval."
+  },
+  {
+   "step": 5,
+   "at_s": 240,
+   "text": "Ez a középső blokk, most a legfontosabb a nyugodt, egyenletes tekerés."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Pihenő a harmadik blokk után, a légzésed álljon vissza, a következő jön."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Negyedik blokk, a lábad már fáradt, de a kontroll maradjon."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Utolsó blokk, most add meg a maradék erőd, de a tempó maradjon."
+  },
+  {
+   "step": 9,
+   "at_s": 360,
+   "text": "Két perc van hátra, a végén még egy kicsit tarts ki."
+  },
+  {
+   "step": 10,
+   "at_s": 300,
+   "text": "Öt blokk, ez a norvég módszer, a kitartásod jól működik, nagyon jól csináltad."
+  }
+ ],
+ "c-threshold-norwegian-10x3": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félidőben a bemelegítés. A mai tíz rövid küszöbblokk jön, most csak melegítsd át a combod."
+  },
+  {
+   "step": 1,
+   "at_s": 90,
+   "text": "Félúton az első háromperces blokkban. A légzésed legyen mély és szabályos."
+  },
+  {
+   "step": 2,
+   "at_s": 30,
+   "text": "Fél perc, és jön a következő blokk. A légzés most a legfontosabb, a kezed ne feszüljön."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk. A rövid pihenő csak arra jó, hogy kiszellőztesd a lábad, ne lazíts túl."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Félúton a sorozatban. A pulzus már magas, de a kadenciát 92 körül tartsd, ez a kulcs."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Nyolcadik blokk. A lábad már fáradt, de a kadencia legyen állandó."
+  },
+  {
+   "step": 19,
+   "at_s": 0,
+   "text": "Az utolsó, tizedik blokk. Utána már csak a levezetés jön, mindent bele."
+  },
+  {
+   "step": 19,
+   "at_s": 90,
+   "text": "Másfél perc van hátra, most a légzés irányítsa a tempót."
+  },
+  {
+   "step": 20,
+   "at_s": 200,
+   "text": "Tíz rövid küszöbblokk, az egész edzés egyik legnehezebb része volt. Most lassan lazíts."
+  }
+ ],
+ "c-threshold-quick-3x8": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Rövid, de intenzív munka jön, a bemelegítés alatt érezd meg a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Félúton az első nyolc percben, a légzésed legyen ritmusos."
+  },
+  {
+   "step": 1,
+   "at_s": 420,
+   "text": "Utolsó perc, most a fejedet használd, a fordulat és a watt maradjon."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Három perc pihenő: igyál, és készülj a második nyolc percre."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk ugyanazzal a wattal. Most a fejedben kell tartani a tempót."
+  },
+  {
+   "step": 3,
+   "at_s": 240,
+   "text": "Félúton a második blokkban, tartsd lazán a vállad, a kezed nyugodt legyen."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Utolsó blokk jön, és most is ugyanaz a watt. Ülj kényelmesen."
+  },
+  {
+   "step": 5,
+   "at_s": 240,
+   "text": "Félidő az utolsó blokkban, most a mély légzés segít, a lábad ne lassuljon."
+  },
+  {
+   "step": 5,
+   "at_s": 420,
+   "text": "Még egy perc, most csak a végére figyelj, aztán jön a levezetés."
+  },
+  {
+   "step": 6,
+   "at_s": 150,
+   "text": "Három nyolc perces küszöbblokk, szép munka. Lassíts most, és nyújtózz."
+  }
+ ],
+ "c-threshold-1x40": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A negyven perces küszöbblokk előtt a bemelegítés most a lábadat készíti elő."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, készülj, hogy a tempó egyenletes marad."
+  },
+  {
+   "step": 1,
+   "at_s": 300,
+   "text": "Megvan a kilégzésed, a kadencia maradjon 88 körül, a vállad lazán."
+  },
+  {
+   "step": 1,
+   "at_s": 750,
+   "text": "Tizenkét perc, a légzésed ritmusos legyen, és a fejed nyugodt."
+  },
+  {
+   "step": 1,
+   "at_s": 1200,
+   "text": "Húsz perc, félidő, a tempó most se gyorsuljon, ellenőrizd a kadenciát."
+  },
+  {
+   "step": 1,
+   "at_s": 1800,
+   "text": "Tíz perc van hátra, ne gyorsulj a végére, a kitartás most a lényeg."
+  },
+  {
+   "step": 1,
+   "at_s": 2340,
+   "text": "Utolsó perc, a végén ne engedj, de a tempó ugyanaz maradjon."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Negyven perc küszöb, ez az FTP-közeli tempó kitartását építi, nagyon jól csináltad."
+  }
+ ],
+ "d-vo2-4x4": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "A mai protokoll 4 × 4 perc. A bemelegítés most a kulcs, nyisd ki a légzésedet."
+  },
+  {
+   "step": 1,
+   "at_s": 120,
+   "text": "Félúton az első intervallumban. Ne a pulzust nézd, hanem a légzésedet: mély, erős, egyenletes."
+  },
+  {
+   "step": 1,
+   "at_s": 200,
+   "text": "Negyven másodperc van hátra, most már csak tartsd ki, mindent bele."
+  },
+  {
+   "step": 2,
+   "at_s": 90,
+   "text": "Félidőben a pihenőn. Igyál egy kortyot, és készülj, hogy a második intervallum ugyanolyan erős legyen."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második négy perc. Ugyanazt a kadenciát és erőt tartsd, mint az elsőnél."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Második pihenő. A lábad még tele van energiával, ne ülj le mozdulatlanul."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik intervallum. A fáradtság most a legnagyobb, de a légzés a kulcs."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Az utolsó négy perc. Ha a légzésed már nehéz, akkor is tartsd a kadenciát száz körül."
+  },
+  {
+   "step": 7,
+   "at_s": 150,
+   "text": "Másfél perc van hátra, most már csak tartsd ki, a végén még lesz egy kis erőd."
+  },
+  {
+   "step": 8,
+   "at_s": 200,
+   "text": "Négy nagy intervallum, ezt most komolyan megdolgoztad. Lassan lazíts, és lélegezz mélyen."
+  }
+ ],
+ "d-vo2-5x5": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Öt ötperces VO2max blokk jön, a bemelegítés végén fókuszálj a lábadra."
+  },
+  {
+   "step": 1,
+   "at_s": 150,
+   "text": "Félúton az első blokkban: a fordulat 100 körül legyen, ne lassulj le."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Utolsó perc, ennyit még bírsz, a fordulat maradjon 100 körül."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Öt perc pihenő: szuszogj, lazítsd a kezed, a következő blokk jön."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második blokk: az első percben ne lőj túl, a végére kell a többlet."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Pihenő: igyál egy kortyot, és lazítsd meg a csípődet."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik blokk. Mély légzéssel dolgozz, ne szaggatott levegővel."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Negyedik blokk előtt pihenj, a pulzus csökken, de a lábad még friss."
+  },
+  {
+   "step": 7,
+   "at_s": 180,
+   "text": "Most jön a nehezebb perc: a fejed azt súgja, hagyd abba, de a fordulat maradjon."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Utolsó öt perc: mindent a fordulatba, a kezed maradjon nyugodt."
+  },
+  {
+   "step": 9,
+   "at_s": 150,
+   "text": "Félúton az utolsó blokkban, tartsd a fordulatot, a végén lesz időd lazítani."
+  },
+  {
+   "step": 10,
+   "at_s": 300,
+   "text": "Öt ötperces VO2max blokk, ez nagy munka volt. Most lassíts, és nyújtózz egy kicsit."
+  }
+ ],
+ "d-vo2-6x3": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Hat rövid, erős szakasz jön, a bemelegítés most a szívedet készíti elő."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Hét perc van hátra, az első nagy kör előtt a légzésed legyen mély."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Első kör, a 118 százalékos tempó ne legyen kapkodós, a kadencia 102 körül."
+  },
+  {
+   "step": 1,
+   "at_s": 150,
+   "text": "Még harminc másodperc, ne lazíts, a tempó maradjon ugyanaz."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Első kör kész, a pihenőben a légzésed álljon vissza, a második kör előtt."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második kör, ugyanaz az erő, mint az elején, most a levegővétel legyen mély."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Félúton vagy, most a harmadik kör közepén, a lábad pörögjön, a felsőtested nyugodt."
+  },
+  {
+   "step": 6,
+   "at_s": 60,
+   "text": "Két kör van hátra, lazíts most, és engedd le a vállad."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Utolsó kör, a hatodik, most a tempó legyen a legerősebb, amit még tartasz."
+  },
+  {
+   "step": 11,
+   "at_s": 120,
+   "text": "Még egy perc, a végén is nyomj, ne lazíts."
+  },
+  {
+   "step": 12,
+   "at_s": 300,
+   "text": "Hat kör, ez volt a VO2max-munka, a szíved és a lábad is dolgozott, nagyon jó."
+  }
+ ],
+ "d-vo2-8x2": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. A mai nyolc rövid kemény szakasz a légzésedet edzi, ezért most lazíts."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Az első kettőperces szakasz közepe. Kapkodni fog a levegő, ez normális, a kadenciát 104-en tartsd."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Három perc pihenő, lazán tekerj tovább, így a következő kemény szakasz is könnyebb lesz."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második kettőperces. A rövid kezdés után a tempót tartsd, ne taposs túl hirtelen."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Félidőben, ötödik kemény kettőperces. A légzésed legyen irányított, ne szaggatott."
+  },
+  {
+   "step": 12,
+   "at_s": 0,
+   "text": "Még két kemény kettőperces van hátra. Lazíts most, és engedd le a pulzust."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Hetedik szakasz. Még egy van a végén, ezért az erőd ne fogyjon el."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Az utolsó kemény szakasz. A légzésed legyen kontrollált, és a kadenciát tartsd végig."
+  },
+  {
+   "step": 15,
+   "at_s": 90,
+   "text": "Harminc másodperc van hátra, mindent add bele."
+  },
+  {
+   "step": 16,
+   "at_s": 200,
+   "text": "Nyolc kemény kettőperces, ez komoly VO2max munka. Most lassan csökkentsd a tempót, és lélegezz mélyen."
+  }
+ ],
+ "d-vo2-10x1": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Tíz rövid, kemény perc jön, a bemelegítésben most ne pazarold a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "A szívverésed gyorsan felmegy, de a fordulat és a tempó maradjon ugyanaz."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Két perc pihenő: rázd ki a kezed, és vegyél mély levegőt."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Négy kész, most az ötödik jön, utána még öt."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Öt kész, most a hatodik jön, utána még négy."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "Hét kész, még három van hátra. Vegyél mély levegőt, a lábad még bírja."
+  },
+  {
+   "step": 19,
+   "at_s": 0,
+   "text": "Utolsó egy perc: húzz ki magadból mindent, a fordulat maradjon 105 körül."
+  },
+  {
+   "step": 20,
+   "at_s": 300,
+   "text": "Tíz kemény perc, ez tényleges teljesítmény volt. Most lassíts, és igyál vizet."
+  }
+ ],
+ "d-vo2-30-30": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A harmincas ritmus gyors lesz, a bemelegítés most a pulzusodat készíti elő."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, most a légzésed legyen nyugodt, az első rövid szakasz jön."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Félúton az első sorozatban, a kadencia legyen 100 körül, ne lassulj le."
+  },
+  {
+   "step": 19,
+   "at_s": 0,
+   "text": "Az első sorozat utolsó rövid szakasza, most a végén is add ki a tempót."
+  },
+  {
+   "step": 20,
+   "at_s": 60,
+   "text": "Az első sorozat kész, a pihenőben a légzésed álljon vissza, aztán a második jön."
+  },
+  {
+   "step": 29,
+   "at_s": 0,
+   "text": "Félúton a második sorozatban, a 30 másodperc alatt a térded egy vonalban maradjon."
+  },
+  {
+   "step": 39,
+   "at_s": 0,
+   "text": "A második sorozat utolsó rövid szakasza, most még egyszer add meg a tempót."
+  },
+  {
+   "step": 40,
+   "at_s": 60,
+   "text": "Második sorozat kész, a pihenő után a harmadik és utolsó jön."
+  },
+  {
+   "step": 41,
+   "at_s": 0,
+   "text": "Harmadik sorozat, a kadencia és a tempó ugyanaz, mint az elején."
+  },
+  {
+   "step": 59,
+   "at_s": 0,
+   "text": "Utolsó rövid szakasz, most minden maradékot ide tegyél, aztán már csak a levezetés."
+  },
+  {
+   "step": 60,
+   "at_s": 300,
+   "text": "Három sorozat, sok rövid erős szakasz, ez komoly VO2max-munka volt, szépen csináltad."
+  }
+ ],
+ "d-vo2-40-20": [
+  {
+   "step": 1,
+   "at_s": 20,
+   "text": "Húsz másodperc van hátra, a légzésed legyen erős, a kadenciát tartsd magasan."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Negyedik intervallum, az első sorozat felénél. A lábad pörögjön, a vállad maradjon lazán."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Az első sorozat utolsó intervalluma. Mindent bele, utána egy kis pihenő jön."
+  },
+  {
+   "step": 16,
+   "at_s": 0,
+   "text": "Öt perc sorozatpihenő. Igyál, lazíts a hátadon, és készülj a második sorozatra."
+  },
+  {
+   "step": 16,
+   "at_s": 180,
+   "text": "Két perc van hátra, lélegezz mélyen és engedd le a pulzust."
+  },
+  {
+   "step": 17,
+   "at_s": 0,
+   "text": "A második sorozat első intervalluma. Ugyanaz a tempó, mint az elsőnél, ne siettesd."
+  },
+  {
+   "step": 25,
+   "at_s": 0,
+   "text": "Félúton a második sorozatban. A légzésed legyen kontrollált, a kadenciát magasan tartsd."
+  },
+  {
+   "step": 31,
+   "at_s": 0,
+   "text": "Utolsó intervallum a második sorozatban. Mindent add bele, aztán már csak a pihenő jön."
+  },
+  {
+   "step": 32,
+   "at_s": 0,
+   "text": "Öt perc, az utolsó sorozat előtt. Igyál egy kortyot, és figyeld a légzésed."
+  },
+  {
+   "step": 33,
+   "at_s": 0,
+   "text": "Harmadik sorozat, az utolsó. Ugyanúgy tekerj, mint eddig, a lábad már ismeri a ritmust."
+  },
+  {
+   "step": 47,
+   "at_s": 0,
+   "text": "Az utolsó intervallum az egész edzésnek. Hajrá, ez a végső negyven másodperc."
+  },
+  {
+   "step": 48,
+   "at_s": 200,
+   "text": "Három sorozat, nyolc-nyolc intervallum. A VO2max munka után most lassan vidd le a pulzust."
+  }
+ ],
+ "d-vo2-ronnestad-30-15": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Három sorozat jön, mindegyik 13 rövid ismétléssel. A bemelegítésben most ne fárassz."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Hat kész az elsőben, most a hetedik jön. Még hat ismétlés van hátra."
+  },
+  {
+   "step": 25,
+   "at_s": 0,
+   "text": "Az első sorozat utolsó ismétlése. Még egyszer tartsd egyenletesen, utána három perc pihenő jön."
+  },
+  {
+   "step": 26,
+   "at_s": 0,
+   "text": "Három perc pihenő: ülj egyenesen, vegyél mély levegőt, és igyál."
+  },
+  {
+   "step": 27,
+   "at_s": 0,
+   "text": "Második sorozat, ugyanaz a ritmus. Az elején a fordulat maradjon 100 körül."
+  },
+  {
+   "step": 39,
+   "at_s": 0,
+   "text": "Félúton a második sorozatban: a légzésed szapora, de a ritmus maradjon meg."
+  },
+  {
+   "step": 51,
+   "at_s": 0,
+   "text": "Utolsó ismétlés a második sorozatban. Most ne lazíts a végén, aztán a pihenő."
+  },
+  {
+   "step": 52,
+   "at_s": 0,
+   "text": "Az utolsó sorozat előtt három perc pihenő. Igyál, és nyisd ki a mellkasod."
+  },
+  {
+   "step": 65,
+   "at_s": 0,
+   "text": "Az utolsó sorozat közepe, még hat ismétlés van hátra, a fordulat maradjon."
+  },
+  {
+   "step": 77,
+   "at_s": 0,
+   "text": "Ez az utolsó ismétlés, mindent bele, utána jön a levezetés."
+  },
+  {
+   "step": 78,
+   "at_s": 300,
+   "text": "Harminckilenc kemény ismétlés, szép munka volt. Most lassíts, és lazíts a kezeden."
+  }
+ ],
+ "d-vo2-ronnestad-intro": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A bemelegítés a 30/15 ritmusára készít elő, a lábad lassan melegedjen."
+  },
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Négy perc van hátra, az első sorozat előtt a légzésed legyen nyugodt."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Félúton az első sorozatban, a 15 másodperces pihenőben ne ülj le, pörögj tovább."
+  },
+  {
+   "step": 19,
+   "at_s": 0,
+   "text": "Az első sorozat utolsó köre, a kadencia legyen 100 körül, ne lassulj."
+  },
+  {
+   "step": 20,
+   "at_s": 60,
+   "text": "Három perc pihenő, most a légzés álljon vissza, a második sorozat jön."
+  },
+  {
+   "step": 21,
+   "at_s": 0,
+   "text": "Második sorozat, a kadencia ugyanaz maradjon, mint az elején."
+  },
+  {
+   "step": 39,
+   "at_s": 0,
+   "text": "Utolsó kör, még egyszer add meg a 30 másodpercet, aztán vége."
+  },
+  {
+   "step": 40,
+   "at_s": 300,
+   "text": "Tíz-tíz kör, ez a 30/15 formátum jó belépő volt, szépen csináltad."
+  }
+ ],
+ "d-vo2-seiler-4x8": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. A mai négy nyolcperces intervallum a küszöb fölött van, most lassan emeld a tempót."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Félúton az első nyolc percen. Ne gyorsulj, a kadenciát 95-ön tartsd."
+  },
+  {
+   "step": 1,
+   "at_s": 420,
+   "text": "Egy perc van hátra az elsőből. Lélegezz erősen, és a tempó maradjon ugyanaz."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második nyolc perc. Tartsd a wattot, ne a fáradtságra figyelj."
+  },
+  {
+   "step": 3,
+   "at_s": 240,
+   "text": "Félúton a második intervallumban. Ilyenkor a legkönnyebb túlhajtani, ezért tartsd a ritmust."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Két perc pihenő. Lassítsd a légzésed, és igyál egy kortyot."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik intervallum. Már fáradtabb vagy, de a watt ugyanaz marad."
+  },
+  {
+   "step": 5,
+   "at_s": 420,
+   "text": "Még egy perc, aztán jön a pihenő."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Az utolsó nyolc perc, a negyedik intervallum. A lábad fáradt, de a légzésed még irányítható."
+  },
+  {
+   "step": 7,
+   "at_s": 240,
+   "text": "Félúton az utolsó intervallumban. Most a végére kell összpontosítani."
+  },
+  {
+   "step": 8,
+   "at_s": 200,
+   "text": "Négy nyolcperces küszöb feletti intervallum, ezt most jól megdolgoztad. Lassan vidd le a pulzust."
+  }
+ ],
+ "d-vo2-odden-5x8": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Öt sorozat jön változó tempóval. A bemelegítés alatt ébreszd fel a lábad."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Az első sorozat közepén járunk. A váltások most lesznek a nehezebbek, de a légzés segít."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Az első sorozat záró része. Húzd végig a fordulattal, utána két perc pihenő jön."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "Két perc pihenő: igyál egy kortyot, a második sorozat már ismerős lesz."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Második sorozat: a harminc másodperces erőt most már ismered, tartsd a fordulatot."
+  },
+  {
+   "step": 37,
+   "at_s": 0,
+   "text": "Félúton a harmadik sorozatban, a váltások most sokat kérnek a lábadtól."
+  },
+  {
+   "step": 55,
+   "at_s": 0,
+   "text": "A negyedik sorozat záró része. A fordulat ne essen vissza, a figyelmed maradjon."
+  },
+  {
+   "step": 56,
+   "at_s": 0,
+   "text": "Utolsó sorozat előtt két perc pihenő. Vegyél mély levegőt és igyál."
+  },
+  {
+   "step": 57,
+   "at_s": 0,
+   "text": "Az utolsó sorozat, a végére érve tartsd a fordulatot, ne lassulj le."
+  },
+  {
+   "step": 63,
+   "at_s": 0,
+   "text": "Félúton az utolsó sorozatban, még hat szakasz van, a légzésed ne essen szét."
+  },
+  {
+   "step": 69,
+   "at_s": 0,
+   "text": "Utolsó szakasz, mindent bele, aztán jön a levezetés."
+  },
+  {
+   "step": 70,
+   "at_s": 330,
+   "text": "Öt hosszú sorozat változó ritmussal, nagyon jól kitartottál. Most lassíts, és lazíts."
+  }
+ ],
+ "d-vo2-varied-6x5": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A változó intenzitású blokkok gyors váltásokról szólnak, a bemelegítés most a lábadat készíti."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, az első csúcs előtt a légzésed legyen nyugodt."
+  },
+  {
+   "step": 2,
+   "at_s": 30,
+   "text": "Most a tempó a fontos, a kadencia 92 körül legyen, és a kilégzés hosszú."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Az első kör utolsó csúcsa, most a legerősebb harminc másodperc, aztán pihenő."
+  },
+  {
+   "step": 8,
+   "at_s": 30,
+   "text": "Az első kör kész, a pihenőben a légzésed álljon vissza, a második kör jön."
+  },
+  {
+   "step": 12,
+   "at_s": 0,
+   "text": "Félúton a második körben, a tempó 92 körül legyen, ne lazíts."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Második kör utolsó csúcsa, most a végén is tartsd a kadenciát."
+  },
+  {
+   "step": 23,
+   "at_s": 0,
+   "text": "Harmadik kör utolsó csúcsa, most a kadencia legyen magas, aztán lazulhat."
+  },
+  {
+   "step": 32,
+   "at_s": 30,
+   "text": "Négy kör van mögötted, ebben a pihenőben lazítsd ki a vállad és a kezed."
+  },
+  {
+   "step": 47,
+   "at_s": 0,
+   "text": "Utolsó csúcs, a hatodik kör vége, most minden erőd bele."
+  },
+  {
+   "step": 48,
+   "at_s": 300,
+   "text": "Hat kör a változó tempóval, ez a VO2max-inger kevesebb szenvedéssel is hatékony, szépen csináltad."
+  }
+ ],
+ "d-vo2-hardstart-5x4": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. Ez az edzés a kemény kezdésről szól, most csak ébreszd fel a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 25,
+   "text": "Az első kemény kezdés, a kezdeti lökés számít. Tartsd az ülést, és a kadenciát 105-ön."
+  },
+  {
+   "step": 2,
+   "at_s": 100,
+   "text": "Félúton a tartásban. A légzésed legyen mély, a kadenciád 98-on stabil."
+  },
+  {
+   "step": 2,
+   "at_s": 175,
+   "text": "Húsz másodperc van hátra, most már csak tartsd a 108%-ot."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Három perc pihenő. A kemény kezdés után a légzés nehéz lesz, ez természetes."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Második kemény kezdés. Ugyanúgy ülve, erős indulással, de ne sprintelj."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Félúton az ötből. A kezdő lökés után a tartás legyen fegyelmezett."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Az utolsó kemény kezdés. Utána már csak egy tartásszakasz jön, ezt is végigcsináljuk."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "Utolsó tartás. Zárd az ötödik blokkot ugyanúgy, mint az elsőt."
+  },
+  {
+   "step": 14,
+   "at_s": 150,
+   "text": "Negyvenöt másodperc van hátra, lazán de erősen."
+  },
+  {
+   "step": 15,
+   "at_s": 200,
+   "text": "Öt kemény kezdés és öt tartás, ez egy nehéz edzés volt. Most lassan lazíts és lélegezz mélyen."
+  }
+ ],
+ "d-vo2-15-15": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Két sorozat jön, mindkettő 16 rövid szakaszból áll. A bemelegítés most még legyen laza."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Hét kész, most a nyolcadik jön, még nyolc van hátra. Ne gyorsíts túl."
+  },
+  {
+   "step": 31,
+   "at_s": 0,
+   "text": "Az első sorozat utolsó ismétlése, a légzésed kontrollált legyen, aztán pihenő."
+  },
+  {
+   "step": 32,
+   "at_s": 0,
+   "text": "Öt perc pihenő: igyál, lazítsd a kezed, a második sorozat következik."
+  },
+  {
+   "step": 33,
+   "at_s": 0,
+   "text": "Második sorozat, ugyanaz a ritmus, tizenöt másodperc élénken."
+  },
+  {
+   "step": 47,
+   "at_s": 0,
+   "text": "Félidő a második sorozatban. A fordulat most a fontos, nem a nyomás."
+  },
+  {
+   "step": 63,
+   "at_s": 0,
+   "text": "Az utolsó ismétlés. Add ki magadból a maradékot, aztán jön a levezetés."
+  },
+  {
+   "step": 64,
+   "at_s": 300,
+   "text": "Harminckét rövid kemény szakasz, szép munka volt. Most lassíts."
+  }
+ ],
+ "d-vo2-pyramid": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A piramis rövid és hosszú szakaszok váltakozása, a bemelegítés most a lábadat készíti."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, az első rövid szakasz előtt a légzésed legyen nyugodt."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Most csak egy perc, de keményen, a kadencia 100 körül tartsd."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második szakasz, két perc 120 százalékon, most a kilégzésed legyen hosszú."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik szakasz, három perc, most a tempó maradjon egyenletes, ne lendülj előre."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Itt a piramis csúcsa, a négy perc alatt a kadencia 100, a vállad lazán."
+  },
+  {
+   "step": 7,
+   "at_s": 120,
+   "text": "Félúton a négyperces szakaszban, a légzésed legyen mély, ne szorítsd a kormányt."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Most visszafelé jövünk, a szakaszok rövidülnek, de a tempó ne csússzon."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Ez a kettes szakasz két perc, utána egy utolsó rövid, erős rész jön."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Utolsó szakasz, egy perc, most mindent bele, aztán vége az intervallumoknak."
+  },
+  {
+   "step": 14,
+   "at_s": 300,
+   "text": "A piramis végig kemény volt, a szakaszok szépen épültek, szép munka."
+  }
+ ],
+ "d-vo2-quick-5x3": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Ez a rövid edzés a VO2max ingerről szól. A bemelegítés alatt lazíts, és készülj a három perces blokkokra."
+  },
+  {
+   "step": 1,
+   "at_s": 90,
+   "text": "Félúton az első háromperces szakaszban. A légzésed már erős, de a kadenciát 100-on tartsd."
+  },
+  {
+   "step": 1,
+   "at_s": 150,
+   "text": "Harminc másodperc van hátra, most add meg a maradékot."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második háromperces. Az első után már tudod, mennyi a tartalék, ne kezdd túl erősen."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Félidőben. A harmadik kemény szakasz a legnagyobb terhelés, a légzésed irányítsd."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Negyedik háromperces. Még egy van hátra, ne lazíts."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Az utolsó háromperces. Mindent bele, a végén csak a légzésed számít."
+  },
+  {
+   "step": 9,
+   "at_s": 120,
+   "text": "Egy perc van hátra, most már csak tartsd ki."
+  },
+  {
+   "step": 10,
+   "at_s": 120,
+   "text": "Öt kemény háromperces után ez a levezetés pihenés. Lassan engedd le a pulzust, és dicsérd meg magad."
+  }
+ ],
+ "d-vo2-intro-6x2": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Ez az első VO2max-ismerkedés. A bemelegítésben már ébreszd fel a lábad a fordulatra."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Félúton a két percben, vegyél mély levegőt, és tartsd a 110%-ot."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Három perc pihenő: igyál, és figyeld, ahogy lassul a légzésed."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második kör, ugyanaz a tempó. Ne próbálj többet kihozni az elsőnél."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Két kör kész, most a harmadik jön. A fordulatod maradjon 98 körül."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Negyedik kör: itt már fáradhatsz, de a légzésed és a fordulatod legyen egyenletes."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Négy kész, most az ötödik jön, és még egy van utána."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Öt kész, most az utolsó kör jön. Ülj egyenesen, és tarts ki a végéig."
+  },
+  {
+   "step": 12,
+   "at_s": 300,
+   "text": "Hat kétperces VO2max kör, szép munka volt az első ismerkedéshez. Lazíts most, és igyál."
+  }
+ ],
+ "d-ana-3x45": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Az anaerob munka rövid, de intenzív, a bemelegítés most a lábad készíti elő."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, az első 45 másodperc előtt a légzésed legyen mély."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Pihenő, a légzésed álljon vissza, mert a következő 45 másodperc a lényeg."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második kör, ugyanaz a tempó, mint az elején, most ne kapkodj."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Az első sorozat utolsó köre, most a 45 másodperc alatt tartsd a kadenciát."
+  },
+  {
+   "step": 6,
+   "at_s": 240,
+   "text": "Az első sorozat kész, most igyál egy kortyot, és készülj a másodikra."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Második sorozat, a 45 másodperc ugyanaz a fókusz, ne lőj ki az elején."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Félúton a második sorozatban, a kadencia 100 körül, a vállad lazán legyen."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Utolsó 45 másodperc, most a végén is add ki mindent, aztán jön a levezetés."
+  },
+  {
+   "step": 12,
+   "at_s": 300,
+   "text": "Két sorozat, mindkettőben három rövid, erős szakasz, az anaerob kapacitásod most jól edződött."
+  }
+ ],
+ "d-ana-gibala-sit": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai hat rövid sprint kevés időt vesz igénybe, ezért a bemelegítés most a kulcs. Hozd fel a pulzusod."
+  },
+  {
+   "step": 1,
+   "at_s": 20,
+   "text": "Tíz másodperc van hátra, mindent add bele."
+  },
+  {
+   "step": 2,
+   "at_s": 120,
+   "text": "Félidőben a pihenő. Lazítsd a vállad, és a légzésed lassítsd le."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Félúton a hat sprintből. A lábad fáradt, de a kezdő erő legyen ugyanaz."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Még két sprint van hátra. Lazíts egy kicsit, és készülj."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Az utolsó sprint. Állj neki teljes erővel, utána a levezetés jön."
+  },
+  {
+   "step": 12,
+   "at_s": 200,
+   "text": "Hat sprint, nagy erőbefektetés kevés idő alatt. Most lassan vidd le a pulzust, szép munka."
+  }
+ ],
+ "d-ana-6x1": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Most jönnek a rövid, nagyon kemény percek. A bemelegítés végén élesítsd a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Félidő: a lábad már érzi, de a 135%-ot még húzd végig."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Négy perc pihenő: ülj, lazítsd a vállad, és igyál egy kortyot."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második egy perc, ugyanúgy, mint az elsőnél. A lábad fordulata legyen magas."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik, félúton vagy. Mély légzéssel dolgozz, ne feszítsd meg a nyakad."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Negyedik következik, utána már csak kettő van hátra. Ülve vagy állva, de a fordulat maradjon."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Ötödik jön, utána már csak a hatodik. Ne engedd el a fordulatot."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Utolsó egy perc, mindent bele, a végén a hajrának is van helye."
+  },
+  {
+   "step": 12,
+   "at_s": 300,
+   "text": "Hat kemény egy perc, nagyon szép munka. Most lazíts, és lassan tekerj tovább."
+  }
+ ],
+ "d-sprint-10x10": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A sprintek előtt a bemelegítés a lábadat készíti, a mai cél az idegrendszer ébresztése."
+  },
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Négy perc van hátra, most ne fáradj el, a sprint előtt lazíts a válladdal."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második sprint, a lábad pörögjön, a kormányt ne szorítsd."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Félúton vagy, most jön a legnehezebb rész, a kilégzésed legyen erős."
+  },
+  {
+   "step": 14,
+   "at_s": 60,
+   "text": "Hét sprint kész, a pihenő alatt a légzésed nyugodjon, az utolsó jön."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Utolsó sprint, a nyolcadik, most add ki mindent, tíz másodperc és vége."
+  },
+  {
+   "step": 16,
+   "at_s": 120,
+   "text": "Nyolc sprint, az idegrendszer és a csúcsteljesítmény is edződött, nagyon jól csináltad."
+  }
+ ],
+ "d-sprint-leadout": [
+  {
+   "step": 0,
+   "at_s": 450,
+   "text": "Félúton a bemelegítésben. A lead-out lényege, hogy magas tempóból indulj, ezért most a lábad készüljön."
+  },
+  {
+   "step": 1,
+   "at_s": 20,
+   "text": "Tíz másodperc van hátra, és jön a sprint. Készülj."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Öt perc pihenő. A lead-out után mindig van idő a lélegzetvételre, használd ki."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Félúton a nyolc lead-outból. Harminc másodpercig tartsd a 100-as kadenciát, a kerék mögött."
+  },
+  {
+   "step": 18,
+   "at_s": 0,
+   "text": "Még két lead-out van hátra. Lazíts most, és engedd le a pulzust egy kicsit."
+  },
+  {
+   "step": 22,
+   "at_s": 0,
+   "text": "Utolsó lead-out: harminc másodperc magas tempó, utána már csak az utolsó sprint jön."
+  },
+  {
+   "step": 23,
+   "at_s": 0,
+   "text": "Az utolsó sprint. Állva indulj, teljes erővel, aztán lazíts."
+  },
+  {
+   "step": 24,
+   "at_s": 200,
+   "text": "Nyolc lead-out és nyolc sprint, ez a valódi befutó helyzete. Most lassan lazíts, szép munka volt."
+  }
+ ],
+ "d-sprint-standing": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "A sprintedzés a robbanékonyságról szól. A bemelegítés most a lábad készítse elő."
+  },
+  {
+   "step": 2,
+   "at_s": 100,
+   "text": "Az első rajt kész. Vedd a levegőt, a pulzus hamar lejön."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Második rajt kész. Ülj egyenesen, és lazítsd a combodat."
+  },
+  {
+   "step": 4,
+   "at_s": 150,
+   "text": "Igyál egy kortyot, és készülj a harmadik rajtra, a csípőd legyen stabil."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Négy rajt kész, még négy jön. Tartsd a nehéz áttételt a rajt előtt."
+  },
+  {
+   "step": 10,
+   "at_s": 0,
+   "text": "Öt rajt kész, még három van hátra. A rajt előtti lassítás legyen kontrollált."
+  },
+  {
+   "step": 12,
+   "at_s": 0,
+   "text": "Hat rajt kész, már csak kettő van hátra. Figyelj a csípőd stabilitására."
+  },
+  {
+   "step": 14,
+   "at_s": 0,
+   "text": "Hét rajt kész, már csak az utolsó van hátra. Vedd a levegőt és készülj."
+  },
+  {
+   "step": 16,
+   "at_s": 300,
+   "text": "Nyolc álló rajt, nagyon szép erő volt. Most lassíts, és lazítsd meg a combod."
+  }
+ ],
+ "d-sprint-spinups": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A bemelegítés a pörgetésekre készít, a lábad most nyújtózkodjon, a kadencia lassan nőjön."
+  },
+  {
+   "step": 0,
+   "at_s": 360,
+   "text": "Négy perc van hátra, most gondolj a magas fordulatra, a lábad gyorsan pörögjön."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második pörgetés, ülve maradj, a kadencia 125 körül, a lábad lazán."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik pörgetés, a kadencia magas, és ne szorítsd a kormányt."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Félúton vagy, a lábad fárad, de a fordulatot tartsd magas szinten."
+  },
+  {
+   "step": 10,
+   "at_s": 60,
+   "text": "Öt pörgetés volt, most lazíts, és készülj az utolsó, hatodik pörgetésre."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Utolsó pörgetés, most a fordulat maradjon magas, a végén se lassulj."
+  },
+  {
+   "step": 12,
+   "at_s": 240,
+   "text": "Hat pörgetés, a gyors láb és a koordináció most fejlődött, szépen csináltad."
+  }
+ ],
+ "e-climb-alpe-60": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai munka egy hosszú hegyi szakasz szimulációja. Most ébreszd fel a lábad, és lazán ülj a nyeregben."
+  },
+  {
+   "step": 1,
+   "at_s": 450,
+   "text": "Félúton az első emelkedőn. Ülve tekerj, a kadenciát 80 körül tartsd, és ne égesd el magad."
+  },
+  {
+   "step": 1,
+   "at_s": 780,
+   "text": "Két perc van hátra, készülj a második emelkedőre."
+  },
+  {
+   "step": 2,
+   "at_s": 450,
+   "text": "Félúton a második szakaszban. A légzésed legyen mély, a vállad maradjon laza."
+  },
+  {
+   "step": 2,
+   "at_s": 780,
+   "text": "Két perc van hátra, a végén csak az erőd számít."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Harmadik emelkedő. A sebesség lassabb lesz, de a watt ugyanaz. Tartsd a ritmust."
+  },
+  {
+   "step": 3,
+   "at_s": 450,
+   "text": "Félúton, a lábad fáradt, de a kadenciát 76 körül tartsd, ne engedd túl alacsonyra."
+  },
+  {
+   "step": 4,
+   "at_s": 450,
+   "text": "Félidőben az utolsó nagy emelkedő. Ülj egyenesen, és figyeld a légzésed ritmusát."
+  },
+  {
+   "step": 4,
+   "at_s": 780,
+   "text": "Két perc van hátra, most már a fejed dönti el, mennyire tartod ki."
+  },
+  {
+   "step": 5,
+   "at_s": 150,
+   "text": "Két és fél perc van hátra a csúcsig. Lendítsd meg a lábad, és ne lazíts."
+  },
+  {
+   "step": 6,
+   "at_s": 200,
+   "text": "Hosszú, egyenletes hegymenet, ez komoly állóképesség. Most lassan csökkentsd a tempót, és lélegezz mélyen."
+  }
+ ],
+ "e-climb-repeats-5x3": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A hegyi munkához a lábad ébredjen, a bemelegítés végén érezd a súlyt a pedálon."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Ülj egyenesen, tarts egyenletes lendületet, a hátad ne görbüljön."
+  },
+  {
+   "step": 1,
+   "at_s": 120,
+   "text": "Még egy perc van hátra, a légzésed szapora, de a lábad maradjon erős."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Négy perc pihenő: ülj vissza a nyeregbe, és igyál egy kortyot."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második emelkedő, a fordulat ugyanaz, de a hátadat tartsd feszesen."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik emelkedő, félúton vagy. Ne a fájdalomra figyelj, hanem a ritmusra."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Negyedik emelkedő, most a kezed és a vállad maradjon lazán."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Utolsó emelkedő, ez zárja a sort. Mindent bele, utána jön a levezetés."
+  },
+  {
+   "step": 10,
+   "at_s": 300,
+   "text": "Öt emelkedő után szép munka volt. Most lassíts, és lazíts a nyeregben."
+  }
+ ],
+ "e-climb-torque-4x8": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Ez a nyomatékos emelkedő lassú kadenciával erőt épít, a bemelegítés most a combodat készíti."
+  },
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Négy perc van hátra, készülj, hogy lassabb, de erős nyomással kell tekerned."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Félidő, ülj nyugodtan, a csípőd ne billegjen, a lábad lassan nyomjon."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Most pörögj gyorsan és könnyen, a fordulat a lényeg a pihenőben."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második nyomaték, a lassú tempó megint erőt kér, a kormány legyen lazán."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "Félidő a második emelkedőben, a vállad maradjon lazán, a lábfejed nyugodt."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik nyomaték, a lábad már fáradt, de a kadencia 55 körül maradjon."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Utolsó nyomaték, ülj egyenesen, a végén még egyszer nyomj erősen, aztán lazíts."
+  },
+  {
+   "step": 7,
+   "at_s": 420,
+   "text": "Egy perc van hátra, a lábad nyomjon, a felsőtested maradjon nyugodt."
+  },
+  {
+   "step": 8,
+   "at_s": 300,
+   "text": "Négy nyomatékos blokk, ez az erő-állóképesség igazi munka volt, szép teljesítmény."
+  }
+ ],
+ "e-climb-sit-stand-3x12": [
+  {
+   "step": 0,
+   "at_s": 360,
+   "text": "Félúton a bemelegítésben. Ma az ülés és az állás váltása a fő feladat, ezért a lábad most lazuljon át."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "Félidő a blokkon. A tempó nyugodt, a törzsed erős maradjon."
+  },
+  {
+   "step": 2,
+   "at_s": 30,
+   "text": "Fél perc van hátra az állásból. Ülj vissza fokozatosan, ne rántsd a kormányt."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Öt perc pihenő az első sorozat után. Igyál, és lazítsd a vállad."
+  },
+  {
+   "step": 9,
+   "at_s": 150,
+   "text": "Két és fél perc van hátra a pihenőből, lélegezz mélyen."
+  },
+  {
+   "step": 12,
+   "at_s": 0,
+   "text": "Félúton a második sorozatban. A légzésed legyen mély, és a csuklód ne szorítsa a kormányt."
+  },
+  {
+   "step": 19,
+   "at_s": 0,
+   "text": "Harmadik sorozat, az utolsó. Ugyanaz az ülés-állás váltás, de most már fáradtabb lábbal."
+  },
+  {
+   "step": 26,
+   "at_s": 0,
+   "text": "Utolsó állás. Ugyanaz a technika, és a végén a watt ne essen le."
+  },
+  {
+   "step": 27,
+   "at_s": 200,
+   "text": "Három sorozat ülve és állva, ez komoly erőnlét. Most lassan lazíts, és engedd le a pulzust."
+  }
+ ],
+ "e-climb-steep-8x90": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "Nyolc rövid, meredek fal jön. A bemelegítés alatt pörögj könnyedén, a combod melegedjen."
+  },
+  {
+   "step": 1,
+   "at_s": 45,
+   "text": "Félúton az első falon, a fordulatot tartsd, ne engedd le a ritmust."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Három perc pihenő: igyál, és lazítsd meg a csuklód."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második fal, a kezed a kormány két oldalán, a csípőd maradjon nyugodt."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Két fal kész, most a harmadik jön, a légzésed még kontrollált legyen."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Három kész, most a negyedik fal jön, rövid, éles lendülettel."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Négy fal kész, most az ötödik jön, és még három van utána."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Öt kész, most a hatodik fal jön, utána még kettő."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Hat kész, a hetedik fal jön. Utána már csak egy van hátra."
+  },
+  {
+   "step": 15,
+   "at_s": 0,
+   "text": "Utolsó fal jön. Mindent bele egy rövid, éles lendületért, aztán levezetés."
+  },
+  {
+   "step": 16,
+   "at_s": 330,
+   "text": "Nyolc meredek fal, szép munka volt. Lazíts most, és nyújtózz egy kicsit."
+  }
+ ],
+ "e-climb-attack-4x6": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A mai emelkedős munka a támadásokról szól, a bemelegítés most a lábadat készíti."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, az első emelkedő előtt a kadenciát állítsd be 82 körülire."
+  },
+  {
+   "step": 1,
+   "at_s": 150,
+   "text": "Félidő, a tempó ne emelkedjen észrevétlenül, a vállad legyen lazán."
+  },
+  {
+   "step": 3,
+   "at_s": 60,
+   "text": "Első támadás kész, a pihenőben a légzésed nyugodjon, a lábad lazuljon."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Második emelkedő, ugyanaz a tempó, mint az elején, a kadencia 82 körül."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Második támadás, indulj állva, aztán ülj vissza, ne veszíts a ritmusból."
+  },
+  {
+   "step": 7,
+   "at_s": 150,
+   "text": "Félúton az emelkedőn, most a tempó maradjon, ne gyorsulj be túl korán."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Harmadik támadás, most a kilégzésed legyen erős, aztán ülj le nyugodtan."
+  },
+  {
+   "step": 10,
+   "at_s": 0,
+   "text": "Utolsó emelkedő, most a lábad tartsd nyugodtan, de erősen."
+  },
+  {
+   "step": 10,
+   "at_s": 240,
+   "text": "Egy perc van hátra, készülj az utolsó támadásra, a légzésed legyen mély."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Utolsó támadás, most mindent bele egy percig, aztán jön a levezetés."
+  },
+  {
+   "step": 12,
+   "at_s": 300,
+   "text": "Négy emelkedő, négy támadás, ez a versenyszerű munka erős volt, szép teljesítmény."
+  }
+ ],
+ "e-race-crit": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A kritérium rövid, robbanékony körökből áll. A bemelegítés most a gyorsulásra készít fel."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Fél perc van hátra, utána a mezőnytempó jön. Készülj a visszaülésre."
+  },
+  {
+   "step": 2,
+   "at_s": 20,
+   "text": "Első kör, mezőny. A pulzusod magas, ezért a légzésed legyen mély és irányított."
+  },
+  {
+   "step": 2,
+   "at_s": 120,
+   "text": "Félúton a mezőnytempóban. Tartsd a 88%-ot, és ne ugorj előre a többiek elé."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Félúton a köröknél. A kigyorsítások után a mezőnytempó legyen stabil."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Hatodik kigyorsítás, az utolsó. Állva indulj, és ülj vissza, amint a lábad megtalálja a ritmust."
+  },
+  {
+   "step": 12,
+   "at_s": 0,
+   "text": "Utolsó mezőnyszakasz. Készülj, mert a végén a hajrá következik."
+  },
+  {
+   "step": 13,
+   "at_s": 20,
+   "text": "Tíz másodperc van hátra, most minden erőd jöjjön."
+  },
+  {
+   "step": 14,
+   "at_s": 200,
+   "text": "Hat kör és a hajrá, ezt a versenyhelyzetet jól megcsináltad. Most lassan engedd le a pulzust."
+  }
+ ],
+ "e-race-surges": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mezőnyben a bemelegítés után a támadások jönnek. A lábad most készüljön rövid lendületekre."
+  },
+  {
+   "step": 2,
+   "at_s": 70,
+   "text": "Az üldözésben ülj be a nyeregbe, a tempó maradjon egyenletes, a légzésed ne szakadjon meg."
+  },
+  {
+   "step": 3,
+   "at_s": 90,
+   "text": "Könnyebb szakasz, a mellkasod legyen nyitott, a légzésed nyugodt."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Második üldözés, a tempó ugyanaz, mint az elsőnél. Ne hagyd ki a légzést."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Harmadik támadás. Most mutasd meg, mit bírsz egy rövid, élesebb lendületben."
+  },
+  {
+   "step": 8,
+   "at_s": 60,
+   "text": "Az üldözés közepén járunk, a kadencia maradjon körülbelül 90."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Gyorsítás után vissza a tempóba. A lábad ne lassuljon, a légzésed legyen nyugodt."
+  },
+  {
+   "step": 13,
+   "at_s": 75,
+   "text": "Félúton a tempóban, a fordulat maradjon, a válladat engedd le."
+  },
+  {
+   "step": 19,
+   "at_s": 0,
+   "text": "A kerékben most pihensz, de figyeld a pulzust, a következő váltás hamar jön."
+  },
+  {
+   "step": 25,
+   "at_s": 300,
+   "text": "Szép munka volt a mezőnyben: támadás, üldözés, összeállás. Most lassíts, és igyál vizet."
+  }
+ ],
+ "d-race-opener": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A mai edzés az idegrendszer ébresztéséről szól, a bemelegítés most a lábadat lazítja be."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc, és jönnek a rövid gyorsítások, a kadencia legyen magas, a légzésed nyugodt."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második gyorsítás, ugyanaz az ébresztő erő, ne többet, mint kell."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Utolsó gyorsítás a sorozatban, most a kadencia 110 körül, aztán lazítás."
+  },
+  {
+   "step": 7,
+   "at_s": 75,
+   "text": "Félidő, most a lábad emlékezzen a tempóra, és a légzésed legyen mély."
+  },
+  {
+   "step": 10,
+   "at_s": 30,
+   "text": "Második sprint előtt pihenés, a légzésed álljon vissza, készülj."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Utolsó tíz másodperc, élesen, aztán vége az ébresztésnek."
+  },
+  {
+   "step": 12,
+   "at_s": 300,
+   "text": "Az idegrendszered már ébren van, a holnapi versenyen ez a készülés hasznos lesz."
+  }
+ ],
+ "e-race-opener-30": [
+  {
+   "step": 0,
+   "at_s": 240,
+   "text": "Ez a rövid nyitó edzés az éles állapotot készíti elő. Most lassan ébreszd a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Harminc másodperc van hátra, tartsd a kadenciát 95-ön, a vállad lazán."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második emelés. Az első után már tudod, mennyire kell tartani a wattot."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Az utolsó emelés az FTP-n, utána már csak a rövid sprintek jönnek."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Második sprint, rövid és éles. Csak a légzésedet irányítsd."
+  },
+  {
+   "step": 12,
+   "at_s": 200,
+   "text": "Három emelés és három sprint, ez a rövid edzés is komoly munka volt. Lassan lazíts, és nézz vissza elégedetten."
+  }
+ ],
+ "e-race-tt-40": [
+  {
+   "step": 0,
+   "at_s": 480,
+   "text": "A mai feladat a visszafogott kezdés és az erős vége. A bemelegítésben már tartsd a türelmet."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Rövid szünet a rajt előtt. Igyál egy kortyot, és nyugtasd meg a légzésed."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második rövid emelés, aztán jön a rajt. Ne fogyassz el most energiát."
+  },
+  {
+   "step": 4,
+   "at_s": 120,
+   "text": "Egy perc van a rajtig. Vegyél mély levegőt, a vállad legyen lazán."
+  },
+  {
+   "step": 5,
+   "at_s": 300,
+   "text": "Ne figyelj a többiekre, csak a 95%-os tempódat tartsd, a végén lesz szükséged az erőre."
+  },
+  {
+   "step": 6,
+   "at_s": 600,
+   "text": "Félúton a középső szakaszban: tartsd a pozíciód, ne a sebességmérőt nézd."
+  },
+  {
+   "step": 6,
+   "at_s": 1140,
+   "text": "Utolsó perc a középszakaszból, már közel van az erős befejezés."
+  },
+  {
+   "step": 7,
+   "at_s": 240,
+   "text": "Félúton a befejezésben, a fordulat legyen gyorsabb, a csípőd maradjon stabil."
+  },
+  {
+   "step": 8,
+   "at_s": 60,
+   "text": "Még egy perc, mindent add ki, amit tartogattál."
+  },
+  {
+   "step": 9,
+   "at_s": 300,
+   "text": "Az időfutam-szimuláció kész, szép munka volt a visszafogott kezdés és az erős vége. Lassíts."
+  }
+ ],
+ "e-race-breakaway": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A szökés-szimuláció a támadás utáni tartásról szól, a bemelegítés most a lábad készíti."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, készülj, hogy az első támadás után nem lazíthatsz."
+  },
+  {
+   "step": 2,
+   "at_s": 240,
+   "text": "Félidő a szökésben, a csípőd nyugodt legyen, a kadencia 90 körül."
+  },
+  {
+   "step": 2,
+   "at_s": 420,
+   "text": "Egy perc van hátra, ne engedd el a tempót, a mezőny már nem ér utol."
+  },
+  {
+   "step": 3,
+   "at_s": 60,
+   "text": "Első szökés kész, a pihenőben a légzésed álljon vissza, a második támadás jön."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Második támadás, indulj erősen, aztán fogd vissza ugyanarra a tempóra."
+  },
+  {
+   "step": 5,
+   "at_s": 240,
+   "text": "Félúton a második szökésben, a tempó maradjon 95 körül, a lábad ne lazuljon."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Utolsó támadás, most mindent bele egy percig, aztán tartsd a tempót."
+  },
+  {
+   "step": 8,
+   "at_s": 240,
+   "text": "Az utolsó tartás, a fejedben a cél egyértelmű, a kilégzés legyen erős."
+  },
+  {
+   "step": 8,
+   "at_s": 420,
+   "text": "Egy perc van hátra, a végére se lassulj, hiszen ez a szökés lényege."
+  },
+  {
+   "step": 9,
+   "at_s": 300,
+   "text": "Három támadás, három tartás, a szökés-szimuláció kitartást épít, szép munka volt."
+  }
+ ],
+ "e-race-gravel": [
+  {
+   "step": 0,
+   "at_s": 360,
+   "text": "Ez a mai változatos terep: kavics és dombok. A bemelegítés alatt érezd meg a kerék ritmusát."
+  },
+  {
+   "step": 1,
+   "at_s": 90,
+   "text": "Félúton a dombon. Ülve tekerj, a kadenciát 80 körül tartsd, és lélegezz nyugodtan."
+  },
+  {
+   "step": 3,
+   "at_s": 60,
+   "text": "Másfél perc van hátra, tartsd a 80%-ot, és ne engedd el a kormányt."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Hullámzó szakasz: a watt hol emelkedik, hol esik. A légzésed legyen egyenletes."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Egyenes, 78%-on. Nem pihenő, csak egyenletes tempó, így a következő dombra is marad erőd."
+  },
+  {
+   "step": 7,
+   "at_s": 120,
+   "text": "Egy perc van hátra az egyenesből, készülj a pihenőre."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Öt perc pihenő az első szakaszból. Igyál, és lazítsd a kezed."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "A második domb. Ugyanúgy ülve kezdj, és a kadenciát tartsd 80-on."
+  },
+  {
+   "step": 15,
+   "at_s": 90,
+   "text": "Félúton a második egyenesen. A pulzus magas, de a watt maradjon ugyanaz."
+  },
+  {
+   "step": 16,
+   "at_s": 0,
+   "text": "Második pihenő, a harmadik domb előtt. Lélegezz mélyen és lazíts."
+  },
+  {
+   "step": 17,
+   "at_s": 0,
+   "text": "Harmadik domb. Ülj, lélegezz, a vállad és a kezed maradjon laza."
+  },
+  {
+   "step": 23,
+   "at_s": 120,
+   "text": "Egy perc van hátra az utolsó egyenesből, a végén még adj egy kis erőt."
+  },
+  {
+   "step": 24,
+   "at_s": 200,
+   "text": "A kavics, a dombok és az egyenesek után végre lazíthatsz. Lassan engedd le a pulzust, szép munka."
+  }
+ ],
+ "e-race-group-ride": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mezőnyben a bemelegítés után a lábad a hullámzásra készül, a pedál legyen könnyű."
+  },
+  {
+   "step": 2,
+   "at_s": 270,
+   "text": "A csoport ritmusát keresd, ne a többiek lendületét kövesd vakon."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Újra mezőnytempó. A pozíciód legyen stabil, a kezed lazán a kormányon."
+  },
+  {
+   "step": 4,
+   "at_s": 300,
+   "text": "Még majdnem három perc, a légzésed kezdjen lelassulni."
+  },
+  {
+   "step": 6,
+   "at_s": 300,
+   "text": "Félidő a harmadik mezőnyben: ne engedd el a lábad fordulatát."
+  },
+  {
+   "step": 8,
+   "at_s": 240,
+   "text": "Ennek a mezőnynek a közepe. A légzésed legyen nyugodt, a vállad maradjon laza."
+  },
+  {
+   "step": 10,
+   "at_s": 0,
+   "text": "Rövid mezőny következik. Tartsd a 68%-ot, amíg a következő gyorsítás jön."
+  },
+  {
+   "step": 12,
+   "at_s": 300,
+   "text": "Itt már ismerős a tempó, de a kadenciára még figyelj."
+  },
+  {
+   "step": 14,
+   "at_s": 210,
+   "text": "Félúton a hetedik mezőnyben. A csípőd maradjon stabil, a szemed előre nézzen."
+  },
+  {
+   "step": 16,
+   "at_s": 300,
+   "text": "Az utolsó mezőny jön, figyelj a kadenciára, utána lazítás következik."
+  },
+  {
+   "step": 17,
+   "at_s": 300,
+   "text": "A mezőnyben végig tartottad a helyed, sok gyorsítás után is. Szép munka, most lazíts."
+  }
+ ],
+ "c-test-ftp-20min": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Ez az FTP-teszt, a mai cél a pontos mérés, a bemelegítés most a lábadat készíti."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Tíz perc van hátra, a légzésed legyen nyugodt, a kadencia 85 körül."
+  },
+  {
+   "step": 0,
+   "at_s": 1080,
+   "text": "Két perc, és jön az első rövid ébresztés, ne fáradj el előre."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Utolsó pörgetés a nyitás előtt, most a fordulatot tartsd magasan, aztán pihenő."
+  },
+  {
+   "step": 6,
+   "at_s": 60,
+   "text": "Most jön a rövid, erős nyitás, a pihenő alatt a légzésed álljon vissza."
+  },
+  {
+   "step": 7,
+   "at_s": 120,
+   "text": "Félidő, ülj le és tarts egyenletes erőt, ne gyorsulj be túl korán."
+  },
+  {
+   "step": 8,
+   "at_s": 300,
+   "text": "Öt perc van hátra, a légzésed nyugodjon, a főteszt előtt még igyál egy kortyot."
+  },
+  {
+   "step": 9,
+   "at_s": 300,
+   "text": "Öt perc ment, most ellenőrizd, hogy a tempó egyenletes."
+  },
+  {
+   "step": 9,
+   "at_s": 600,
+   "text": "Félidő, most ülj egyenesen, a légzésed legyen mély, a kadencia 90 körül."
+  },
+  {
+   "step": 9,
+   "at_s": 1140,
+   "text": "Egy perc van hátra, most minden maradékot bele."
+  },
+  {
+   "step": 10,
+   "at_s": 300,
+   "text": "Az FTP-tesztet megcsináltad, a számok most már az edzéseid irányát adják, szép munka."
+  }
+ ],
+ "c-test-ftp-8min": [
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Félúton a bemelegítésben. A mai teszt az FTP becslésére épül, most ne fáradj el."
+  },
+  {
+   "step": 0,
+   "at_s": 1080,
+   "text": "Két perc van hátra a bemelegítésből, készülj a rövid pörgetésekre."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Fél perc van hátra, utána jön a pihenő. Lélegezz mélyen és tartsd a lábad pörgetve."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második rövid pörgetés. Ez a bemelegítés utolsó éles pillanata, a lábad csak pörögjön."
+  },
+  {
+   "step": 4,
+   "at_s": 150,
+   "text": "Két és fél perc van hátra a pihenőből. Lélegezz mélyen, a teszt előtt a pulzusnak le kell esnie."
+  },
+  {
+   "step": 5,
+   "at_s": 240,
+   "text": "Félúton az első nyolc percen. Tartsd a kezdeti erőt, a légzésed legyen mély és egyenletes."
+  },
+  {
+   "step": 5,
+   "at_s": 420,
+   "text": "Egy perc van hátra az első tesztből, tartsd a kadenciát 92 körül."
+  },
+  {
+   "step": 6,
+   "at_s": 300,
+   "text": "Öt perc van még a második tesztig. Készülj, de ne tekerj túl erősen."
+  },
+  {
+   "step": 7,
+   "at_s": 240,
+   "text": "Félúton. Tartsd ugyanazt a tempót, mint az elsőnél, a légzésed legyen stabil."
+  },
+  {
+   "step": 8,
+   "at_s": 200,
+   "text": "Két nyolcperces erőfeszítés, ez az FTP-d becslésének alapja. Most lassan engedd le a pulzust, szép munka."
+  }
+ ],
+ "e-ramp-20w": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A ramp teszt a fokozatos emelésről szól, most még ne fárasszd magad."
+  },
+  {
+   "step": 1,
+   "at_s": 90,
+   "text": "Másfél perc van a tesztig, a pozíciódat most rögzítsd."
+  },
+  {
+   "step": 2,
+   "at_s": 600,
+   "text": "A teszt közepén vagy, a légzésed legyen mély és egyenletes."
+  },
+  {
+   "step": 2,
+   "at_s": 1140,
+   "text": "Ha már nem bírod a lépéseket, ne erőltesd, a fontos a valódi adat."
+  },
+  {
+   "step": 3,
+   "at_s": 150,
+   "text": "A teszt kész, szép munka volt. Most lassíts, és lazítsd el a vállad."
+  }
+ ],
+ "e-ramp-15w": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Ez egy finom ramp teszt, a bemelegítés most a lábadat készíti a fokozatos emelésre."
+  },
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Három perc van hátra, készülj, hogy a ramp hamarosan kezdődik."
+  },
+  {
+   "step": 1,
+   "at_s": 60,
+   "text": "A ramp előtt egy kis lendület, a kadencia 95 körül legyen, a lábad pörögjön."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Ötödik perc, a légzésed legyen ritmusos, és a kadencia 90 körül maradjon."
+  },
+  {
+   "step": 2,
+   "at_s": 600,
+   "text": "Tíz perc, a felsőtested maradjon lazán, a kezed ne feszüljön a kormányon."
+  },
+  {
+   "step": 2,
+   "at_s": 1200,
+   "text": "Még körülbelül öt perc, figyeld a légzésedet, és ne ess ki a ritmusból."
+  },
+  {
+   "step": 2,
+   "at_s": 1440,
+   "text": "Egy perc van hátra, ha már nem bírod, nyugodtan lassíts, a teszt eredményét így is megkapod."
+  },
+  {
+   "step": 3,
+   "at_s": 120,
+   "text": "A mért eredményed most már jó alap a következő edzésekhez, szép munka."
+  }
+ ],
+ "e-ramp-25w": [
+  {
+   "step": 0,
+   "at_s": 240,
+   "text": "Ez a ramp teszt az erősebb bringásoknak szól, a bemelegítés most a kulcs. A pulzusod már emelkedjen."
+  },
+  {
+   "step": 1,
+   "at_s": 30,
+   "text": "Három perc egyenletesen, a kadenciát 95-ön tartsd. Ez a teszt előtti utolsó nyugodt szakasz."
+  },
+  {
+   "step": 2,
+   "at_s": 20,
+   "text": "Minden percben 25 wattot emelünk. Az elején még könnyű, de a kadencia lesz a jelzés a végén."
+  },
+  {
+   "step": 2,
+   "at_s": 300,
+   "text": "Öt perc telt el a rampából. Ne a wattot nézd, hanem a légzésedet és a kadenciádat."
+  },
+  {
+   "step": 2,
+   "at_s": 900,
+   "text": "Ha már nem bírod a kadenciát, nyugodtan lassíts, ez is része a tesztnek."
+  },
+  {
+   "step": 3,
+   "at_s": 200,
+   "text": "Egy kemény ramp teszt, ami sok információt ad az erőnlétedről. Most lassan lazíts, és nézz vissza büszkén."
+  }
+ ],
+ "e-ramp-3min-steps": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A bemelegítés most a fejedet készíti elő. Ma stabil, hosszabb lépcsők jönnek."
+  },
+  {
+   "step": 1,
+   "at_s": 90,
+   "text": "Félúton a ráhangolásban. Ülj egyenesen, és a kadenciát tartsd 95 körül."
+  },
+  {
+   "step": 2,
+   "at_s": 360,
+   "text": "Két lépcső kész, a harmadik jön. A légzésed legyen egyenletes."
+  },
+  {
+   "step": 2,
+   "at_s": 900,
+   "text": "Most már érezhetően nehezebb, a vállad maradjon lazán, a csípőd stabil."
+  },
+  {
+   "step": 2,
+   "at_s": 1260,
+   "text": "Még két perc a tesztből, tartsd a fordulatot, amíg tudod."
+  },
+  {
+   "step": 3,
+   "at_s": 300,
+   "text": "A lépcsős teszt kész, jó munka volt. Most lassan tekerj, és lazíts a kezedben."
+  }
+ ],
+ "c-test-cp-3-12": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "A CP-teszt két részből áll, a bemelegítés most a lábadat és a légzésedet készíti."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Tíz perc van hátra, az első nyitó előtt a kadenciát tartsd 90 körül."
+  },
+  {
+   "step": 0,
+   "at_s": 1080,
+   "text": "Két perc, és jön az első egy perces ébresztés, a kadencia legyen 100 körül."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Egy perc pihenő, a légzésed nyugodjon, aztán jön a második rövid ébresztés."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második ébresztés, most erősebben, de a kadencia 100 maradjon, aztán vége a nyitásnak."
+  },
+  {
+   "step": 4,
+   "at_s": 60,
+   "text": "Négy perc van a rajt előtt, lazítsd ki a vállad, a három perces teszt jön."
+  },
+  {
+   "step": 4,
+   "at_s": 180,
+   "text": "Két perc van hátra, készülj a három perces maximumra, ne pazarold el."
+  },
+  {
+   "step": 5,
+   "at_s": 90,
+   "text": "Félidő, tartsd a kadenciát 100 körül, ne lassulj le a kilégzésnél."
+  },
+  {
+   "step": 6,
+   "at_s": 600,
+   "text": "Tíz perc pihenő, most a lábad lazuljon, és igyál, hogy a tizenkét perces teszthez legyen erőd."
+  },
+  {
+   "step": 6,
+   "at_s": 1500,
+   "text": "Öt perc van hátra, a pulzusod már lejjebb lett, készülj a fókuszra."
+  },
+  {
+   "step": 7,
+   "at_s": 300,
+   "text": "Félidő, a tempó még tartható, a légzésed nyugodt, a fejed tiszta."
+  },
+  {
+   "step": 7,
+   "at_s": 660,
+   "text": "Egy perc van hátra, most minden erőd kell, hajrá."
+  },
+  {
+   "step": 8,
+   "at_s": 300,
+   "text": "A CP-teszt kész, a számok most már a zónáidat is megadják, szép munka."
+  }
+ ],
+ "c-test-power-profile": [
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Félúton a bemelegítésben. A mai teszt három rövid szakaszt mér, most a lábad és a légzésed készüljön."
+  },
+  {
+   "step": 0,
+   "at_s": 1020,
+   "text": "Három perc van hátra a bemelegítésből, most már csak könnyű pörgetés legyen."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Rövid pihenő a következő gyorsítás előtt. Lazíts, és lélegezz mélyen."
+  },
+  {
+   "step": 4,
+   "at_s": 0,
+   "text": "Négy perc pihenő a sprint előtt. Most nyugodtan tekerj, és készülj a legerősebb kezdésre."
+  },
+  {
+   "step": 4,
+   "at_s": 120,
+   "text": "Két perc van hátra, ne hagyd, hogy a lábad kihűljön."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Tíz perc pihenő, igyál és lélegezz, hogy az egy perces teszt tiszta legyen."
+  },
+  {
+   "step": 6,
+   "at_s": 300,
+   "text": "Öt perc van hátra az első pihenőből, készülj az egy perces maximumra."
+  },
+  {
+   "step": 7,
+   "at_s": 30,
+   "text": "Fél perc van hátra, a légzésed legyen mély és egyenletes."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Most tizenöt perc pihenő jön az öt perces teszt előtt. Igyál és lazíts."
+  },
+  {
+   "step": 8,
+   "at_s": 600,
+   "text": "Öt perc van hátra a pihenőből, készülj az öt perces teszthez."
+  },
+  {
+   "step": 9,
+   "at_s": 150,
+   "text": "Félúton az öt perces teszten. Tartsd a tempót, és ne gyorsulj hirtelen."
+  },
+  {
+   "step": 9,
+   "at_s": 270,
+   "text": "Még harminc másodperc, add meg a maradékot, aztán vége."
+  },
+  {
+   "step": 10,
+   "at_s": 200,
+   "text": "Ez volt a teljes profil: rövid, közepes és hosszabb erőfeszítés. Most lassan lazíts, nagyon jó munka."
+  }
+ ],
+ "c-test-durability": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "Ez a teszt a kitartásról szól, a bemelegítés alatt most lazán ébreszd a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Tíz perc telt el, a 75% legyen kényelmes, a légzésed nyugodt."
+  },
+  {
+   "step": 1,
+   "at_s": 1350,
+   "text": "Félidő: most egy kis harapnivaló jól jön, a második fele még hosszú."
+  },
+  {
+   "step": 1,
+   "at_s": 2580,
+   "text": "Még két perc, és jön a második adag."
+  },
+  {
+   "step": 2,
+   "at_s": 600,
+   "text": "Most a második adag jön, a fáradtság normális, a wattot tartsd."
+  },
+  {
+   "step": 2,
+   "at_s": 1500,
+   "text": "Félidő a második részben. Igyál pár kortyot, és lazítsd meg a kezed."
+  },
+  {
+   "step": 2,
+   "at_s": 2640,
+   "text": "Utolsó perc az előterhelésből, készülj a rövid pihenőre és a tesztre."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Három perc pihenő a teszt előtt. Lazíts, igyál, és nyugtasd meg a légzésed."
+  },
+  {
+   "step": 4,
+   "at_s": 150,
+   "text": "Félúton az öt percben, a csípőd maradjon nyugodt, a váll lazán."
+  },
+  {
+   "step": 4,
+   "at_s": 270,
+   "text": "Még harminc másodperc, mindent a fordulatba."
+  },
+  {
+   "step": 5,
+   "at_s": 360,
+   "text": "A teszt kész, nagyon erős munka volt. Most lassan tekerj, és engedd ki a levegőt."
+  }
+ ],
+ "f-mixed-threshold-vo2": [
+  {
+   "step": 0,
+   "at_s": 60,
+   "text": "Ez a mai edzés két nagy részből áll, a bemelegítés most a küszöbre készít."
+  },
+  {
+   "step": 0,
+   "at_s": 600,
+   "text": "Öt perc van hátra, a küszöb előtt a légzésed legyen mély és nyugodt."
+  },
+  {
+   "step": 1,
+   "at_s": 240,
+   "text": "Félidő, a kadencia maradjon 90 körül, a kilégzésed legyen hosszú."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Két perc van hátra, most tartsd a tempót, ne lazíts a végén."
+  },
+  {
+   "step": 2,
+   "at_s": 60,
+   "text": "Első küszöb kész, a pihenőben a vállad lazuljon, a második küszöb jön."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második küszöb, most már fáradtabb lábbal, de a tempó ugyanaz legyen."
+  },
+  {
+   "step": 3,
+   "at_s": 480,
+   "text": "Négy perc van hátra a küszöbből, a légzés legyen ritmusos."
+  },
+  {
+   "step": 5,
+   "at_s": 60,
+   "text": "Első rövid VO2max szakasz, a kadencia 102 körül legyen, a kilégzés erős."
+  },
+  {
+   "step": 7,
+   "at_s": 0,
+   "text": "Második kör, a fáradtság már érződik, de a tempó maradjon 118 körül."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Félúton a VO2max részben, a lábad legyen gyors, a felsőtested nyugodt."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Negyedik kör, a légzésed legyen erős, és a kadencia ne essen vissza."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Utolsó kör, most mindent a kadenciába, a végén még egy kicsit kitartás."
+  },
+  {
+   "step": 13,
+   "at_s": 60,
+   "text": "Egy perc van hátra, a végére tartsd meg a kilégzést, aztán jön a levezetés."
+  },
+  {
+   "step": 14,
+   "at_s": 300,
+   "text": "Két különböző munkát csináltál, a küszöb és a VO2max is megvolt, ez igazi kitartás."
+  }
+ ],
+ "f-mixed-sweetspot-sprints": [
+  {
+   "step": 0,
+   "at_s": 360,
+   "text": "Félúton a bemelegítésben. A mai edzés a fáradt sprintekről szól, ezért ne pazarold a lábad."
+  },
+  {
+   "step": 1,
+   "at_s": 360,
+   "text": "Félidőben az első sweet spot. A légzésed legyen mély, és a vállad maradjon lazán."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Két perc van hátra az első blokkból, készülj a pihenőre."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Négy perc pihenő. Lazítsd a kezed, és igyál egy kortyot."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Második sweet spot, 90%-on. Az első blokk után a fáradtság érződik, de a watt maradjon."
+  },
+  {
+   "step": 3,
+   "at_s": 480,
+   "text": "Négy perc van hátra ebből a blokkból, tartsd a kadenciát 90 körül."
+  },
+  {
+   "step": 5,
+   "at_s": 0,
+   "text": "Harmadik sweet spot blokk, az utolsó a fő munka előtt. Most a fegyelem a lényeg."
+  },
+  {
+   "step": 5,
+   "at_s": 480,
+   "text": "Négy perc van hátra. A végén sprintek jönnek, ezért a lábadnak még tartania kell."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Öt perc pihenő, ez után jönnek a fáradt sprintek. Lélegezz mélyen és lazíts."
+  },
+  {
+   "step": 9,
+   "at_s": 0,
+   "text": "Második fáradt sprint. Ilyenkor a lábad nehéz, de a kezdő lökés a lényeg."
+  },
+  {
+   "step": 11,
+   "at_s": 0,
+   "text": "Harmadik sprint. Ez a fáradtság a verseny végét utánozza, ezért ne add fel."
+  },
+  {
+   "step": 12,
+   "at_s": 0,
+   "text": "Utolsó előtti pihenő, utána jön az utolsó sprint. Használd ki a lélegzetvételt."
+  },
+  {
+   "step": 13,
+   "at_s": 0,
+   "text": "Utolsó sprint. Állva indulj, teljes erővel, utána már csak a levezetés jön."
+  },
+  {
+   "step": 14,
+   "at_s": 200,
+   "text": "Három sweet spot blokk és négy sprint, ez a mai munka igazi mérföldkő. Most lassan engedd le a pulzust."
+  }
+ ],
+ "f-mixed-long-vo2-finish": [
+  {
+   "step": 0,
+   "at_s": 300,
+   "text": "A mai munka két órás. A bemelegítés után a tempó legyen kényelmes, nem sietős."
+  },
+  {
+   "step": 1,
+   "at_s": 600,
+   "text": "Most a hosszú alap a lényeg: egyenletes kadencia, nyugodt váll."
+  },
+  {
+   "step": 1,
+   "at_s": 1500,
+   "text": "Félidő az alapban. Igyál egy kortyot, és figyeld a légzésed mélységét."
+  },
+  {
+   "step": 1,
+   "at_s": 2340,
+   "text": "Még egy perc az alapozóból, készülj az átállásra."
+  },
+  {
+   "step": 2,
+   "at_s": 0,
+   "text": "Második alapblokk, most kicsit erősebb a tempó. A kezed ne feszüljön meg."
+  },
+  {
+   "step": 2,
+   "at_s": 1050,
+   "text": "Félúton a második alapblokkban, a fáradtság most jön, tartsd a formát."
+  },
+  {
+   "step": 2,
+   "at_s": 2040,
+   "text": "Utolsó perc az alapból, tartsd a kadenciát, mert utána jön a VO2max rész."
+  },
+  {
+   "step": 3,
+   "at_s": 0,
+   "text": "Három perc átállás, a lábad szedje össze magát a VO2max-hoz."
+  },
+  {
+   "step": 4,
+   "at_s": 90,
+   "text": "Félúton vagy, a fordulat legyen erős, de a légzés ne essen szét."
+  },
+  {
+   "step": 6,
+   "at_s": 0,
+   "text": "Második fáradt intervallum, most a fejedet kell használni, a fordulat ugyanaz."
+  },
+  {
+   "step": 8,
+   "at_s": 0,
+   "text": "Harmadik fáradt intervallum, a lábad nehéz lehet. Ülj egyenesen, a kulcsod ne feszüljön."
+  },
+  {
+   "step": 10,
+   "at_s": 0,
+   "text": "Utolsó VO2max, mindent bele, utána már csak a levezetés vár."
+  },
+  {
+   "step": 11,
+   "at_s": 330,
+   "text": "Két órás munka volt, a VO2max-ot fáradtan is kibírtad. Nagyon szép munka, most lazíts."
+  }
+ ]
+}

@@ -50,6 +50,7 @@ fn raw_points() -> Vec<RawPoint> {
         lat,
         lon,
         ele: Some(ele),
+        time: None,
     });
     for i in 0..n {
         // Midpoint rule: evaluate heading and grade in the middle of the step.
@@ -64,6 +65,7 @@ fn raw_points() -> Vec<RawPoint> {
             lat,
             lon,
             ele: Some((ele * 4.0).round() / 4.0),
+            time: None,
         });
     }
     pts
@@ -97,6 +99,8 @@ fn build_demo() -> Route {
             climbs: Vec::new(),
             waypoints: Vec::new(),
             has_elevation: false,
+            segments: Vec::new(),
+            timeline: Vec::new(),
         },
     }
 }

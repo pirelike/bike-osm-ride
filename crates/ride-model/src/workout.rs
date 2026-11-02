@@ -400,6 +400,23 @@ impl StepTarget {
     }
 }
 
+/// A coaching message of a step (a `textevent` of a Zwift / MyWhoosh file), shown `at_s`
+/// seconds after the step starts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StepMessage {
+    pub at_s: u32,
+    pub text: String,
+}
+
+/// The coaching message on screen right now (see [`WorkoutProgress::message`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CoachMessage {
+    /// Position of the message in the whole workout, so a new message can be told from the one
+    /// already shown.
+    pub id: usize,
+    pub text: String,
+}
+
 /// One block of the workout.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkoutStep {
@@ -412,7 +429,14 @@ pub struct WorkoutStep {
     pub cadence: Option<u16>,
     #[serde(default)]
     pub note: Option<String>,
+    /// Timed coaching messages of the step (imported files); without them the `note` is shown
+    /// at the start of the step.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<StepMessage>,
 }
+
+/// Id prefix of workouts imported from a file (the rest of the id is a content hash).
+pub const IMPORT_PREFIX: &str = "import-";
 
 /// One workout of the library.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -437,6 +461,11 @@ pub struct Workout {
 impl Workout {
     pub fn total_seconds(&self) -> u32 {
         self.steps.iter().map(|s| s.duration_s).sum()
+    }
+
+    /// This workout came from an imported file, not from the embedded library.
+    pub fn is_imported(&self) -> bool {
+        self.id.starts_with(IMPORT_PREFIX)
     }
 
     /// Structural check used when the library is loaded. A failure is a data bug, not a
@@ -521,6 +550,9 @@ pub struct WorkoutProgress {
     pub finished: bool,
     pub next_step_name: Option<String>,
     pub next_target_w: Option<f64>,
+    /// The coaching message of the moment (for a few seconds after it is due).
+    #[serde(default)]
+    pub message: Option<CoachMessage>,
 }
 
 #[derive(Deserialize)]
@@ -530,7 +562,7 @@ struct LibraryFile {
 }
 
 /// The workout library (embedded at build time and validated once).
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct WorkoutLibrary {
     workouts: Vec<Workout>,
 }
@@ -571,6 +603,31 @@ impl WorkoutLibrary {
     pub fn embedded() -> &'static WorkoutLibrary {
         static LIB: OnceLock<WorkoutLibrary> = OnceLock::new();
         LIB.get_or_init(|| WorkoutLibrary::from_json(include_str!("../assets/workouts.json")))
+    }
+
+    /// The embedded library plus workouts imported from files (a MyWhoosh or Zwift export).
+    ///
+    /// Imported entries are not passed through [`Workout::validate`]: they were not written for
+    /// this library and a whole-minute length is not something a downloaded file promises. An
+    /// entry with the same id replaces the embedded one, so re-importing a corrected file
+    /// updates it instead of duplicating it.
+    pub fn with_imported(imported: Vec<Workout>) -> WorkoutLibrary {
+        let mut workouts = Self::embedded().workouts.clone();
+        for workout in imported {
+            if let Some(slot) = workouts.iter_mut().find(|w| w.id == workout.id) {
+                *slot = workout;
+            } else {
+                workouts.push(workout);
+            }
+        }
+        workouts.retain(|w| !w.steps.is_empty());
+        workouts.sort_by(|a, b| {
+            a.category
+                .order()
+                .cmp(&b.category.order())
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        WorkoutLibrary { workouts }
     }
 
     pub fn all(&self) -> &[Workout] {
@@ -831,10 +888,47 @@ mod tests {
                 target: StepTarget::Free,
                 cadence: None,
                 note: None,
+                messages: Vec::new(),
             }],
         };
         assert_eq!(workout.duration_text(), "1:05");
         assert_eq!(workout.total_seconds(), 3900);
         assert!(workout.validate().is_ok());
+    }
+
+    #[test]
+    fn the_coachs_messages_of_the_library_sit_inside_their_steps() {
+        let lib = WorkoutLibrary::embedded();
+        let mut count = 0;
+        for w in lib.all() {
+            for step in &w.steps {
+                let mut last: Option<u32> = None;
+                for m in &step.messages {
+                    assert!(
+                        m.at_s < step.duration_s,
+                        "{}: {} s in a {} s step",
+                        w.id,
+                        m.at_s,
+                        step.duration_s
+                    );
+                    assert!(
+                        !m.text.trim().is_empty() && m.text.chars().count() <= 160,
+                        "{}",
+                        w.id
+                    );
+                    assert!(
+                        step.note.is_none() || m.at_s > 0,
+                        "{}: a message at 0 s would hide under the note",
+                        w.id
+                    );
+                    if let Some(prev) = last {
+                        assert!(m.at_s >= prev, "{}: messages out of order", w.id);
+                    }
+                    last = Some(m.at_s);
+                    count += 1;
+                }
+            }
+        }
+        assert!(count > 0, "the library has coaching messages");
     }
 }

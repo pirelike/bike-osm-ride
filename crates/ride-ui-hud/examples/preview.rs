@@ -140,6 +140,17 @@ fn riding_snapshot(dist: f64, inside: bool) -> RideSnapshot {
         next_climb_in: Some(if inside { 0.0 } else { 1_500.0 }),
         trainer_grade: if inside { 6.6 } else { 1.2 },
         workout: None,
+        ghost: None,
+        segment: if inside {
+            Some(ride_model::SegmentLive {
+                climb: 0,
+                elapsed_s: 272.0,
+                pr_s: Some(280.0),
+                delta_s: Some(-6.0),
+            })
+        } else {
+            None
+        },
     }
 }
 
@@ -163,6 +174,8 @@ fn Scene(props: SceneProps) -> Element {
     let route0 = props.route.clone();
     let route = use_signal(move || route0);
     let rider = use_signal(demo_rider);
+    // the demo PR of the big climb: shown before the ride and live while riding it
+    let prs = use_signal(|| vec![Some(280.0)]);
     let theme0 = props.theme;
     let theme = use_signal(move || theme0);
     let note = props.note.clone();
@@ -175,7 +188,7 @@ fn Scene(props: SceneProps) -> Element {
             }
             div { class: "hp-stage",
                 div { class: "hp-stage__grid", aria_hidden: "true" }
-                ClimbCard { route, snapshot, theme }
+                ClimbCard { route, snapshot, theme, prs }
                 if !note.is_empty() {
                     div { class: "hp-stage__note", "{note}" }
                 }

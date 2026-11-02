@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=bike-osm-ride
+Comment=Virtuális tekerés GPX-útvonalakon okos trainerrel
+Exec=bike-osm-ride
+Icon=bike-osm-ride
+Terminal=false
+Categories=Sports;Utility;
+Keywords=bike;cycling;trainer;gpx;indoor;
+StartupWMClass=bike-osm-ride

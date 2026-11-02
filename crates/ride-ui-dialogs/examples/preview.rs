@@ -163,6 +163,7 @@ fn fake_settings(theme: Theme) -> Settings {
 fn fake_summary() -> RideSummary {
     RideSummary {
         route_name: "Budai-hegység kör".into(),
+        route_id: "demo-route".into(),
         started_unix_s: 1_790_000_000.0,
         elapsed_s: 6_129.0,
         dist: 24_100.0,
@@ -279,11 +280,21 @@ fn DevicesStage() -> Element {
 #[component]
 fn SettingsStage(theme: Theme) -> Element {
     let settings = use_signal(|| fake_settings(theme));
+    // two stored rides on the loaded route: the ghost selector says the ghost is ready
+    let ghost_status = use_signal(|| ride_model::GhostStatus {
+        loaded: true,
+        rides: 2,
+        simulated: 0,
+        replayable: true,
+        partial: false,
+        route_time_s: Some(5_025.0),
+    });
     rsx! {
         div { class: "pk-stage pk-stage--dialog",
             SettingsDialog {
                 open: true,
                 settings,
+                ghost_status,
                 on_change: move |_: Settings| {},
                 on_close: move |_| {},
             }
@@ -300,6 +311,10 @@ fn SummaryStage() -> Element {
                 open: true,
                 summary,
                 on_save_tcx: move |_| {},
+                details: use_signal(ride_ui_dialogs::RideDetails::default),
+                on_details: move |_| {},
+                uploading: false,
+                on_upload_strava: move |_| {},
                 on_close: move |_| {},
                 on_new_ride: move |_| {},
             }

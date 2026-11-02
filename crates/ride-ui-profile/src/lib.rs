@@ -21,15 +21,23 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use ride_model::{
-    ClimbCategory, ProfileMode, RecordPoint, RideSnapshot, RideState, RiderSettings, Route, Theme,
+    ClimbCategory, ProfileMode, ProfileView, RecordPoint, RideSnapshot, RideState, RiderSettings,
+    Route, Theme,
 };
 use ride_ui_kit::color::ink_on;
-use ride_ui_kit::format::{fmt_grade, fmt_km, fmt_m};
+use ride_ui_kit::format::{fmt_delta_s, fmt_grade, fmt_km, fmt_m};
+
 use ride_ui_kit::palette;
 use ride_ui_kit::{Icon, IconName, Segmented};
 
 pub mod geom;
 pub mod series;
+pub mod swipe;
+pub mod workout;
+
+pub use swipe::Pages;
+
+pub use workout::WorkoutProfile;
 
 /// Component stylesheet (tokens only; every class is prefixed `profile-`). The shell injects
 /// it after the design kit.
@@ -155,13 +163,75 @@ fn climb_flags(route: &Route, scale: geom::XScale, theme: Theme) -> Vec<Flag> {
     out
 }
 
+/// One named segment of the file inside the window, in percent of the plot width.
+#[derive(Clone, Debug, PartialEq)]
+struct SegmentMark {
+    left: f64,
+    width: f64,
+    name: String,
+}
+
+/// The file's named segments (Strava segments added to the GPX) that intersect the window.
+fn segment_marks(route: &Route, scale: geom::XScale) -> Vec<SegmentMark> {
+    route
+        .segments
+        .iter()
+        .filter_map(|seg| {
+            let start = seg.start_dist.max(scale.start());
+            let end = seg.end_dist.min(scale.end());
+            if !(start.is_finite() && end.is_finite()) || end <= start {
+                return None;
+            }
+            let left = scale.pct(start);
+            Some(SegmentMark {
+                left,
+                width: (scale.pct(end) - left).max(0.3),
+                name: seg.name.clone(),
+            })
+        })
+        .collect()
+}
+
 // ───────────────────────────── ElevationProfile ─────────────────────────────
 
-/// One label / value pair of the profile header ("Táv 9.82 / 24.10 km").
+/// Elevation / Workout switch of the profile panel header (only offered while a workout is
+/// selected).
 #[component]
-fn Pair(label: String, value: String, #[props(default = String::new())] unit: String) -> Element {
+fn ViewSwitch(view: ProfileView, on_view: EventHandler<ProfileView>) -> Element {
     rsx! {
-        span { class: "profile-pair",
+        Segmented {
+            options: vec![
+                ("elevation".to_string(), "Magasság".to_string()),
+                ("workout".to_string(), "Edzés".to_string()),
+            ],
+            value: if view == ProfileView::Workout { "workout".to_string() } else { "elevation".to_string() },
+            on_change: move |value: String| {
+                on_view.call(if value == "workout" { ProfileView::Workout } else { ProfileView::Elevation });
+            },
+            aria_label: "A panel tartalma".to_string(),
+            small: true,
+        }
+    }
+}
+
+/// One label / value pair of the profile header ("Táv 9.82 / 24.10 km").
+///
+/// `tone` colours a signed difference: `""` (neutral), `"ahead"` (green, the rider is in front
+/// of the ghost) or `"behind"` (red).
+#[component]
+fn Pair(
+    label: String,
+    value: String,
+    #[props(default = String::new())] unit: String,
+    #[props(default = String::new())] tone: String,
+) -> Element {
+    let class = if tone.is_empty() {
+        "profile-pair".to_string()
+    } else {
+        format!("profile-pair profile-pair--{tone}")
+    };
+    rsx! {
+        span { class: "{class}",
             span { class: "profile-pair-label", "{label}" }
             span { class: "profile-pair-value", "{value}" }
             if !unit.is_empty() {
@@ -171,12 +241,23 @@ fn Pair(label: String, value: String, #[props(default = String::new())] unit: St
     }
 }
 
+/// Read-out tone of a ghost difference (positive = behind).
+fn delta_tone(delta: f64) -> &'static str {
+    if !delta.is_finite() || delta.abs() < 0.5 {
+        ""
+    } else if delta < 0.0 {
+        "ahead"
+    } else {
+        "behind"
+    }
+}
+
 /// Flat grade-coloured elevation profile with the rider marker, climb flags (category
 /// numeral; length and grade on wide climbs), a km ruler, hover read-out (distance / elevation
 /// / grade), click to seek (emits the distance in metres; the app ignores it while riding) and
 /// a Full / Look-ahead toggle (`on_mode`). In look-ahead mode the window starts slightly behind
-/// the rider and spans `lookahead_m`. The header bar leaves `--profile-dock` (296 px) free at
-/// its left edge for the transport controls the shell docks there.
+/// the rider and spans `lookahead_m`. With `on_view` the header also offers the switch to the
+/// workout view.
 #[component]
 pub fn ElevationProfile(
     route: ReadSignal<Option<Arc<Route>>>,
@@ -186,10 +267,29 @@ pub fn ElevationProfile(
     theme: ReadSignal<Theme>,
     on_seek: EventHandler<f64>,
     on_mode: EventHandler<ProfileMode>,
+    #[props(default)] on_view: Option<EventHandler<ProfileView>>,
+    /// At most this many elevation hairlines (a short profile, like the one under the phone's
+    /// map, reads better with three than with seven).
+    #[props(default = 7)]
+    grid_steps: usize,
+    /// Phone: the views are pages turned by swiping, instead of the header buttons.
+    #[props(default)]
+    pages: Option<Pages>,
 ) -> Element {
     let mut hover = use_signal(|| None::<f64>);
     let width = use_signal(|| 0.0_f64);
     let mut mounted = use_signal(|| None::<Rc<MountedData>>);
+
+    // phone: a sideways swipe over the plot turns the page (see `swipe.rs`)
+    let mut swipe_from = use_signal(|| None::<(f64, f64)>);
+    let mut swiped = use_signal(|| false);
+    // The y axis drawn last time, with what it was drawn for (route id, mode): read and written
+    // during render, so it is plain memory, not a signal.
+    let last_axis = use_hook(|| {
+        Rc::new(std::cell::RefCell::new(
+            None::<(String, ProfileMode, (f64, f64))>,
+        ))
+    });
 
     // The static geometry only depends on the route, the theme and the 250 m bucket the
     // rider is in — never on the 10 Hz snapshot itself. `bucket` is cheap to recompute and
@@ -246,9 +346,25 @@ pub fn ElevationProfile(
     };
     let (d0, d1) = geom::window_bounds(total, mode_v, dist, look_v);
     let scale = geom::XScale::new(d0, d1);
-    let (y_lo, y_hi) = geom::elevation_range(&route_ref, d0, d1)
-        .map(|(lo, hi)| geom::y_range(lo, hi))
-        .unwrap_or_else(|| geom::y_range(0.0, 100.0));
+    let (y_lo, y_hi) = match mode_v {
+        ProfileMode::Full => geom::elevation_range(&route_ref, d0, d1)
+            .map(|(lo, hi)| geom::y_range(lo, hi))
+            .unwrap_or_else(|| geom::y_range(0.0, 100.0)),
+        ProfileMode::Lookahead => {
+            // the terrain of the window and of one more window beyond it, so a climb coming up
+            // widens the axis before it reaches the edge, and the axis only changes when it must
+            let ahead = (d1 + (d1 - d0)).min(total);
+            let (lo, hi) = geom::elevation_range(&route_ref, d0, ahead).unwrap_or((0.0, 100.0));
+            let mut memory = last_axis.borrow_mut();
+            let prev = memory
+                .as_ref()
+                .filter(|(id, m, _)| *id == route_ref.id && *m == mode_v)
+                .map(|(_, _, axis)| *axis);
+            let axis = geom::stable_y_range(prev, lo, hi);
+            *memory = Some((route_ref.id.clone(), mode_v, axis));
+            axis
+        }
+    };
     let transform = geom::view_transform(d0, d1, y_lo, y_hi);
     let markup = geometry
         .read()
@@ -262,8 +378,21 @@ pub fn ElevationProfile(
     let show_rider = snap.state != RideState::Empty;
     let rider_x = scale.pct(dist);
     let rider_y = y_pct(route_ref.locate(dist).ele);
-    // the disc never leaves the plot at the start or the end of the route
+    // The disc never leaves the plot: at the start/end of the route, and on the flattest or
+    // steepest part of the window, half of it would hang over the edge without the clamp.
     let rider_left = format!("clamp(8px, {}, calc(100% - 8px))", pct_text(rider_x));
+    let rider_top = format!("clamp(8px, {}, calc(100% - 8px))", pct_text(rider_y));
+
+    // ghost marker: only while it is inside the shown window (a look-ahead window would
+    // otherwise pin a ghost that is kilometres behind to the left edge)
+    let ghost = snap.ghost.as_ref().filter(|ghost| {
+        show_rider
+            && ghost.dist.is_finite()
+            && ghost.dist >= d0
+            && ghost.dist <= d1
+            && ghost.dist <= total
+    });
+    let ghost_delta = snap.ghost.as_ref().and_then(|ghost| ghost.delta_s);
 
     // km ruler: the first numeral carries the unit
     let mut ticks: Vec<(geom::RulerTick, f64)> = geom::ruler_ticks(d0, d1)
@@ -276,10 +405,19 @@ pub fn ElevationProfile(
     if let Some((tick, _)) = ticks.iter_mut().find(|(tick, _)| tick.label.is_some()) {
         tick.label = tick.label.take().map(|label| format!("{label} km"));
     }
-    let grid: Vec<(f64, String)> = geom::grid_values(y_lo, y_hi)
+    // a hairline right under the header would put its label on the header's text
+    let grid: Vec<(f64, String)> = geom::grid_values_n(y_lo, y_hi, grid_steps.max(1))
         .into_iter()
         .map(|value| (y_pct(value), format!("{} m", fmt_m(value))))
+        .filter(|(top, _)| *top >= 8.0)
         .collect();
+    let segment_bands = segment_marks(&route_ref, scale);
+    // the segment the rider is on, for the read-out
+    let live_segment = route_ref
+        .segments
+        .iter()
+        .find(|seg| show_rider && dist >= seg.start_dist && dist < seg.end_dist)
+        .map(|seg| (seg.name.clone(), seg.end_dist - dist));
     let flags: Vec<(Flag, f64)> = climb_flags(&route_ref, scale, theme_v)
         .into_iter()
         .map(|flag| {
@@ -294,6 +432,13 @@ pub fn ElevationProfile(
         let d = scale.dist_at_frac(frac);
         let pos = route_ref.locate(d);
         (frac, d, pos.ele, pos.grade)
+    });
+    let hover_segment = hover_info.and_then(|(_, d, _, _)| {
+        route_ref
+            .segments
+            .iter()
+            .find(|seg| d >= seg.start_dist && d <= seg.end_dist)
+            .map(|seg| seg.name.clone())
     });
 
     let summary = format!(
@@ -311,8 +456,8 @@ pub fn ElevationProfile(
         .unwrap_or(0);
 
     rsx! {
-        div { class: "profile",
-            div { class: "profile-head",
+        div { class: if pages.as_ref().is_some_and(|p| p.hint) { "profile profile--nudge" } else { "profile" },
+            div { class: if pages.is_some() { "profile-head profile-head--pages" } else { "profile-head" },
                 div { class: "profile-readout",
                     if let Some((_, d, ele, grade)) = hover_info {
                         Pair { label: "Táv".to_string(), value: fmt_km(d), unit: "km".to_string() }
@@ -326,28 +471,56 @@ pub fn ElevationProfile(
                         }
                         Pair {
                             label: "Szint".to_string(),
-                            value: format!("+{}", fmt_m(route_ref.ascent)),
+                            value: if show_rider {
+                                format!("+{} / {}", fmt_m(snap.ascent_done.max(0.0)), fmt_m(route_ref.ascent))
+                            } else {
+                                format!("+{}", fmt_m(route_ref.ascent))
+                            },
                             unit: "m".to_string(),
                         }
                         if mode_v == ProfileMode::Lookahead {
                             Pair { label: "Ablak".to_string(), value: fmt_km(d1 - d0), unit: "km".to_string() }
+                        }
+                        if let Some((name, left)) = live_segment.clone() {
+                            Pair {
+                                label: format!("Szegmens: {name}"),
+                                value: fmt_km(left.max(0.0)),
+                                unit: "km hátra".to_string(),
+                            }
+                        }
+                        if let Some(delta) = ghost_delta {
+                            Pair {
+                                label: "Szellem".to_string(),
+                                value: fmt_delta_s(delta),
+                                unit: "s".to_string(),
+                                tone: delta_tone(delta).to_string(),
+                            }
                         }
                         if no_elevation {
                             span { class: "tag profile-readout-note", "Nincs magassági adat" }
                         }
                     }
                 }
-                Segmented {
-                    options: vec![
-                        ("full".to_string(), "Teljes".to_string()),
-                        ("lookahead".to_string(), "Előretekintés".to_string()),
-                    ],
-                    value: if mode_v == ProfileMode::Full { "full".to_string() } else { "lookahead".to_string() },
-                    on_change: move |value: String| {
-                        on_mode.call(if value == "full" { ProfileMode::Full } else { ProfileMode::Lookahead });
-                    },
-                    aria_label: "Profil nézet".to_string(),
-                    small: true,
+                if let Some(pages) = pages.clone() {
+                    swipe::PageDots { pages }
+                } else {
+                    div { class: "profile-switches",
+                        Segmented {
+                            options: vec![
+                                ("full".to_string(), "Teljes".to_string()),
+                                ("lookahead".to_string(), "Előretekintés".to_string()),
+                            ],
+                            value: if mode_v == ProfileMode::Full { "full".to_string() } else { "lookahead".to_string() },
+                            on_change: move |value: String| {
+                                on_mode.call(if value == "full" { ProfileMode::Full } else { ProfileMode::Lookahead });
+                            },
+                            aria_label: "Profil nézet".to_string(),
+                            small: true,
+                        }
+                        if let Some(on_view) = on_view {
+                            ViewSwitch { view: ProfileView::Elevation, on_view }
+                        }
+                    }
                 }
             }
             div { class: "profile-plot", role: "img", "aria-label": "{summary}",
@@ -373,6 +546,15 @@ pub fn ElevationProfile(
                 for (top , text) in grid.iter() {
                     div { key: "y-{top:.1}", class: "profile-ytick", style: "top: {pct_text(*top)}", "{text}" }
                 }
+                for seg in segment_bands.iter() {
+                    div {
+                        key: "seg-{seg.left:.2}",
+                        class: "profile-seg",
+                        style: "left: {pct_text(seg.left)}; width: {pct_text(seg.width)}",
+                        title: "Szegmens: {seg.name}",
+                        span { class: "profile-seg-label", "{seg.name}" }
+                    }
+                }
                 for (flag , top) in flags.iter() {
                     div {
                         key: "flag-{flag.left:.2}",
@@ -390,7 +572,7 @@ pub fn ElevationProfile(
                     div { class: "profile-guide", style: "left: {rider_left}" }
                     svg {
                         class: "profile-dot",
-                        style: "left: {rider_left}; top: {pct_text(rider_y)}",
+                        style: "left: {rider_left}; top: {rider_top}",
                         width: "16",
                         height: "16",
                         view_box: "0 0 16 16",
@@ -403,6 +585,19 @@ pub fn ElevationProfile(
                             stroke: "var(--marker-ring)",
                             stroke_width: "3",
                         }
+                    }
+                }
+                if let Some(ghost) = ghost {
+                    div {
+                        class: "profile-guide profile-guide--ghost",
+                        style: "left: {pct_text(scale.pct(ghost.dist))}",
+                    }
+                    div {
+                        class: "profile-ghost",
+                        style: "left: clamp(5px, {pct_text(scale.pct(ghost.dist))}, calc(100% - 5px)); top: clamp(5px, {pct_text(y_pct(route_ref.locate(ghost.dist).ele))}, calc(100% - 5px))",
+                        title: "Szellem",
+                        role: "img",
+                        "aria-label": "Szellem",
                     }
                 }
                 if let Some((frac, d, ele, grade)) = hover_info {
@@ -425,10 +620,40 @@ pub fn ElevationProfile(
                             span { class: "profile-tip-label", "Meredekség" }
                             span { class: "profile-tip-value", "{fmt_grade(grade)} %" }
                         }
+                        if let Some(name) = &hover_segment {
+                            div { class: "profile-tip-row profile-tip-row--seg",
+                                span { class: "profile-tip-label", "Szegmens" }
+                                span { class: "profile-tip-seg", "{name}" }
+                            }
+                        }
                     }
                 }
                 div {
-                    class: "profile-hit",
+                    class: if pages.is_some() { "profile-hit profile-hit--swipe" } else { "profile-hit" },
+                    onpointerdown: move |event: PointerEvent| {
+                        let p = event.client_coordinates();
+                        swipe_from.set(Some((p.x, p.y)));
+                        swiped.set(false);
+                    },
+                    onpointercancel: move |_| swipe_from.set(None),
+                    onpointerup: {
+                        let pages = pages.clone();
+                        move |event: PointerEvent| {
+                            let Some((x0, y0)) = swipe_from.take() else {
+                                return;
+                            };
+                            let p = event.client_coordinates();
+                            let turned = pages.as_ref().and_then(|pages| {
+                                let to = pages.step(swipe::swipe_step(p.x - x0, p.y - y0)?)?;
+                                pages.on_page.call(to);
+                                Some(())
+                            });
+                            if turned.is_some() {
+                                swiped.set(true);
+                                hover.set(None);
+                            }
+                        }
+                    },
                     onmounted: move |event: MountedEvent| {
                         mounted.set(Some(event.data()));
                         measure_width(mounted, width);
@@ -442,6 +667,10 @@ pub fn ElevationProfile(
                     },
                     onmouseleave: move |_| hover.set(None),
                     onclick: move |event: MouseEvent| {
+                        // the end of a swipe is not a tap on the profile
+                        if swiped.take() {
+                            return;
+                        }
                         let w = *width.peek();
                         if let Some(frac) = pointer_frac(event.element_coordinates().x, w) {
                             on_seek.call(scale.dist_at_frac(frac));
@@ -860,7 +1089,7 @@ mod tests {
     // ── css ────────────────────────────────────────────────────────────────────
 
     /// Custom properties the components define inline (not part of the token set).
-    const LOCAL_VARS: [&str; 5] = ["--c", "--p", "--fill", "--ink", "--profile-dock"];
+    const LOCAL_VARS: [&str; 6] = ["--c", "--p", "--fill", "--ink", "--profile-dock", "--wpad"];
 
     /// Every `--name:` declaration of a stylesheet (comments included declarations the plain
     /// `split(';')` approach would swallow, so this scans for the declaration colon).
@@ -959,6 +1188,8 @@ mod tests {
         theme: Theme,
         mode: ProfileMode,
         dist: f64,
+        /// `(distance, delta in seconds)` of a ghost to put in the snapshot.
+        ghost: Option<(f64, Option<f64>)>,
     }
 
     #[component]
@@ -966,11 +1197,19 @@ mod tests {
         let route0 = props.route.clone();
         let route = use_signal(move || route0);
         let dist0 = props.dist;
+        let ghost0 = props.ghost;
         let snapshot = use_signal(move || {
             let mut snapshot = RideSnapshot::empty();
             snapshot.state = RideState::Riding;
             snapshot.dist = dist0;
             snapshot.pos.dist = dist0;
+            if let Some((ghost_dist, delta_s)) = ghost0 {
+                snapshot.ghost = Some(ride_model::GhostLive {
+                    dist: ghost_dist,
+                    pos: Default::default(),
+                    delta_s,
+                });
+            }
             snapshot
         });
         let mode0 = props.mode;
@@ -1011,6 +1250,7 @@ mod tests {
             theme: Theme::Dark,
             mode,
             dist,
+            ghost: None,
         }
     }
 
@@ -1024,6 +1264,15 @@ mod tests {
         assert!(html.contains("vector-effect"), "crisp outline");
         assert!(html.contains("profile-guide"), "rider hairline");
         assert!(html.contains("profile-dot"), "rider disc");
+        // the disc is clamped on both axes, so it never hangs over the plot edge
+        let dot = html
+            .split(r#"class="profile-dot""#)
+            .nth(1)
+            .expect("the rider disc");
+        assert!(
+            dot.contains("left: clamp(8px,") && dot.contains("top: clamp(8px,"),
+            "the disc is clamped left and top: {dot:.160}"
+        );
         assert!(html.contains("profile-done"), "ridden part covered");
         assert!(html.contains("profile-flag-box"), "climb flag");
         assert!(html.contains("profile-climbbar"), "climb bar on the ruler");
@@ -1058,6 +1307,57 @@ mod tests {
         assert!(html.contains("Teljes"));
         assert!(!html.contains("Ablak"), "no window pair in full mode");
         assert!(!html.contains("NaN"));
+    }
+
+    #[test]
+    fn the_ghost_gets_a_marker_and_a_signed_read_out() {
+        // 6 km, ghost 500 m ahead (positive = the rider is behind): red, +25 s
+        let mut props = harness(6_000.0, ProfileMode::Full);
+        props.ghost = Some((6_500.0, Some(25.0)));
+        let html = render(props);
+        assert!(html.contains("profile-ghost"), "ghost diamond missing");
+        assert!(
+            html.contains("profile-guide--ghost"),
+            "ghost hairline missing"
+        );
+        assert!(html.contains("Szellem"), "ghost label missing");
+        assert!(
+            html.contains("profile-pair profile-pair--behind"),
+            "behind must be coloured: {html}"
+        );
+        assert!(html.contains("+25"), "signed difference missing");
+        assert!(
+            html.matches("profile-dot").count() >= 1,
+            "the rider keeps its disc"
+        );
+
+        // ahead: green, negative
+        let mut props = harness(6_500.0, ProfileMode::Full);
+        props.ghost = Some((6_000.0, Some(-25.0)));
+        let html = render(props);
+        assert!(html.contains("profile-pair profile-pair--ahead"), "{html}");
+        assert!(html.contains("-25"));
+
+        // a ghost outside the shown window is not pinned to the edge
+        let mut props = harness(20_000.0, ProfileMode::Lookahead);
+        props.ghost = Some((1_000.0, Some(400.0)));
+        let html = render(props);
+        assert!(!html.contains("profile-ghost"), "no ghost far behind");
+        // ... but its difference is still reported
+        assert!(html.contains("+400"));
+
+        // no ghost at all: no marker, no pair
+        let html = render(harness(6_000.0, ProfileMode::Full));
+        assert!(!html.contains("profile-ghost"));
+        assert!(!html.contains("Szellem"));
+    }
+
+    #[test]
+    fn the_delta_tone_is_symmetric() {
+        assert_eq!(delta_tone(-12.0), "ahead");
+        assert_eq!(delta_tone(12.0), "behind");
+        assert_eq!(delta_tone(0.2), "");
+        assert_eq!(delta_tone(f64::NAN), "");
     }
 
     #[test]
@@ -1145,6 +1445,7 @@ mod tests {
             theme: Theme::Light,
             mode: ProfileMode::Lookahead,
             dist: 0.0,
+            ghost: None,
         });
         assert!(
             html.contains("profile--empty"),
@@ -1167,6 +1468,7 @@ mod tests {
             theme: Theme::Dark,
             mode: ProfileMode::Lookahead,
             dist: 0.0,
+            ghost: None,
         });
         assert!(html.contains("Nincs mit kirajzolni"));
         assert!(!html.contains("NaN"));
@@ -1182,6 +1484,7 @@ mod tests {
             theme: Theme::Dark,
             mode: ProfileMode::Full,
             dist: 0.0,
+            ghost: None,
         });
         assert!(html.contains("Nincs magassági adat"));
         assert!(!html.contains("NaN"));
@@ -1201,6 +1504,7 @@ mod tests {
             theme: Theme::Dark,
             mode: ProfileMode::Lookahead,
             dist: 1_000.0,
+            ghost: None,
         });
         assert!(html.contains("profile-chart"));
         assert!(html.contains("jelenleg —") || html.contains("—"));

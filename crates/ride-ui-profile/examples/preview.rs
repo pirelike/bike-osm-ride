@@ -146,6 +146,8 @@ fn fake_route() -> Route {
         climbs,
         waypoints: Vec::new(),
         has_elevation: true,
+        segments: Vec::new(),
+        timeline: Vec::new(),
     }
 }
 

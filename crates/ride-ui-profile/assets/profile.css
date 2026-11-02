@@ -18,10 +18,12 @@
   overflow: hidden;
   background: var(--bg-1);
   color: var(--text);
+  container-type: inline-size;
 }
 
-/* 32 px bar. The shell docks the transport controls over its left edge: --profile-dock is the
-   width kept free for them (the shell may override it). */
+/* 32 px bar: the read-out on the left, the view switches on the right. (The transport controls
+   are a panel of their own now; --profile-dock only keeps the hook for a shell that docks
+   something over the left edge.) */
 .profile-head {
   display: flex;
   flex: none;
@@ -29,11 +31,32 @@
   justify-content: space-between;
   gap: var(--space-3);
   height: 32px;
-  padding: 0 var(--space-3) 0 var(--profile-dock, 296px);
+  padding: 0 var(--space-3) 0 var(--profile-dock, var(--space-3));
   border-bottom: 1px solid var(--rule);
 }
 
+/* a narrow panel (a phone, a thin tile): the switches on the first line, the read-out under them */
+@container (max-width: 560px) {
+  .profile-head {
+    flex-wrap: wrap;
+    height: auto;
+    row-gap: 4px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  .profile-switches { margin-left: auto; }
+  .profile-readout { order: 2; flex-basis: 100%; }
+}
+
+.profile-switches {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .profile-readout {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -73,6 +96,9 @@
   color: var(--text-dim);
 }
 
+/* a signed difference: green when the rider is ahead of the ghost, red when behind */
+.profile-pair--ahead .profile-pair-value { color: var(--ok); }
+.profile-pair--behind .profile-pair-value { color: var(--crit); }
 .profile-readout-note { margin-left: var(--space-3); }
 
 .profile-plot {
@@ -123,7 +149,6 @@
   background: var(--bg-1);
   opacity: 0.55;
   pointer-events: none;
-  transition: width 100ms linear;
 }
 
 /* a climb: a flag on a pole standing on the terrain at the climb start */
@@ -168,6 +193,9 @@
 }
 
 /* the rider: a vertical hairline and a solid disc with a paper ring */
+/* The markers have no CSS transition on purpose: the curve is redrawn at the ride's own 10 Hz
+   cadence without one, so an animated marker would lag a tick behind the line it is supposed to
+   sit on — which reads as the disc "jumping" whenever the window rescales. */
 .profile-guide {
   position: absolute;
   top: 0;
@@ -175,9 +203,27 @@
   width: 1px;
   background: var(--chart-ink);
   pointer-events: none;
-  transition: left 100ms linear;
 }
 
+/* the ghost shares the hairline geometry but keeps its own aqua, so the two vertical lines are
+   never confused: the rider's is ink, the ghost's is the ghost colour and thinner */
+.profile-guide--ghost {
+  background: var(--ghost);
+  opacity: 0.55;
+}
+
+/* a hollow diamond, not a disc: the ghost is a marker on the profile, not a second rider */
+.profile-ghost {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  border: 2px solid var(--ghost);
+  background: var(--bg-1);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
 .profile-guide--hover {
   background: var(--text-dim);
   transition: none;
@@ -188,7 +234,6 @@
   margin: -8px 0 0 -8px;
   overflow: visible;
   pointer-events: none;
-  transition: left 100ms linear, top 100ms linear;
 }
 
 /* read-out: the kit tip class (1 px border, hard offset) plus placement */
@@ -276,6 +321,92 @@
 }
 .profile-tick-label--start { transform: translateX(1px); }
 .profile-tick-label--end { transform: translateX(-100%); }
+
+/* a named segment of the GPX file (a Strava segment, say): a faint band over its stretch with an
+   ink rule and its name along the top, so it reads as a bracket, not as terrain */
+.profile-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-top: 2px solid var(--chart-ink);
+  border-left: 1px dashed var(--chart-axis);
+  border-right: 1px dashed var(--chart-axis);
+  background: var(--hover);
+  pointer-events: none;
+}
+.profile-seg-label {
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  left: 4px;
+  max-width: calc(100% - 8px);
+  padding: 1px 4px;
+  background: var(--bg-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--t-11)/1.2 var(--font-ui);
+  color: var(--text);
+}
+.profile-tip-seg {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--t-13)/1.3 var(--font-ui);
+  color: var(--text);
+}
+
+/* ───────────────────────────── workout view ─────────────────────────────
+   The blocks of the workout instead of the terrain: zone-coloured, flat, separated by a hairline
+   of the surface colour where they are wide enough; the running block carries the ink outline. */
+
+.profile--workout { --wpad: 14px; }
+/* headroom over the highest block, so the FTP label and the countdown never sit on the edge */
+.profile-wsvg { top: var(--wpad); height: calc(100% - var(--wpad)); shape-rendering: crispEdges; }
+.profile-wblock--gap { stroke: var(--bg-1); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.profile-wblock--now { stroke: var(--chart-ink); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+
+/* the FTP rule: dashed, labelled at the right edge */
+.profile-ftp {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--chart-ink);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.profile-ftp span {
+  position: absolute;
+  right: var(--space-2);
+  bottom: 2px;
+  padding: 1px var(--space-1);
+  background: var(--bg-1);
+  font: 600 var(--t-11)/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* countdown to the next block, standing on its top edge */
+.profile-wnext {
+  position: absolute;
+  z-index: 2;
+  transform: translate(4px, calc(-100% - 4px));
+  padding: 2px var(--space-1);
+  border: 1px solid var(--chart-ink);
+  background: var(--bg-1);
+  font: 600 var(--t-11)/1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.profile-wnext--flip { transform: translate(calc(-100% - 4px), calc(-100% - 4px)); }
+
+/* the workout cannot be seeked: hovering only reads the block */
+.profile-hit--readonly { cursor: default; }
 
 /* ───────────────────────────── empty profile ───────────────────────────── */
 
@@ -477,10 +608,46 @@
   text-align: center;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .profile-done,
-  .profile-guide,
-  .profile-dot {
-    transition: none;
-  }
+/* ───────────────────────────── phone: pages instead of buttons ─────────────────────────────
+   The header keeps one line: the read-out, then the page name and the dots. The plot takes
+   the sideways drags itself (vertical ones still scroll the screen). */
+
+.profile-head.profile-head--pages { flex-wrap: nowrap; height: 32px; padding-top: 0; padding-bottom: 0; }
+.profile-head--pages .profile-readout { order: 0; flex-basis: auto; }
+
+.profile-pages {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+.profile-pages__label { font: 600 var(--t-11)/1 var(--font-ui); color: var(--text); white-space: nowrap; }
+.profile-pages__hint { font: 500 var(--t-11)/1 var(--font-ui); color: var(--accent); white-space: nowrap; }
+.profile-pages__dots { display: flex; align-items: center; gap: 2px; }
+.profile-pages__dot {
+  width: 14px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.profile-pages__dot::after {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 0 auto;
+  border: 1px solid var(--text-dim);
+}
+.profile-pages__dot.is-current::after { background: var(--text); border-color: var(--text); }
+
+.profile-hit--swipe { touch-action: pan-y; }
+
+/* until the first swipe the plot nudges sideways twice: it can be pulled */
+.profile--nudge .profile-plot { animation: profile-nudge 1.4s var(--ease) 0.8s 2; }
+@keyframes profile-nudge {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-14px); }
+  60% { transform: translateX(6px); }
 }

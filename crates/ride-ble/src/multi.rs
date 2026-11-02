@@ -140,6 +140,7 @@ impl MultiSession {
                 Out::Notice(text) => ctx.notice(text),
                 Out::ControlGranted => ctx.log.comment("FTMS vezérlés megszerezve"),
                 Out::ControlLost => ctx.log.comment("FTMS vezérlés elveszett"),
+                Out::StatusIgnored(what) => ctx.log.comment(what),
                 Out::Write(_) => {}
             }
         }

@@ -122,7 +122,11 @@ async fn downloaded_images_ride_without_a_key_or_a_request() {
     assert!(html.contains("data-state=\"ok\""), "{html}");
     // 100 m / 75 m = bucket 1
     assert!(
-        html.contains("http://svimg.localhost/streetview/offlinetest/1.jpg"),
+        html.contains("streetview/offlinetest/1.jpg"),
+        "the panel shows the cached image through the svimg protocol: {html}"
+    );
+    assert!(
+        html.contains(ride_ui_kit::protocol::base("svimg").as_str()),
         "{html}"
     );
     assert!(

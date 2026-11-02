@@ -1,17 +1,24 @@
-//! Local persistence: settings, the recent-routes index and the processed routes.
+//! Local persistence: settings, the recent-routes index, the processed routes, the ride log and
+//! the imported workouts.
 //!
 //! Layout under [`data_dir`] (`%LOCALAPPDATA%\bike-osm-ride` on Windows):
 //!
 //! ```text
-//! settings.json          ride_model::Settings (pretty JSON)
-//! recent.json            Vec<RecentRoute>, newest first (at most MAX_RECENT)
-//! routes/<id>.json       the processed ride_model::Route
+//! settings.json             ride_model::Settings (pretty JSON)
+//! recent.json               Vec<RecentRoute>, newest first (at most MAX_RECENT)
+//! routes/<id>.json          the processed ride_model::Route
+//! rides/<id>/<stem>.json    one finished ride (see [`crate::rides`])
+//! rides/<id>/index.json     Vec<RideMeta>, newest first
+//! workouts/<id>.json        one workout imported from a MyWhoosh / Zwift file
 //! ```
 //!
 //! The directory can be overridden with the `RIDE_DATA_DIR` environment variable (tests,
 //! portable installs). Writes are atomic (temp file + rename), reads never panic: a
 //! missing or corrupt file simply yields defaults / `None`. The free functions use
 //! [`data_dir`]; [`Store`] works on any directory (that is what the tests use).
+//!
+//! The ride records are **not** touched by the recent-route housekeeping: deleting a route from
+//! the recent list keeps its history.
 
 use std::ffi::OsString;
 use std::io;
@@ -19,17 +26,19 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ride_model::{RecentRoute, Route, Settings};
+use ride_model::{RecentRoute, Route, Settings, Workout};
 
 const APP_DIR: &str = "bike-osm-ride";
+/// Imported workouts, one file per workout.
+const WORKOUTS_DIR: &str = "workouts";
 /// Number of routes kept in the recent list (older ones are deleted from disk).
 pub const MAX_RECENT: usize = 20;
 /// Refuse to read route/settings files larger than this (corrupt or foreign files).
-const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
 
 static LOCK: Mutex<()> = Mutex::new(());
 
-fn lock() -> MutexGuard<'static, ()> {
+pub(crate) fn lock() -> MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
@@ -78,7 +87,9 @@ fn local_data_base(platform: Platform, get: &dyn Fn(&str) -> Option<OsString>) -
 }
 
 /// Application data directory: `$RIDE_DATA_DIR` if set and non-empty, else
-/// `<local app data>/bike-osm-ride` (`%LOCALAPPDATA%ike-osm-ride` on Windows).
+/// `<local app data>/bike-osm-ride` (`%LOCALAPPDATA%/bike-osm-ride` on Windows,
+/// `~/Library/Application Support/bike-osm-ride` on macOS, `$XDG_DATA_HOME/bike-osm-ride` or
+/// `~/.local/share/bike-osm-ride` on Linux).
 pub fn data_dir() -> PathBuf {
     if let Some(v) = std::env::var_os("RIDE_DATA_DIR").filter(|v| !v.is_empty()) {
         return PathBuf::from(v);
@@ -88,13 +99,13 @@ pub fn data_dir() -> PathBuf {
         .join(APP_DIR)
 }
 
-fn now_unix() -> f64 {
+pub(crate) fn now_unix() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0.0, |d| d.as_secs_f64())
 }
 
-fn valid_id(id: &str) -> bool {
+pub(crate) fn valid_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 64
         && id
@@ -102,14 +113,14 @@ fn valid_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn invalid_id() -> io::Error {
+pub(crate) fn invalid_id() -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidInput,
         "Érvénytelen útvonal-azonosító.",
     )
 }
 
-fn read_limited(path: &Path) -> Option<Vec<u8>> {
+pub(crate) fn read_limited(path: &Path) -> Option<Vec<u8>> {
     let meta = std::fs::metadata(path).ok()?;
     if !meta.is_file() || meta.len() > MAX_FILE_BYTES {
         return None;
@@ -117,7 +128,7 @@ fn read_limited(path: &Path) -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -288,6 +299,63 @@ impl Store {
         }
         Ok(())
     }
+
+    // ───── imported workouts ─────
+
+    fn workout_path(&self, id: &str) -> Option<PathBuf> {
+        valid_id(id).then(|| self.dir.join(WORKOUTS_DIR).join(format!("{id}.json")))
+    }
+
+    /// Workouts imported from files, by name. A missing directory is empty, a corrupt file is
+    /// skipped; an entry that is not an import (its id does not carry the import prefix) is
+    /// ignored, so a hand-dropped file cannot shadow a built-in workout.
+    pub fn list_workouts(&self) -> Vec<Workout> {
+        let dir = self.dir.join(WORKOUTS_DIR);
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let _g = lock();
+        let mut out: Vec<Workout> = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(bytes) = read_limited(&path) else {
+                continue;
+            };
+            let Ok(workout) = serde_json::from_slice::<Workout>(&bytes) else {
+                continue;
+            };
+            if workout.is_imported() && !workout.steps.is_empty() {
+                out.push(workout);
+            }
+        }
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
+    /// Store one imported workout as `<id>.json`; re-importing the same file replaces it.
+    pub fn save_workout(&self, workout: &Workout) -> io::Result<()> {
+        if !workout.is_imported() {
+            return Err(invalid_id());
+        }
+        let path = self.workout_path(&workout.id).ok_or_else(invalid_id)?;
+        let json = serde_json::to_vec_pretty(workout).map_err(io::Error::other)?;
+        let _g = lock();
+        write_atomic(&path, &json)
+    }
+
+    /// Remove an imported workout. A missing file is not an error.
+    pub fn delete_workout(&self, id: &str) -> io::Result<()> {
+        let path = self.workout_path(id).ok_or_else(invalid_id)?;
+        let _g = lock();
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 pub fn load_settings() -> Settings {
@@ -314,6 +382,19 @@ pub fn load_recent(id: &str) -> Option<Route> {
 
 pub fn delete_recent(id: &str) -> io::Result<()> {
     Store::default_location().delete_recent(id)
+}
+
+/// Workouts imported from files, by name.
+pub fn list_workouts() -> Vec<Workout> {
+    Store::default_location().list_workouts()
+}
+
+pub fn save_workout(workout: &Workout) -> io::Result<()> {
+    Store::default_location().save_workout(workout)
+}
+
+pub fn delete_workout(id: &str) -> io::Result<()> {
+    Store::default_location().delete_workout(id)
 }
 
 #[cfg(test)]
@@ -599,5 +680,72 @@ mod tests {
             let d = data_dir();
             assert!(d.ends_with(APP_DIR), "{}", d.display());
         }
+    }
+
+    fn imported(id: &str, name: &str) -> Workout {
+        Workout {
+            id: id.into(),
+            name: name.into(),
+            category: ride_model::WorkoutCategory::Endurance,
+            goal: "cél".into(),
+            description: "leírás".into(),
+            ftp_pct: 70,
+            duration_min: 10,
+            tags: vec![],
+            sources: vec!["x.xml".into()],
+            steps: vec![ride_model::WorkoutStep {
+                kind: ride_model::StepKind::Steady,
+                name: "Blokk".into(),
+                duration_s: 600,
+                target: ride_model::StepTarget::PctFtp { value: 70.0 },
+                cadence: None,
+                note: None,
+                messages: Vec::new(),
+            }],
+        }
+    }
+
+    #[test]
+    fn imported_workouts_round_trip_and_survive_junk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        assert!(store.list_workouts().is_empty(), "no directory yet");
+
+        let workout = imported("import-00000000000000aa", "Pacing #2");
+        store.save_workout(&workout).unwrap();
+        let again = imported("import-00000000000000bb", "Alpha");
+        store.save_workout(&again).unwrap();
+        let list = store.list_workouts();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].name, "Alpha", "sorted by name");
+        assert_eq!(list[1], workout, "the whole workout round-trips");
+
+        // saving the same id replaces instead of duplicating
+        let mut renamed = workout.clone();
+        renamed.name = "Pacing #2 (javított)".into();
+        store.save_workout(&renamed).unwrap();
+        let list = store.list_workouts();
+        assert_eq!(list.len(), 2);
+        assert!(list.iter().any(|w| w.name == "Pacing #2 (javított)"));
+
+        // a corrupt file and a file that is not an import are ignored
+        std::fs::write(tmp.path().join(WORKOUTS_DIR).join("broken.json"), b"{oops").unwrap();
+        let builtin = imported("a-endurance-beginner-45", "Beépített");
+        std::fs::write(
+            tmp.path().join(WORKOUTS_DIR).join("builtin.json"),
+            serde_json::to_vec(&builtin).unwrap(),
+        )
+        .unwrap();
+        let list = store.list_workouts();
+        assert_eq!(list.len(), 2, "only the two real imports");
+        assert!(list.iter().all(|w| w.is_imported()));
+
+        // a built-in id cannot be written through the import path
+        assert!(store.save_workout(&builtin).is_err());
+
+        // deleting is idempotent
+        store.delete_workout(&workout.id).unwrap();
+        store.delete_workout(&workout.id).unwrap();
+        assert_eq!(store.list_workouts().len(), 1);
     }
 }

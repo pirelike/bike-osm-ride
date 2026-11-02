@@ -1,6 +1,8 @@
-//! Map component. Tiles are requested from the app's own tile proxy
-//! (`http://tiles.localhost/{style}/{z}/{x}/{y}.png`, registered as a Dioxus custom
-//! protocol in `ride-app`, which fetches upstream with a proper User-Agent and caches on disk).
+//! Map component. Tiles are requested from the app's own tile proxy (a Dioxus custom protocol
+//! named `tiles` in `ride-app`, which fetches upstream with a proper User-Agent and caches on
+//! disk). [`tile_url`] is the URL of one tile; the webview-specific base
+//! (`http://tiles.localhost` on Windows, `tiles://localhost` on macOS/Linux,
+//! `https://tiles.localhost` on Android) comes from [`ride_ui_kit::protocol`].
 //!
 //! The map is pure Rust: [`mercator`] holds the projection and tile maths, [`camera`] the
 //! viewport/camera maths (fit, pan, wheel zoom, follow, projection), [`route_path`] turns the
@@ -41,15 +43,16 @@ pub use route_path::{build_route_paths, RoutePaths};
 /// Component styles; the shell injects this after `ride_ui_kit::CSS`.
 pub const CSS: &str = include_str!("../assets/map.css");
 
-/// Path part after the host, e.g. `dark/14/8923/5701.png`. The app's protocol handler
-/// parses it with [`parse_tile_path`] and fetches [`upstream_url`].
+/// URL of one tile inside the `tiles` protocol, e.g.
+/// `http://tiles.localhost/dark/14/8923/5701.png` on Windows. The app's protocol handler takes
+/// `uri().path()` of it and parses that with [`parse_tile_path`], then fetches [`upstream_url`].
 pub fn tile_url(style: MapStyle, z: u8, x: u32, y: u32) -> String {
     let s = match style {
         MapStyle::Dark => "dark",
         MapStyle::Light => "light",
         MapStyle::Osm => "osm",
     };
-    format!("http://tiles.localhost/{s}/{z}/{x}/{y}.png")
+    ride_ui_kit::protocol::url("tiles", &format!("{s}/{z}/{x}/{y}.png"))
 }
 
 /// Inverse of [`tile_url`] on the path component (leading `/` allowed).
@@ -115,6 +118,15 @@ fn style_from_value(value: &str) -> Option<MapStyle> {
     }
 }
 
+/// Whether an interpolated position can be projected (a fresh `Ready` snapshot has none yet).
+fn usable_position(pos: &RoutePosition) -> bool {
+    pos.dist.is_finite()
+        && pos.lat.is_finite()
+        && pos.lon.is_finite()
+        && pos.lat.abs() <= mercator::MAX_LAT
+        && (pos.lat != 0.0 || pos.lon != 0.0)
+}
+
 /// Position of the rider marker: the snapshot's interpolated position when it is usable,
 /// else the route point at `snapshot.dist` (a fresh `Ready` snapshot has no position yet).
 pub fn rider_position(route: &Route, snapshot: &RideSnapshot) -> Option<RoutePosition> {
@@ -122,12 +134,7 @@ pub fn rider_position(route: &Route, snapshot: &RideSnapshot) -> Option<RoutePos
         return None;
     }
     let pos = snapshot.pos;
-    let usable = pos.lat.is_finite()
-        && pos.lon.is_finite()
-        && pos.dist.is_finite()
-        && pos.lat.abs() <= mercator::MAX_LAT
-        && (pos.lat != 0.0 || pos.lon != 0.0);
-    if usable {
+    if usable_position(&pos) {
         return Some(RoutePosition {
             heading_deg: camera::normalize_heading(pos.heading_deg),
             ..pos
@@ -139,6 +146,25 @@ pub fn rider_position(route: &Route, snapshot: &RideSnapshot) -> Option<RoutePos
         0.0
     };
     Some(route.locate(dist))
+}
+
+/// Position of the ghost marker (an earlier ride replayed on the same route), if the snapshot
+/// carries one. Falls back to the route point at the ghost's distance, like the rider.
+pub fn ghost_position(route: &Route, snapshot: &RideSnapshot) -> Option<RoutePosition> {
+    if route.points.is_empty() || snapshot.state == RideState::Empty {
+        return None;
+    }
+    let ghost = snapshot.ghost.as_ref()?;
+    if usable_position(&ghost.pos) {
+        return Some(RoutePosition {
+            heading_deg: camera::normalize_heading(ghost.pos.heading_deg),
+            ..ghost.pos
+        });
+    }
+    ghost
+        .dist
+        .is_finite()
+        .then(|| route.locate(ghost.dist.clamp(0.0, route.total_dist)))
 }
 
 /// One `<img>` of the tile grid: its world position inside the transformed layer is fixed,
@@ -178,6 +204,10 @@ fn resize_script(element_id: &str) -> String {
 /// The rider's heading wedge (north-up, rotated by the heading): a notched arrow head that
 /// starts outside the 16 px disc. Fill and paper outline come from `map.css`.
 const RIDER_WEDGE: &str = r#"<svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><path d="M24 3 32 19 24 15 16 19z"/></svg>"#;
+
+/// The ghost's wedge: the same shape, drawn translucent and outlined (the ghost is a memory of
+/// an earlier ride, not a second rider). Fill and outline come from `map.css`.
+const GHOST_WEDGE: &str = r#"<svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><path d="M24 3 32 19 24 15 16 19z" fill-opacity="0.28" stroke-width="2.5"/></svg>"#;
 
 static MAP_UID: AtomicU64 = AtomicU64::new(1);
 
@@ -416,6 +446,9 @@ pub fn MapView(
     let rider = route_now
         .as_deref()
         .and_then(|route| rider_position(route, &snapshot_now));
+    let ghost = route_now
+        .as_deref()
+        .and_then(|route| ghost_position(route, &snapshot_now));
 
     // While following, the camera centre is derived from the rider (rider at 60 % height).
     // The memo subscribes to the snapshot, so the map moves with the 10 Hz ride updates.
@@ -520,6 +553,12 @@ pub fn MapView(
         .and_then(|route| route.points.last())
         .map(|point| transform.project(GeoPoint::new(point.lat, point.lon)));
     let rider_marker = rider.map(|pos| {
+        (
+            transform.project(GeoPoint::from_position(pos)),
+            camera::normalize_heading(pos.heading_deg),
+        )
+    });
+    let ghost_marker = ghost.map(|pos| {
         (
             transform.project(GeoPoint::from_position(pos)),
             camera::normalize_heading(pos.heading_deg),
@@ -736,6 +775,21 @@ pub fn MapView(
                             }
                         }
                     }
+                    if let Some(((x, y), heading)) = ghost_marker {
+                        div {
+                            class: "map-marker map-marker--ghost",
+                            style: "transform: translate({x:.1}px, {y:.1}px)",
+                            role: "img",
+                            "aria-label": "Szellem",
+                            title: "Szellem",
+                            div {
+                                class: "map-ghost__wedge",
+                                style: "transform: rotate({heading:.1}deg)",
+                                dangerous_inner_html: GHOST_WEDGE,
+                            }
+                            div { class: "map-ghost__dot" }
+                        }
+                    }
                     if let Some(((x, y), heading)) = rider_marker {
                         div {
                             class: "map-marker map-marker--rider",
@@ -774,7 +828,7 @@ pub fn MapView(
                         small: true,
                     }
                 }
-                div { class: "btn-group btn-group--v", role: "group", "aria-label": "Nagyítás és követés",
+                div { class: "btn-group btn-group--v map-controls__zoom", role: "group", "aria-label": "Nagyítás",
                     button {
                         class: "btn btn--icon",
                         r#type: "button",
@@ -791,6 +845,8 @@ pub fn MapView(
                         onclick: move |_| apply_zoom(viewport, zoom, center, following, fit_pending, -1.0, None),
                         Icon { name: IconName::Minus, size: 18 }
                     }
+                }
+                div { class: "btn-group btn-group--v map-controls__follow", role: "group", "aria-label": "Követés",
                     button {
                         class: if following { "btn btn--icon is-active" } else { "btn btn--icon" },
                         r#type: "button",
@@ -837,18 +893,21 @@ mod tests {
 
     #[test]
     fn tile_urls_round_trip_through_the_proxy_path_parser() {
+        // The base is platform specific (`http://tiles.localhost` on Windows,
+        // `tiles://localhost` elsewhere, `https://…` on Android); the path never is.
+        let base = ride_ui_kit::protocol::base("tiles");
         for style in [MapStyle::Dark, MapStyle::Light, MapStyle::Osm] {
             for (z, x, y) in [(3u8, 0u32, 0u32), (14, 8923, 5701), (19, 524_287, 524_287)] {
                 let url = tile_url(style, z, x, y);
-                assert!(url.starts_with("http://tiles.localhost/"), "{url}");
-                let path = url.trim_start_matches("http://tiles.localhost");
+                assert!(url.starts_with(&format!("{base}/")), "{url}");
+                let path = url.trim_start_matches(&base);
                 assert_eq!(parse_tile_path(path), Some((style, z, x, y)), "{url}");
                 assert_eq!(parse_tile_path(&format!("/{path}")), Some((style, z, x, y)));
             }
         }
         assert_eq!(
             tile_url(MapStyle::Osm, 5, 17, 11),
-            "http://tiles.localhost/osm/5/17/11.png"
+            format!("{base}/osm/5/17/11.png")
         );
     }
 
@@ -943,6 +1002,45 @@ mod tests {
     }
 
     #[test]
+    fn ghost_position_follows_the_snapshot_and_falls_back_to_the_route() {
+        let route = straight_route(&[(1_000.0, 4.0)], 100.0);
+        let mut snapshot = RideSnapshot::empty();
+        assert_eq!(ghost_position(&route, &snapshot), None, "no ghost yet");
+
+        snapshot.state = RideState::Riding;
+        snapshot.ghost = Some(ride_model::GhostLive {
+            dist: 400.0,
+            pos: route.locate(400.0),
+            delta_s: Some(12.0),
+        });
+        let ghost = ghost_position(&route, &snapshot).expect("ghost position");
+        assert!((ghost.dist - 400.0).abs() < 1e-6);
+        assert!((ghost.lat - 47.5).abs() < 1e-6);
+
+        // a ghost whose position is still the default falls back to its distance
+        snapshot.ghost = Some(ride_model::GhostLive {
+            dist: 700.0,
+            pos: RoutePosition::default(),
+            delta_s: None,
+        });
+        let ghost = ghost_position(&route, &snapshot).expect("fallback");
+        assert!((ghost.dist - 700.0).abs() < 1e-6);
+        assert!(ghost.lat > 40.0);
+
+        // NaN distance: nothing to draw, no panic
+        snapshot.ghost = Some(ride_model::GhostLive {
+            dist: f64::NAN,
+            pos: RoutePosition::default(),
+            delta_s: None,
+        });
+        assert_eq!(ghost_position(&route, &snapshot), None);
+        // an empty route has no ghost either
+        let mut no_points = straight_route(&[(0.0, 0.0)], 0.0);
+        no_points.points.clear();
+        assert_eq!(ghost_position(&no_points, &snapshot), None);
+    }
+
+    #[test]
     fn map_css_stays_on_the_design_tokens() {
         assert!(!CSS.is_empty(), "map.css is embedded");
         assert!(CSS.contains(".map-tile"), "tile styles present");
@@ -1001,6 +1099,8 @@ mod tests {
             ".map-route__casing",
             ".map-route__seg",
             ".map-marker",
+            ".map-ghost__dot",
+            ".map-ghost__wedge",
             ".map-rider__dot",
             ".map-rider__wedge",
             ".map-scale",

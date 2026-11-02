@@ -76,6 +76,11 @@ pub const GRADE_STOP_PCT: [f64; 7] = [-10.0, -0.5, 0.5, 3.0, 6.0, 9.5, 13.0];
 /// Accent colours (UI chrome, never data).
 pub const ACCENT_DARK: &str = "#ff6f1f";
 pub const ACCENT_LIGHT: &str = "#b93405";
+/// The ghost of an earlier ride: a cool aqua that stays apart from every grade colour (the route
+/// scale) and from the vermilion rider marker. Dark theme.
+pub const GHOST_DARK: &str = "#63d8cf";
+/// The ghost of an earlier ride. Light theme.
+pub const GHOST_LIGHT: &str = "#0f6f74";
 /// Status colours (usable as text on the panel surfaces): `[ok, warn, crit]`.
 pub const STATUS_DARK: [&str; 3] = ["#7fd18b", "#f2c14e", "#ff6f94"];
 pub const STATUS_LIGHT: [&str; 3] = ["#1b6e38", "#845000", "#a8195a"];
@@ -283,6 +288,11 @@ pub fn accent_color(theme: Theme) -> &'static str {
     pick(theme, ACCENT_DARK, ACCENT_LIGHT)
 }
 
+/// Colour of the ghost marker (an earlier ride replayed on the same route).
+pub fn ghost_color(theme: Theme) -> &'static str {
+    pick(theme, GHOST_DARK, GHOST_LIGHT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,6 +373,7 @@ mod tests {
                 );
             }
             assert_eq!(get("--accent"), accent_color(theme));
+            assert_eq!(get("--ghost"), ghost_color(theme));
             let s = pick(theme, &STATUS_DARK, &STATUS_LIGHT);
             assert_eq!(
                 [get("--ok"), get("--warn"), get("--crit")],
@@ -377,7 +388,7 @@ mod tests {
             z1 z2 z3 z4 z5 z6 z7 h1 h2 h3 h4 h5 grade-down grade-flat grade-up-1 grade-up-2 grade-up-3 grade-up-4 \
             radius-sm radius-md radius-lg radius-xl shadow-1 shadow-2 space-1 space-2 space-3 space-4 space-5 space-6 space-7 \
             ease dur-fast dur dur-slow font-ui font-display font-num \
-            rule rule-strong rule-ink accent-strong chart-grid chart-axis chart-ink route-casing marker-ring shadow-ink \
+            rule rule-strong rule-ink accent-strong chart-grid chart-axis chart-ink route-casing marker-ring shadow-ink ghost \
             fs-2xs fs-xs fs-sm fs-md fs-base fs-lg fs-xl fs-2xl fs-3xl fs-4xl fs-hero t-11 t-13 t-15 t-20 t-28 t-56 t-96 \
             fill-1 fill-2 fill-3 hover scrim accent-line accent-glow ok-soft warn-soft crit-soft cat-none cat-4 cat-3 cat-2 cat-1 cat-hc \
             h1 h2 h3 h4 h5 radius-xs radius-pill";
@@ -660,6 +671,26 @@ mod tests {
                 color::contrast_ratio(c("--accent"), ring) >= 2.0,
                 "accent vs marker ring ({theme:?})"
             );
+        }
+    }
+
+    #[test]
+    fn the_ghost_stays_apart_from_the_route_and_the_rider() {
+        // the ghost marker is drawn *on* the route: it must never be mistaken for a grade colour,
+        // for the casing under it, or for the rider's vermilion marker
+        for theme in themes() {
+            let vars = css_vars(theme);
+            let c = |k: &str| hex_of(vars.get(k).unwrap_or_else(|| panic!("missing {k}")));
+            let ghost = c("--ghost");
+            let a = pick(theme, &GRADE_ANCHORS_DARK, &GRADE_ANCHORS_LIGHT);
+            for g in a.up.iter().chain([&a.down, &a.flat]) {
+                let d = color::delta_e(ghost, hex_of(g));
+                assert!(d >= 12.0, "ghost vs route colour {g} ΔE {d:.1} ({theme:?})");
+            }
+            let d = color::delta_e(ghost, c("--accent"));
+            assert!(d >= 18.0, "ghost vs accent ΔE {d:.1} ({theme:?})");
+            let r = color::contrast_ratio(ghost, c("--route-casing"));
+            assert!(r >= 3.0, "ghost vs casing ({theme:?}) only {r:.2}:1");
         }
     }
 }

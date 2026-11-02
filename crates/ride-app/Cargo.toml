@@ -37,6 +37,21 @@ tempfile = "3"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
 
+# Keeping the machine awake while riding: the session-bus inhibitor of the free desktops
+# (same crate version btleplug uses through bluez-async, so it is built once).
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus = "0.9"
+
+# ... and the IOKit power assertion on macOS (the CFString comes from core-foundation, which
+# the rest of the desktop stack already uses).
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+
+# The Linux .deb and the macOS .dmg cannot replace themselves: the update opens the release page
+# in the system browser (the crate is already in the tree through dioxus-desktop).
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+webbrowser = "1.2"
+
 # Native open/save dialogs; same feature set as dioxus-desktop so it is built once.
 # Android has no native file dialog (see `controller::pick_file`).
 [target.'cfg(not(target_os = "android"))'.dependencies]
@@ -45,3 +60,6 @@ rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 # On Android the same desktop renderer runs inside the mobile shell `dx` generates.
 [target.'cfg(target_os = "android")'.dependencies]
 dioxus = { workspace = true, features = ["mobile"] }
+# The share-to-Strava intent is built through JNI (jni 0.21 is the version the BLE stack uses).
+jni = "0.21"
+ndk-context = "0.1"

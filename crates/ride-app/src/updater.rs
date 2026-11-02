@@ -3,17 +3,30 @@
 //! The repository comes from the crate's `repository` field (`Cargo.toml`); while it is empty
 //! the updater does nothing. At start-up the latest release is fetched from the GitHub API
 //! (`/repos/<owner>/<repo>/releases/latest`); when its tag is newer than this build the top bar
-//! offers it:
+//! offers it.
 //!
-//! * **Windows**: the release's `*-windows-x64.exe` asset is downloaded next to the running
-//!   executable, the running file is renamed to `*.old` (Windows allows renaming a running
-//!   exe), the new one takes its name, the new version is started and this one exits. The
-//!   leftover `*.old` is removed on the next start.
-//! * **Android**: an app cannot replace itself; the `.apk` asset is opened in the system
-//!   browser, which downloads it and hands it to the package installer.
+//! ## Asset contract
 //!
-//! Everything that decides (version comparison, asset choice, response parsing) is pure and
-//! unit-tested; only [`check`] and [`install`] touch the network and the file system.
+//! A release carries one package per platform, named
+//! `bike-osm-ride-<version>-<platform>.<ext>` (see `README.md` and the header of
+//! `.github/workflows/release.yml`):
+//!
+//! | platform | asset | install |
+//! |---|---|---|
+//! | Windows | `…-windows-x64.exe` | download, swap itself, restart |
+//! | Android | `…-android.apk` | open the APK, the system installer takes over |
+//! | Linux (AppImage) | `…-linux-x86_64.AppImage` | download, swap the `.AppImage`, restart |
+//! | Linux (.deb) | `…-linux-amd64.deb` | open the release page |
+//! | macOS | `…-macos-universal.dmg` | open the release page |
+//!
+//! Only the AppImage can replace itself on Linux: it is a single executable file, while a `.deb`
+//! installation lives in `/usr` and belongs to the package manager. macOS cannot replace a
+//! quarantined, ad-hoc signed bundle either, so both open the release page in the browser
+//! instead (the same idea as the Android branch) and a toast tells the rider what to download.
+//!
+//! Everything that decides (version comparison, asset choice, install mode, magic bytes) is
+//! pure and unit-tested; only [`check`], [`install`] and [`open_release_page`] touch the network,
+//! the browser and the file system.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -58,11 +71,18 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
     }
 }
 
+/// The magic bytes that identify an executable of a platform we can replace ourselves with.
+const ELF_MAGIC: &[u8] = b"\x7fELF";
+/// Anything smaller than this is an error page or a truncated download, not a program.
+const MIN_PROGRAM_BYTES: usize = 1024;
+
 /// The platforms a release carries a package for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Platform {
     Windows,
     Android,
+    Linux,
+    MacOs,
 }
 
 impl Platform {
@@ -71,17 +91,83 @@ impl Platform {
             Some(Platform::Android)
         } else if cfg!(windows) {
             Some(Platform::Windows)
+        } else if cfg!(target_os = "macos") {
+            Some(Platform::MacOs)
+        } else if cfg!(target_os = "linux") {
+            Some(Platform::Linux)
         } else {
             None
         }
     }
 
+    /// Is `asset_name` the package of this platform?
     fn matches(self, asset_name: &str) -> bool {
         let name = asset_name.to_ascii_lowercase();
         match self {
             Platform::Windows => name.ends_with(".exe") && name.contains("windows"),
             Platform::Android => name.ends_with(".apk"),
+            // The AppImage is the only Linux package the updater can install itself; the .deb
+            // is offered on the release page instead.
+            Platform::Linux => name.ends_with(".appimage") && name.contains("linux"),
+            Platform::MacOs => name.ends_with(".dmg") && name.contains("macos"),
         }
+    }
+
+    /// Magic bytes of a program this platform can swap itself with, `None` when it never does.
+    pub fn executable_magic(self) -> Option<&'static [u8]> {
+        match self {
+            Platform::Windows => Some(b"MZ"),
+            Platform::Linux => Some(ELF_MAGIC),
+            // The .apk and the .dmg are installed by the system / the user, not by us.
+            Platform::Android | Platform::MacOs => None,
+        }
+    }
+}
+
+/// What the "Frissítés" button does for the package of `platform`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstallMode {
+    /// Download, verify, swap the running file and start the new version.
+    ReplaceSelf,
+    /// The package cannot replace itself: open the release page and explain what to install.
+    OpenReleasePage,
+}
+
+/// The install mode of `platform`. `appimage` is the `APPIMAGE` environment variable, which the
+/// AppImage runtime sets to the path of the `.AppImage` file it has mounted.
+pub fn install_mode(platform: Platform, appimage: Option<&str>) -> InstallMode {
+    match platform {
+        Platform::Windows => InstallMode::ReplaceSelf,
+        Platform::Linux => match appimage.map(str::trim) {
+            Some(path) if !path.is_empty() => InstallMode::ReplaceSelf,
+            _ => InstallMode::OpenReleasePage,
+        },
+        Platform::Android | Platform::MacOs => InstallMode::OpenReleasePage,
+    }
+}
+
+/// [`install_mode`] with the environment of this process.
+pub fn current_install_mode(platform: Platform) -> InstallMode {
+    let appimage = std::env::var("APPIMAGE").ok();
+    install_mode(platform, appimage.as_deref())
+}
+
+/// The file a self-replacing update overwrites: the running executable, or — inside an AppImage
+/// — the `.AppImage` file the runtime mounted, which is the one the user downloaded.
+pub fn install_target(platform: Platform, exe: &Path, appimage: Option<&Path>) -> PathBuf {
+    match platform {
+        Platform::Linux => appimage
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| exe.to_path_buf()),
+        _ => exe.to_path_buf(),
+    }
+}
+
+/// Does `bytes` start like a program this platform can replace itself with?
+pub fn looks_like_program(platform: Platform, bytes: &[u8]) -> bool {
+    match platform.executable_magic() {
+        Some(magic) => bytes.len() >= MIN_PROGRAM_BYTES && bytes.starts_with(magic),
+        None => false,
     }
 }
 
@@ -168,17 +254,32 @@ pub fn old_path(exe: &Path) -> PathBuf {
     exe.with_file_name(name)
 }
 
-/// Removes what a previous update left behind (`*.old` beside the running executable).
+/// Where the downloaded bytes are staged before the swap (same directory, so the rename is one
+/// filesystem operation).
+fn staged_path(target: &Path) -> PathBuf {
+    target.with_extension("new")
+}
+
+/// Removes what a previous update left behind (`*.old` beside the running executable and beside
+/// the AppImage).
 pub fn cleanup_previous() {
     if let Ok(exe) = std::env::current_exe() {
         let _ = std::fs::remove_file(old_path(&exe));
     }
+    // Inside an AppImage the running executable is in the read-only mount; the file the update
+    // replaced is the `.AppImage` itself.
+    if let Some(appimage) = std::env::var_os("APPIMAGE").map(PathBuf::from) {
+        let _ = std::fs::remove_file(old_path(&appimage));
+    }
 }
 
-/// Downloads the new executable and swaps it in (Windows). On success the caller starts the
-/// new file (returned) and exits.
-pub async fn install(update: &UpdateInfo) -> Result<PathBuf, String> {
+/// Downloads the new program and swaps it in (Windows, or Linux inside an AppImage). On success
+/// the caller starts the returned file and exits.
+pub async fn install(update: &UpdateInfo, platform: Platform) -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
+    let target = install_target(platform, &exe, appimage.as_deref());
+
     let client = client().ok_or("a HTTP-kliens nem indult el")?;
     let response = client
         .get(&update.asset_url)
@@ -189,23 +290,63 @@ pub async fn install(update: &UpdateInfo) -> Result<PathBuf, String> {
         return Err(format!("HTTP {}", response.status().as_u16()));
     }
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
-    // An exe starts with "MZ"; anything else (an HTML error page) is not installed.
-    if bytes.len() < 1024 || !bytes.starts_with(b"MZ") {
+    // An exe starts with "MZ", an AppImage with "\x7fELF"; anything else (an HTML error page, a
+    // link to a login wall) is not installed.
+    if !looks_like_program(platform, &bytes) {
         return Err("a letöltött fájl nem futtatható program".into());
     }
-    let staged = exe.with_extension("new");
+
+    let staged = staged_path(&target);
     tokio::fs::write(&staged, &bytes)
         .await
         .map_err(|e| e.to_string())?;
-    let old = old_path(&exe);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // The download is written with the umask, and the AppImage must stay executable.
+        tokio::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    let old = old_path(&target);
     let _ = std::fs::remove_file(&old);
-    std::fs::rename(&exe, &old).map_err(|e| e.to_string())?;
-    if let Err(e) = std::fs::rename(&staged, &exe) {
+    std::fs::rename(&target, &old).map_err(|e| e.to_string())?;
+    if let Err(e) = std::fs::rename(&staged, &target) {
         // put the running version back so the app still starts next time
-        let _ = std::fs::rename(&old, &exe);
+        let _ = std::fs::rename(&old, &target);
         return Err(e.to_string());
     }
-    Ok(exe)
+    Ok(target)
+}
+
+/// Opens the release page in the system browser. Only the platforms whose package the user has
+/// to install by hand have a browser helper here; the others never ask for one.
+pub fn open_release_page(update: &UpdateInfo) -> bool {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        webbrowser::open(&update.page_url).is_ok()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = update;
+        false
+    }
+}
+
+/// What the rider has to do when the package cannot be installed from inside the app.
+pub fn manual_install_hint(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Linux => {
+            "Nyisd meg a kiadás oldalát, töltsd le a .deb csomagot, és telepítsd \
+             (sudo apt install ./bike-osm-ride-*.deb)."
+        }
+        Platform::MacOs => {
+            "Nyisd meg a kiadás oldalát, töltsd le a .dmg-t, és húzd a bike-osm-ride.app-ot \
+             az Alkalmazások mappába."
+        }
+        Platform::Android => "Töltsd le és telepítsd az új APK-t.",
+        Platform::Windows => "Töltsd le az új exe-t a kiadás oldaláról.",
+    }
 }
 
 #[cfg(test)]
@@ -221,7 +362,13 @@ mod tests {
             {"name": "bike-osm-ride-0.2.0-android.apk",
              "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-android.apk"},
             {"name": "bike-osm-ride-0.2.0-windows-x64.exe",
-             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-windows-x64.exe"}
+             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-windows-x64.exe"},
+            {"name": "bike-osm-ride-0.2.0-linux-x86_64.AppImage",
+             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-linux-x86_64.AppImage"},
+            {"name": "bike-osm-ride-0.2.0-linux-amd64.deb",
+             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-linux-amd64.deb"},
+            {"name": "bike-osm-ride-0.2.0-macos-universal.dmg",
+             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-macos-universal.dmg"}
         ]
     }"#;
 
@@ -254,19 +401,31 @@ mod tests {
     }
 
     #[test]
-    fn a_newer_release_offers_the_package_of_the_platform() {
+    fn a_newer_release_offers_the_package_of_each_platform() {
         let win = evaluate(RELEASE, "0.1.0", Platform::Windows).expect("windows update");
         assert_eq!(win.version, "v0.2.0");
         assert!(win.asset_name.ends_with("windows-x64.exe"));
+
         let apk = evaluate(RELEASE, "0.1.0", Platform::Android).expect("android update");
         assert!(apk.asset_name.ends_with(".apk"));
+
+        let appimage = evaluate(RELEASE, "0.1.0", Platform::Linux).expect("linux update");
+        assert!(
+            appimage.asset_name.ends_with("linux-x86_64.AppImage"),
+            "the AppImage is the Linux update, not the .deb: {}",
+            appimage.asset_name
+        );
+
+        let dmg = evaluate(RELEASE, "0.1.0", Platform::MacOs).expect("macos update");
+        assert!(dmg.asset_name.ends_with("macos-universal.dmg"));
+
         assert_eq!(
             evaluate(RELEASE, "0.2.0", Platform::Windows),
             None,
             "same version"
         );
         assert_eq!(
-            evaluate(RELEASE, "0.3.0", Platform::Windows),
+            evaluate(RELEASE, "0.3.0", Platform::Linux),
             None,
             "older release"
         );
@@ -286,8 +445,109 @@ mod tests {
     }
 
     #[test]
+    fn only_the_appimage_and_the_exe_are_installed_in_place() {
+        // Windows always replaces itself, whatever the environment says.
+        assert_eq!(
+            install_mode(Platform::Windows, None),
+            InstallMode::ReplaceSelf
+        );
+        assert_eq!(
+            install_mode(Platform::Windows, Some("/home/u/bike.AppImage")),
+            InstallMode::ReplaceSelf
+        );
+        // Linux: only inside an AppImage (the runtime sets APPIMAGE).
+        assert_eq!(
+            install_mode(Platform::Linux, Some("/home/u/Applications/bike.AppImage")),
+            InstallMode::ReplaceSelf
+        );
+        for none in [None, Some(""), Some("   ")] {
+            assert_eq!(
+                install_mode(Platform::Linux, none),
+                InstallMode::OpenReleasePage,
+                "a .deb installation cannot replace itself: {none:?}"
+            );
+        }
+        // Never in place: the system installs these.
+        assert_eq!(
+            install_mode(Platform::Android, None),
+            InstallMode::OpenReleasePage
+        );
+        assert_eq!(
+            install_mode(Platform::MacOs, Some("/Applications/bike.app")),
+            InstallMode::OpenReleasePage,
+            "APPIMAGE means nothing on macOS"
+        );
+    }
+
+    #[test]
+    fn the_installed_file_is_the_appimage_when_there_is_one() {
+        let exe = Path::new("/tmp/.mount_bike/usr/bin/bike-osm-ride");
+        let appimage = Path::new("/home/u/Apps/bike-osm-ride-0.2.0-linux-x86_64.AppImage");
+        assert_eq!(
+            install_target(Platform::Linux, exe, Some(appimage)),
+            appimage,
+            "inside the mount the exe is read-only, the AppImage is the real file"
+        );
+        assert_eq!(install_target(Platform::Linux, exe, None), exe);
+        let win = Path::new("C:/apps/bike-osm-ride.exe");
+        assert_eq!(install_target(Platform::Windows, win, None), win);
+        assert_eq!(
+            install_target(Platform::Windows, win, Some(appimage)),
+            win,
+            "APPIMAGE is ignored where it cannot exist"
+        );
+    }
+
+    #[test]
+    fn only_the_magic_of_the_platform_is_accepted() {
+        fn padded(magic: &[u8]) -> Vec<u8> {
+            let mut bytes = magic.to_vec();
+            bytes.resize(MIN_PROGRAM_BYTES * 2, 0);
+            bytes
+        }
+        let exe = padded(b"MZ");
+        let elf = padded(b"\x7fELF");
+        assert!(looks_like_program(Platform::Windows, &exe));
+        assert!(!looks_like_program(Platform::Linux, &exe));
+        assert!(looks_like_program(Platform::Linux, &elf));
+        assert!(!looks_like_program(Platform::Windows, &elf));
+        // an HTML error page is neither, and a tiny file is not a program
+        assert!(!looks_like_program(
+            Platform::Windows,
+            &padded(b"<!doctype html>")
+        ));
+        assert!(!looks_like_program(Platform::Windows, b"MZ"));
+        assert!(!looks_like_program(Platform::MacOs, &elf));
+        assert!(!looks_like_program(Platform::Android, &exe));
+    }
+
+    #[test]
     fn the_old_file_sits_beside_the_executable() {
         let exe = Path::new("C:/apps/bike-osm-ride.exe");
         assert_eq!(old_path(exe), Path::new("C:/apps/bike-osm-ride.exe.old"));
+        let appimage = Path::new("/home/u/bike-osm-ride-0.2.0-linux-x86_64.AppImage");
+        assert_eq!(
+            old_path(appimage),
+            Path::new("/home/u/bike-osm-ride-0.2.0-linux-x86_64.AppImage.old")
+        );
+        assert_eq!(
+            staged_path(appimage),
+            Path::new("/home/u/bike-osm-ride-0.2.0-linux-x86_64.new")
+        );
+    }
+
+    #[test]
+    fn the_manual_hint_names_the_package_of_the_platform() {
+        assert!(manual_install_hint(Platform::Linux).contains(".deb"));
+        assert!(manual_install_hint(Platform::MacOs).contains(".dmg"));
+        assert!(manual_install_hint(Platform::Android).contains("APK"));
+        for platform in [
+            Platform::Windows,
+            Platform::Android,
+            Platform::Linux,
+            Platform::MacOs,
+        ] {
+            assert!(!manual_install_hint(platform).is_empty());
+        }
     }
 }

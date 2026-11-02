@@ -22,9 +22,11 @@ use dioxus::desktop::DesktopContext;
 use dioxus::prelude::*;
 use ride_ble::{spawn_sensor_hub, HubOptions, SensorLink};
 use ride_model::{
-    ConnState, DeviceKind, MapStyle, ProfileMode, RideState, Route, RouteSource, SensorCommand,
-    SensorEvent, Settings, Theme, Workout, WorkoutLibrary,
+    ConnState, DeviceKind, GhostStatus, MapStyle, ProfileMode, ProfileView, RideRecord, RideState,
+    Route, RouteSource, SensorCommand, SensorEvent, Settings, Theme, Workout, WorkoutLibrary,
+    RIDE_RECORD_VERSION,
 };
+use ride_ui_dialogs::RideDetails;
 use ride_ui_kit::format::{fmt_km, fmt_m};
 use ride_ui_kit::ToastKind;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -37,6 +39,8 @@ use crate::paths;
 use crate::ride_core::{step_dt, FinishedRide, Output, RideCore};
 use crate::state::{apply_slot, boot, kind_label, AppState, DialogKind};
 use crate::wake;
+use ride_route::rides as ride_log;
+use ride_sim::ghost::GhostSet;
 
 /// Ride loop period.
 pub const TICK: std::time::Duration = std::time::Duration::from_millis(100);
@@ -156,6 +160,13 @@ pub fn clamp_virtual_power(watts: f64) -> f64 {
     }
 }
 
+/// Whether the test hooks alone make every ride of this session a simulated one: `RIDE_DEMO`
+/// and `RIDE_SIM` exist to produce runs without a rider, so their rides never become PRs.
+pub fn simulated_hooks() -> bool {
+    let hooks = &boot().hooks;
+    hooks.demo || hooks.sim_watts.is_some()
+}
+
 // ───────────────────────────── state ─────────────────────────────
 
 pub struct Inner {
@@ -175,6 +186,19 @@ pub struct Inner {
     scan_gen: u64,
     hub_lost_notified: bool,
     file_dialog_open: bool,
+    /// The open Strava upload view (desktop only).
+    #[cfg(not(target_os = "android"))]
+    strava: Option<crate::strava::StravaView>,
+    /// Sticky per ride: the simulated rider took part (`RIDE_DEMO` / `RIDE_SIM` count as one).
+    /// Such a ride is stored but never becomes a PR or the "Best" ghost.
+    simulated: bool,
+    /// The ghost/PR plan of the loaded route, applied to the engine at the start.
+    ghost_plan: Option<GhostSet>,
+    /// Generation of the ghost plan, so a plan that arrives after a route change is dropped.
+    ghost_gen: u64,
+    /// The `Copy` handle of this controller, filled in right after the cell has been leaked:
+    /// the async tasks started from an `Inner` method need it to come back after their `await`.
+    cell: Option<&'static RefCell<Inner>>,
 }
 
 /// `Copy` handle to the controller; see the module docs.
@@ -188,13 +212,21 @@ impl Controller {
     /// Creates the (single) controller. Call once from the root component.
     pub fn new(st: AppState, win: DesktopContext) -> Self {
         let b = boot();
+        // Workouts imported earlier sit on top of the embedded library, also at start-up, so a
+        // selected imported workout is found again after a restart.
+        let imported_workouts = ride_route::store::Store::default_location().list_workouts();
+        let library = WorkoutLibrary::with_imported(imported_workouts.clone());
+        {
+            let mut signal = st.imported_workouts;
+            signal.set(imported_workouts);
+        }
         let mut core = RideCore::new();
         let selected_workout = b
             .settings
             .ui
             .workout_id
             .as_deref()
-            .and_then(|id| WorkoutLibrary::embedded().get(id))
+            .and_then(|id| library.get(id))
             .map(|w| Arc::new(w.clone()));
         let _ = core.set_workout(selected_workout, Instant::now());
         let inner = Inner {
@@ -213,9 +245,16 @@ impl Controller {
             scan_gen: 0,
             hub_lost_notified: false,
             file_dialog_open: false,
+            #[cfg(not(target_os = "android"))]
+            strava: None,
+            simulated: false,
+            ghost_plan: None,
+            ghost_gen: 0,
+            cell: None,
         };
         // One controller per process: leaking it makes the handle `Copy`.
         let inner: &'static RefCell<Inner> = Box::leak(Box::new(RefCell::new(inner)));
+        inner.borrow_mut().cell = Some(inner);
         Self { st, inner }
     }
 
@@ -279,6 +318,26 @@ impl Controller {
         }
         #[cfg(not(target_os = "android"))]
         {
+            let platform =
+                crate::updater::Platform::current().unwrap_or(crate::updater::Platform::Windows);
+            // A .deb installation (Linux without APPIMAGE) and the macOS .dmg cannot replace
+            // themselves: the release page opens and the rider installs the package — the same
+            // shape as the Android branch above.
+            if crate::updater::current_install_mode(platform)
+                == crate::updater::InstallMode::OpenReleasePage
+            {
+                let opened = crate::updater::open_release_page(&update);
+                let hint = crate::updater::manual_install_hint(platform);
+                self.st.toast(
+                    ToastKind::Info,
+                    if opened {
+                        hint.to_string()
+                    } else {
+                        format!("{hint} {}", update.page_url)
+                    },
+                );
+                return;
+            }
             let mut updating = self.st.updating;
             updating.set(true);
             self.st.toast(
@@ -286,7 +345,7 @@ impl Controller {
                 format!("A {} letöltése folyamatban…", update.version),
             );
             spawn(async move {
-                match crate::updater::install(&update).await {
+                match crate::updater::install(&update, platform).await {
                     Ok(exe) => {
                         flush_pending_settings();
                         match std::process::Command::new(&exe).spawn() {
@@ -338,6 +397,9 @@ impl Controller {
         if let Some(watts) = hooks.sim_watts {
             self.with(|i| i.connect_simulated(watts));
             if self.st.route.peek().is_some() {
+                // The ghost/PR plan of the route is read on a blocking thread; a scripted start
+                // would otherwise always race it and begin without the ghost.
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                 self.start();
             }
         }
@@ -415,6 +477,39 @@ impl Controller {
             self.run_load(ride_route::load_route_from_path(path, true))
                 .await
         });
+    }
+
+    // ───── workout import ─────
+
+    /// Native "open" dialog for a workout file (MyWhoosh / Zwift), then imports it.
+    #[cfg(not(target_os = "android"))]
+    pub fn import_workout(self) {
+        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+            return;
+        }
+        let win = self.with(|i| i.win.clone());
+        spawn(async move {
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Edzés importálása")
+                .add_filter("MyWhoosh / Zwift edzés", &["xml", "zwo", "json"])
+                .add_filter("Minden fájl", &["*"])
+                .set_parent(&*win.window)
+                .pick_file()
+                .await;
+            self.with(|i| i.file_dialog_open = false);
+            if let Some(file) = picked {
+                self.with(|i| i.import_workout_path(file.path().to_path_buf()));
+            }
+        });
+    }
+
+    /// Android has no native file dialog (see [`Controller::pick_file`]).
+    #[cfg(target_os = "android")]
+    pub fn import_workout(self) {
+        self.st.toast(
+            ToastKind::Info,
+            "Androidon az edzésimport még nem elérhető.",
+        );
     }
 
     /// Imports a bikerouter.de link (or raw BRouter URL).
@@ -726,9 +821,11 @@ impl Controller {
     }
 
     /// Shifts the virtual gearbox one gear up (`+1`, harder) or down (`-1`, easier).
+    /// Ignored while a workout holds the trainer in ERG: the gear would change nothing there
+    /// but would surprise the rider after the workout.
     pub fn shift_gear(self, delta: i32) {
         let s = self.st.settings.peek().clone();
-        if !s.ui.virtual_gears {
+        if !s.ui.virtual_gears || *self.st.erg.peek() {
             return;
         }
         let now = crate::gearbox::index_from_saved(s.ui.gear);
@@ -763,6 +860,20 @@ impl Controller {
 
     pub fn set_profile_mode(self, mode: ProfileMode) {
         self.update_settings(|s| s.ui.profile_mode = mode);
+    }
+
+    pub fn set_profile_view(self, view: ProfileView) {
+        self.update_settings(|s| s.ui.profile_view = view);
+    }
+
+    /// A page of the phone's profile was chosen (by swiping or by its dot): view and mode at
+    /// once, and the swipe hint has done its job.
+    pub fn set_profile_page(self, view: ProfileView, mode: ProfileMode) {
+        self.update_settings(|s| {
+            s.ui.profile_view = view;
+            s.ui.profile_mode = mode;
+            s.ui.profile_swipe_learned = true;
+        });
     }
 
     /// Settings are written 500 ms after the last change.
@@ -815,13 +926,17 @@ impl Controller {
                 return false;
             }
             let workout: Option<Arc<Workout>> = match id.as_deref() {
-                Some(id) => match WorkoutLibrary::embedded().get(id) {
-                    Some(w) => Some(Arc::new(w.clone())),
-                    None => {
-                        i.toast(ToastKind::Error, "Ez az edzés nem található.");
-                        return false;
+                Some(id) => {
+                    let library =
+                        WorkoutLibrary::with_imported(i.st.imported_workouts.peek().clone());
+                    match library.get(id) {
+                        Some(w) => Some(Arc::new(w.clone())),
+                        None => {
+                            i.toast(ToastKind::Error, "Ez az edzés nem található.");
+                            return false;
+                        }
                     }
-                },
+                }
                 None => None,
             };
             let out = i.core.set_workout(workout, Instant::now());
@@ -953,6 +1068,169 @@ impl Controller {
             }
         });
     }
+
+    /// "Feltöltés Stravára": the TCX is saved as a copy in the app's data folder, then it goes to
+    /// Strava in the background (desktop: a hidden WebView, see `strava.rs`) or is handed to the
+    /// Strava app (Android). The rider's details (title, sport, notes...) come from the summary.
+    pub fn upload_strava(self) {
+        let Some(finished) = self.with(|i| i.finished.clone()) else {
+            self.st.toast(ToastKind::Warning, "Nincs feltölthető túra.");
+            return;
+        };
+        if *self.st.strava_busy.peek() {
+            return;
+        }
+        let mut busy = self.st.strava_busy;
+        busy.set(true);
+        let details = self.st.ride_details.peek().clone();
+        spawn(async move {
+            let rendered = guarded("tcx", || {
+                (
+                    ride_sim::tcx::to_tcx(&finished.summary, &finished.points),
+                    ride_sim::tcx::suggested_filename(&finished.summary),
+                )
+            });
+            let Ok((xml, name)) = rendered else {
+                self.st
+                    .toast(ToastKind::Error, "A TCX-fájl előállítása nem sikerült.");
+                busy.set(false);
+                return;
+            };
+            self.deliver_to_strava(xml, name, details).await;
+        });
+    }
+
+    /// Desktop: signs in once (visible), then the hidden WebView uploads and reports back.
+    #[cfg(not(target_os = "android"))]
+    async fn deliver_to_strava(self, xml: String, name: String, details: RideDetails) {
+        let st = self.st;
+        let mut busy = st.strava_busy;
+        let copy = paths::strava_dir().join(&name);
+        let saved = match tokio::fs::create_dir_all(paths::strava_dir()).await {
+            Ok(()) => tokio::fs::write(&copy, xml.as_bytes()).await,
+            Err(err) => Err(err),
+        };
+        if let Err(err) = saved {
+            st.toast(ToastKind::Error, format!("A mentés nem sikerült: {err}"));
+            busy.set(false);
+            return;
+        }
+        let win = self.with(|i| i.win.clone());
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let opened = crate::strava::StravaView::open(
+            &win,
+            &paths::strava_webview_dir(),
+            &name,
+            &xml,
+            &details,
+            move |word| {
+                let _ = tx.send(word);
+            },
+        );
+        match opened {
+            Ok(view) => self.with(|i| i.strava = Some(view)),
+            Err(err) => {
+                st.toast(
+                    ToastKind::Error,
+                    format!("A Strava-oldal megnyitása nem sikerült: {err}"),
+                );
+                busy.set(false);
+                return;
+            }
+        }
+        st.toast(
+            ToastKind::Info,
+            "Feltöltés a Stravára… (a háttérben megy, az összegző addig használható)",
+        );
+        // The page script reports; a quiet page is a stuck one.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(150);
+        let mut status = st.strava_status;
+        loop {
+            let raw = tokio::select! {
+                raw = rx.recv() => raw,
+                _ = tokio::time::sleep_until(deadline) => Some("debug:{\"reason\":\"no-answer\"}".to_string()),
+            };
+            let Some(raw) = raw else { break };
+            match crate::strava::parse_word(&raw) {
+                crate::strava::Word::Selected => {}
+                crate::strava::Word::Fields(report) => {
+                    eprintln!("[ride-app] strava fields: {report}")
+                }
+                crate::strava::Word::Saved => {
+                    st.toast(ToastKind::Success, "A túra felkerült a Stravára.");
+                    self.finish_strava_view();
+                    break;
+                }
+                crate::strava::Word::Login => {
+                    self.with(|i| {
+                        if let Some(view) = &i.strava {
+                            view.show();
+                        }
+                    });
+                    status.set(Some(
+                        "Jelentkezz be a Stravába; utána a feltöltés magától folytatódik."
+                            .to_string(),
+                    ));
+                }
+                crate::strava::Word::Stuck(dump) => {
+                    let log = paths::strava_dir().join("strava-debug.log");
+                    let _ = tokio::fs::write(&log, dump.as_bytes()).await;
+                    self.with(|i| {
+                        if let Some(view) = &i.strava {
+                            view.show();
+                        }
+                    });
+                    status.set(Some(format!(
+                        "A feltöltés nem ment végig automatikusan. Fejezd be itt, vagy töltsd fel a fájlt: {}",
+                        copy.display()
+                    )));
+                    // The view stays until "Kész"; the busy flag is released now.
+                    busy.set(false);
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Android: the Strava app takes the TCX through the system share sheet.
+    #[cfg(target_os = "android")]
+    async fn deliver_to_strava(self, xml: String, name: String, _details: RideDetails) {
+        let mut busy = self.st.strava_busy;
+        let result = crate::android_share::share_tcx(&name, xml.as_bytes());
+        busy.set(false);
+        match result {
+            Ok(()) => self.st.toast(
+                ToastKind::Info,
+                "A Strava app megnyílt a TCX-fájllal: ott add meg a címet és mentsd el.",
+            ),
+            Err(err) => self
+                .st
+                .toast(ToastKind::Error, format!("A megosztás nem sikerült: {err}")),
+        }
+    }
+
+    /// Drops the Strava view (and its bar) and releases the busy flag.
+    #[cfg(not(target_os = "android"))]
+    fn finish_strava_view(self) {
+        let view = self.with(|i| i.strava.take());
+        drop(view);
+        let mut status = self.st.strava_status;
+        status.set(None);
+        let mut busy = self.st.strava_busy;
+        busy.set(false);
+    }
+
+    /// "Kész" on the Strava bar.
+    #[cfg(not(target_os = "android"))]
+    pub fn close_strava(self) {
+        self.finish_strava_view();
+    }
+
+    /// The summary form was edited.
+    pub fn set_ride_details(self, details: RideDetails) {
+        let mut slot = self.st.ride_details;
+        slot.set(details);
+    }
 }
 
 /// Next sensor event, or never if the hub is gone.
@@ -966,6 +1244,59 @@ async fn next_event(rx: &mut Option<UnboundedReceiver<SensorEvent>>) -> Option<S
 // ───────────────────────────── Inner: synchronous logic ─────────────────────────────
 
 impl Inner {
+    /// The `Copy` controller handle (see [`Inner::cell`]).
+    fn controller(&self) -> Controller {
+        Controller {
+            st: self.st,
+            inner: self
+                .cell
+                .expect("the controller cell is set in Controller::new"),
+        }
+    }
+
+    /// Parses one workout file, stores it and adds it to the library.
+    fn import_workout_path(&mut self, path: PathBuf) {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "edzés".to_string());
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                eprintln!("[ride-app] workout import: {err}");
+                self.toast(ToastKind::Error, "A fájlt nem sikerült megnyitni.");
+                return;
+            }
+        };
+        let workout = match ride_sim::workout_import::from_bytes(&bytes, &name) {
+            Ok(workout) => workout,
+            Err(message) => {
+                self.toast(ToastKind::Error, message);
+                return;
+            }
+        };
+        if let Err(err) = ride_route::store::Store::default_location().save_workout(&workout) {
+            eprintln!("[ride-app] save_workout: {err}");
+            self.toast(ToastKind::Error, "Az edzést nem sikerült elmenteni.");
+            return;
+        }
+        let mut imported = self.st.imported_workouts.peek().clone();
+        imported.retain(|other| other.id != workout.id);
+        imported.push(workout.clone());
+        imported.sort_by(|a, b| a.name.cmp(&b.name));
+        let mut signal = self.st.imported_workouts;
+        signal.set(imported);
+        self.toast(
+            ToastKind::Success,
+            format!(
+                "„{}” importálva: {} blokk, {} perc.",
+                workout.name,
+                workout.steps.len(),
+                workout.total_seconds() / 60
+            ),
+        );
+    }
+
     fn toast(&self, kind: ToastKind, text: impl Into<String>) {
         self.st.toast(kind, text);
     }
@@ -1134,6 +1465,10 @@ impl Inner {
             .peek()
             .iter()
             .any(|s| s.state == ConnState::Connected && self.sim_kinds.contains(&s.kind));
+        // A virtual rider joining during the ride makes the whole ride a simulated one.
+        if sim_connected && matches!(self.core.state(), RideState::Riding | RideState::Paused) {
+            self.simulated = true;
+        }
         let mut flag = self.st.sim_connected;
         if *flag.peek() != sim_connected {
             flag.set(sim_connected);
@@ -1153,13 +1488,22 @@ impl Inner {
 
     fn start(&mut self) {
         match self.core.state() {
-            RideState::Ready | RideState::Paused => {
+            RideState::Ready => {
+                // A ride counts as simulated when the virtual rider takes part, or when a test
+                // hook loaded the demo route / started the simulated rider.
+                self.simulated = simulated_hooks() || *self.st.sim_connected.peek();
+                // The ghost plan may have arrived while the previous ride was still running.
+                self.core.set_ghost(self.ghost_plan.clone());
                 if self.core.workout().is_some() && !self.trainer_controllable() {
                     self.toast(
                         ToastKind::Warning,
                         "Az edzés célwattját nincs mire küldeni: nincs Trainer szerepben csatlakoztatott okos trainer. Az Eszközök ablakban a trainert Trainer szerepben csatlakoztasd (a teljesítménymérő szerep csak adatot olvas).",
                     );
                 }
+                let out = self.core.start(unix_now(), Instant::now());
+                self.apply(out);
+            }
+            RideState::Paused => {
                 let out = self.core.start(unix_now(), Instant::now());
                 self.apply(out);
             }
@@ -1199,6 +1543,8 @@ impl Inner {
         self.finished = None;
         let mut summary = self.st.summary;
         summary.set(None);
+        let mut comparison = self.st.comparison;
+        comparison.set(None);
         let out = self.core.reset(Instant::now());
         self.apply(out);
     }
@@ -1226,6 +1572,12 @@ impl Inner {
                 "A szimuláció belső hiba miatt leállt. Töltsd be újra az útvonalat.",
             );
             self.drop_route_signals();
+        }
+        // ERG while a selected workout is not finished: the gearbox is hidden meanwhile
+        let erg = snapshot.workout.as_ref().is_some_and(|w| !w.finished);
+        if *self.st.erg.peek() != erg {
+            let mut e = self.st.erg;
+            e.set(erg);
         }
         if *self.st.snapshot.peek() != snapshot {
             let mut s = self.st.snapshot;
@@ -1256,7 +1608,13 @@ impl Inner {
         let reached_end = self.st.snapshot.peek().remaining_dist < 5.0;
         let mut summary = self.st.summary;
         summary.set(Some(finished.summary.clone()));
-        self.finished = Some(finished);
+        // The dialog opens now; its comparison arrives when the ride has been stored, so a
+        // stale comparison of the previous ride must not be shown in between.
+        let mut comparison = self.st.comparison;
+        comparison.set(None);
+        let mut details = self.st.ride_details;
+        details.set(RideDetails::default());
+        self.finished = Some(finished.clone());
         let mut dialog = self.st.dialog;
         dialog.set(Some(DialogKind::Summary));
         self.toast(
@@ -1267,6 +1625,131 @@ impl Inner {
                 "A túra véget ért. Nézd meg az összegzést."
             },
         );
+        self.store_finished_ride(finished);
+    }
+
+    /// Stores the finished ride in the ride log and publishes its comparison with the history.
+    /// Both run on a blocking thread: a two-hour ride is a few thousand points and the index is
+    /// rewritten. A failure is a warning only — the TCX export of the finished ride still works.
+    fn store_finished_ride(&mut self, finished: FinishedRide) {
+        let Some(route) = self.st.route.peek().clone() else {
+            return;
+        };
+        let record = RideRecord {
+            version: RIDE_RECORD_VERSION,
+            route_id: route.id.clone(),
+            route_name: finished.summary.route_name.clone(),
+            simulated: self.simulated,
+            summary: finished.summary,
+            points: finished.points,
+        };
+        // The comparison must use the PRs *before* this ride is saved, so the read, the compare
+        // and the write happen in this order on the same blocking thread.
+        let ghost_delta_s = self
+            .st
+            .snapshot
+            .peek()
+            .ghost
+            .as_ref()
+            .and_then(|ghost| ghost.delta_s);
+        let mut comparison = self.st.comparison;
+        let saved_route = route;
+        let ctl = self.controller();
+        spawn(async move {
+            let joined = tokio::task::spawn_blocking(move || {
+                let store = ride_route::store::Store::default_location();
+                let previous = ride_log::list_rides(&saved_route.id);
+                let best = ride_sim::segments::best_times(&previous);
+                let comparison =
+                    crate::history::compare(&record, &saved_route, &best, ghost_delta_s);
+                let saved = store.save_ride(&record, &saved_route);
+                (comparison, saved)
+            })
+            .await;
+            match joined {
+                Ok((value, saved)) => {
+                    comparison.set(Some(value));
+                    match saved {
+                        Ok(Some(meta)) => ctl.st.toast(
+                            ToastKind::Success,
+                            if meta.simulated {
+                                "Menet elmentve a tekerés-naplóba. Szimulált menet: nem lesz PR és nem lehet Legjobb szellem."
+                            } else {
+                                "Menet elmentve a tekerés-naplóba: a következő menetnél már szellemként megy előtted."
+                            },
+                        ),
+                        // Too short to keep: say so, otherwise the missing ghost looks broken.
+                        Ok(None) => ctl.st.toast(
+                            ToastKind::Info,
+                            "A menet rövid volt a naplózáshoz (legalább 1 perc és 200 m kell), ezért nem lesz belőle szellem.",
+                        ),
+                        Err(err) => {
+                            eprintln!("[ride-app] save_ride: {err}");
+                            ctl.st.toast(
+                                ToastKind::Warning,
+                                "A menetet nem sikerült a tekerés-naplóba menteni.",
+                            );
+                        }
+                    }
+                }
+                Err(_) => ctl.st.toast(
+                    ToastKind::Warning,
+                    "A menetet nem sikerült a tekerés-naplóba menteni.",
+                ),
+            }
+            // The next ride should see the PRs and the ghost of the ride that just ended.
+            ctl.with(|i| i.reload_ghost());
+        });
+    }
+
+    /// Rebuilds the ghost and the PR times of the loaded route (off the UI thread).
+    /// Ignored while a ride is running: a ride compares against the history it started with.
+    fn reload_ghost(&mut self) {
+        let Some(route) = self.st.route.peek().clone() else {
+            self.ghost_plan = None;
+            self.core.set_ghost(None);
+            let mut prs = self.st.segment_prs;
+            prs.set(Vec::new());
+            let mut status = self.st.ghost_status;
+            status.set(GhostStatus::default());
+            return;
+        };
+        if matches!(self.core.state(), RideState::Riding | RideState::Paused) {
+            return;
+        }
+        let mode = self.st.settings.peek().ui.ghost;
+        self.ghost_gen += 1;
+        let generation = self.ghost_gen;
+        let route_id = route.id.clone();
+        let mut prs_signal = self.st.segment_prs;
+        let mut status_signal = self.st.ghost_status;
+        let ctl = self.controller();
+        spawn(async move {
+            let joined = tokio::task::spawn_blocking(move || {
+                guarded("history::plan", || crate::history::plan(&route, mode)).unwrap_or_default()
+            })
+            .await;
+            let history = joined.unwrap_or_default();
+            let crate::history::HistoryPlan { ghost, prs } = history.plan;
+            let applied = ctl.with(|i| {
+                let same_route =
+                    i.st.route
+                        .peek()
+                        .as_ref()
+                        .is_some_and(|route| route.id == route_id);
+                if i.ghost_gen != generation || !same_route {
+                    return false;
+                }
+                i.ghost_plan = ghost;
+                i.core.set_ghost(i.ghost_plan.clone());
+                true
+            });
+            // A plan for a route that has been replaced meanwhile must not leak into the new one.
+            if applied {
+                prs_signal.set(prs);
+                status_signal.set(history.status);
+            }
+        });
     }
 
     /// Keeps the PC awake while riding.
@@ -1274,7 +1757,7 @@ impl Inner {
         if self.awake != on {
             self.awake = on;
             if !wake::set(on) {
-                eprintln!("[ride-app] SetThreadExecutionState({on}) failed");
+                eprintln!("[ride-app] keep-awake could not be toggled to {on}");
             }
         }
     }
@@ -1329,6 +1812,13 @@ impl Inner {
                 self.apply(out);
                 self.win.set_title(&window_title(Some(&route)));
                 self.remember_recent(&route);
+                // The PRs of the previous route must not show against the new climbs while the
+                // plan is being read.
+                let mut segment_prs = self.st.segment_prs;
+                segment_prs.set(Vec::new());
+                let mut ghost_status = self.st.ghost_status;
+                ghost_status.set(GhostStatus::default());
+                self.reload_ghost();
                 self.toast(ToastKind::Success, route_loaded_text(&route));
                 if !route.has_elevation {
                     self.toast(
@@ -1352,15 +1842,24 @@ impl Inner {
     /// Clears everything that belongs to the loaded route.
     fn drop_route_signals(&mut self) {
         self.finished = None;
-        let (mut route, mut summary, mut history, mut dialog) = (
+        self.ghost_plan = None;
+        self.ghost_gen += 1;
+        self.core.set_ghost(None);
+        let (mut route, mut summary, mut history, mut dialog, mut comparison, mut segment_prs) = (
             self.st.route,
             self.st.summary,
             self.st.history,
             self.st.dialog,
+            self.st.comparison,
+            self.st.segment_prs,
         );
+        let mut ghost_status = self.st.ghost_status;
         route.set(None);
         summary.set(None);
         history.set(Arc::new(Vec::new()));
+        comparison.set(None);
+        segment_prs.set(Vec::new());
+        ghost_status.set(GhostStatus::default());
         if *dialog.peek() == Some(DialogKind::Summary) {
             dialog.set(None);
         }
@@ -1438,6 +1937,9 @@ impl Inner {
         let mut settings = self.st.settings;
         settings.set(new.clone());
         self.sync_gear(&new);
+        if old.ui.ghost != new.ui.ghost {
+            self.reload_ghost();
+        }
         if self.st.drag.peek().is_none() {
             let dock = Dock::from_settings(new.ui.tiles.as_ref());
             if *self.st.dock.peek() != dock {

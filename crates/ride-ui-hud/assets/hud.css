@@ -257,6 +257,28 @@
   white-space: nowrap;
 }
 
+/* the PR line: the target of this climb, and — while riding it — the difference measured at the
+   same distance (green ahead, red behind, like every other signed difference) */
+.hud-climb__pr {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.hud-climb__pr-time {
+  font: 600 var(--t-15)/1 var(--font-num);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--text);
+}
+
+.hud-climb__pr-delta {
+  font: 600 var(--t-13)/1 var(--font-num);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--crit);
+}
+
+.hud-climb__pr-delta.is-ahead { color: var(--ok); }
 .hud-climb__cells { border-top: 1px solid var(--rule); }
 
 .hud-climb__bar { border-top: 1px solid var(--rule); }
@@ -381,3 +403,123 @@
 @container (min-width: 560px) {
   .hud-grid { --cols: 4; }
 }
+
+/* ───────────────────────────── phone head unit ─────────────────────────────
+   One card for the ride tab of the phone layout: the workout block, the power against its
+   target, the zone bar and four small cells. Nothing here is needed on the desktop. */
+
+.hud-dash {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-1);
+  color: var(--text);
+}
+
+.hud-dash__wo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+.hud-dash__wohead { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
+.hud-dash__wotext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hud-dash__step {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--t-20)/1.15 var(--font-display);
+}
+.hud-dash__left { flex: none; font-variant-numeric: tabular-nums; }
+.hud-dash__bar { height: 6px; }
+.hud-dash__next { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.hud-dash__nexttext {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--t-13)/1.2 var(--font-ui);
+}
+.hud-dash__wo--done .hud-dash__step { color: var(--ok); }
+
+/* the coach's message of the moment (MyWhoosh / Zwift text event, or the note of the step) */
+.hud-dash__coach {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font: 500 var(--t-13)/1.35 var(--font-ui);
+  color: var(--text);
+}
+
+.hud-dash__power {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+.hud-dash__watts { line-height: 1; }
+.hud-dash__watts.is-dim { color: var(--text-faint); }
+.hud-dash__side { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); }
+.hud-dash__delta {
+  padding: 2px var(--space-2);
+  border: 1px solid currentColor;
+  font: 600 var(--t-13)/1.2 var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.hud-dash__delta--ok { color: var(--ok); }
+.hud-dash__delta--low { color: var(--warn); }
+.hud-dash__delta--high { color: var(--crit); }
+
+/* the zone bar: the live power is a solid pin, the block's target an open bracket */
+.hud-dash__zones {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  height: 18px;
+  margin: 0 var(--space-3);
+  align-items: end;
+}
+.hud-dash__seg { height: 8px; background: var(--c); opacity: 0.55; }
+.hud-dash__seg.is-current { height: 18px; opacity: 1; }
+.hud-dash__pin {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--text);
+}
+.hud-dash__goal {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 10px;
+  margin-left: -5px;
+  border: 2px solid var(--text);
+  border-top: 0;
+  border-bottom: 0;
+}
+.hud-dash__zonefoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+.hud-dash__cells { border-top: 1px solid var(--rule); }
+.hud-dash__cell { padding: var(--space-2); }
+
+/* the map tab's one line of workout */
+.hud-dash__woline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+.hud-dash__wonext { margin-left: auto; overflow: hidden; text-overflow: ellipsis; }

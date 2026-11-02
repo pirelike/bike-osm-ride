@@ -1,5 +1,5 @@
 //! Workout picker: category and tag filters, the embedded library and the selected workout's
-//! steps.
+//! steps, its chart and the import of a MyWhoosh / Zwift file.
 //!
 //! Selecting a card applies it immediately (the ride screen and the trainer follow at once);
 //! the dialog stays open so the rider can browse. "Edzés nélkül" clears the selection. Tags
@@ -8,30 +8,41 @@
 
 use dioxus::prelude::*;
 use ride_model::{StepTarget, TagGroup, Workout, WorkoutCategory, WorkoutLibrary, WorkoutTag};
+use ride_ui_kit::palette::{power_zone_name, power_zone_var};
 use ride_ui_kit::{Dialog, Icon, IconName};
+
+use ride_ui_kit::workout_chart;
 
 /// Tags shown on a list card (the detail column shows all of them).
 const CARD_TAGS: usize = 3;
 
 /// Structured workout picker. `selected` is the applied workout id; `on_select` emits the
-/// new id (or `None` for a free ride).
+/// new id (or `None` for a free ride). `imported` holds the workouts imported from files and
+/// `on_import` asks the app to open the file dialog. `ftp_w` scales watt targets in the chart.
 #[component]
 pub fn WorkoutsDialog(
     open: bool,
     selected: Option<String>,
+    #[props(default = 200.0)] ftp_w: f64,
+    #[props(default)] imported: ReadSignal<Vec<Workout>>,
+    #[props(default)] on_import: EventHandler<()>,
     on_select: EventHandler<Option<String>>,
     on_close: EventHandler<()>,
 ) -> Element {
     if !open {
         return rsx! {};
     }
-    let lib = WorkoutLibrary::embedded();
+    let imported_list = imported.read().clone();
+    let imported_count = imported_list.len();
+    let library = use_memo(move || WorkoutLibrary::with_imported(imported_list.clone()));
+    let lib = library.read();
     let mut category = use_signal(|| None::<WorkoutCategory>);
     let mut picked = use_signal(Vec::<WorkoutTag>::new);
     let filter = *category.read();
     let tags = picked.read().clone();
     let workouts: Vec<&Workout> = lib.filter(filter, &tags);
     let current = selected.as_deref().and_then(|id| lib.get(id));
+    let chart = current.map(|w| workout_chart::chart(w, ftp_w));
     // category counts follow the tag selection, so the rider sees where the matches are
     let categories: Vec<(WorkoutCategory, usize)> = lib
         .categories()
@@ -51,9 +62,16 @@ pub fn WorkoutsDialog(
             flush: true,
             foot: rsx! {
                 span { class: "dlg-foot__note",
-                    "A célwattok az FTP-ből számolódnak (Beállítások → FTP); edzés közben a trainer ERG-módban tartja őket."
+                    "A célwattok az FTP-ből számolódnak (Beállítások → FTP), a trainer ERG-módban tartja őket. Saját edzés: MyWhoosh / Zwift fájl (XML, ZWO, JSON)."
                 }
                 div { class: "dlg-foot__end",
+                    button {
+                        class: "btn btn--ghost btn--sm",
+                        r#type: "button",
+                        title: "MyWhoosh / Zwift edzésfájl (XML, ZWO, JSON) importálása",
+                        onclick: move |_| on_import.call(()),
+                        "Edzés importálása…"
+                    }
                     button {
                         class: "btn btn--ghost",
                         r#type: "button",
@@ -123,14 +141,19 @@ pub fn WorkoutsDialog(
                     }
                 }
                 section { class: "dlg-workouts__list", aria_label: "Edzések",
-                    if !tags.is_empty() {
+                    if imported_count > 0 || !tags.is_empty() {
                         div { class: "dlg-workouts__bar",
-                            span { class: "dlg-workouts__found num", "{shown} találat" }
-                            button {
-                                class: "btn btn--ghost btn--sm",
-                                r#type: "button",
-                                onclick: move |_| picked.write().clear(),
-                                "Címkék törlése"
+                            if imported_count > 0 {
+                                span { class: "dlg-workouts__found num", "{imported_count} importált" }
+                            }
+                            if !tags.is_empty() {
+                                span { class: "dlg-workouts__found num", "{shown} találat" }
+                                button {
+                                    class: "btn btn--ghost btn--sm",
+                                    r#type: "button",
+                                    onclick: move |_| picked.write().clear(),
+                                    "Címkék törlése"
+                                }
                             }
                         }
                     }
@@ -160,6 +183,9 @@ pub fn WorkoutsDialog(
                             div { class: "dlg-workout__meta",
                                 span { class: "tag", "{workout.category.label()}" }
                                 span { class: "dlg-workout__pct num", "{workout.ftp_pct}% FTP" }
+                                if workout.is_imported() {
+                                    span { class: "tag tag--data", "Importált" }
+                                }
                                 if selected.as_deref() == Some(workout.id.as_str()) {
                                     span { class: "tag tag--solid", "Kiválasztva" }
                                 }
@@ -180,6 +206,9 @@ pub fn WorkoutsDialog(
                             span { class: "dlg-workout-detail__meta",
                                 "{w.category.label()} · {w.duration_text()} · {w.ftp_pct}% FTP"
                             }
+                            if w.is_imported() {
+                                span { class: "tag tag--data", "Importált" }
+                            }
                         }
                         div { class: "dlg-workout-detail__tags",
                             for tag in w.tag_list() {
@@ -192,6 +221,47 @@ pub fn WorkoutsDialog(
                             }
                         }
                         p { class: "dlg-workout-detail__text", "{w.description}" }
+                        if let Some(chart) = &chart {
+                            div {
+                                class: "dlg-wchart",
+                                role: "img",
+                                aria_label: "Az edzés profilja: {w.steps.len()} blokk, {w.duration_text()}, {w.ftp_pct}% FTP",
+                                div { class: "dlg-wchart__plot",
+                                    svg {
+                                        class: "dlg-wchart__svg",
+                                        view_box: "0 0 1000 1000",
+                                        preserve_aspect_ratio: "none",
+                                        "aria-hidden": "true",
+                                        for (index, block) in chart.blocks.iter().enumerate() {
+                                            polygon {
+                                                key: "block-{index}",
+                                                class: if workout_chart::gets_gap(block.width) { "dlg-wchart__block dlg-wchart__block--gap" } else { "dlg-wchart__block" },
+                                                points: "{workout_chart::polygon(block, chart.ceiling)}",
+                                                fill: if block.zone == 0 { "var(--rule-ink)".to_string() } else { power_zone_var(block.zone).to_string() },
+                                            }
+                                        }
+                                    }
+                                    // the FTP line: the one reference every block is measured against
+                                    div {
+                                        class: "dlg-wchart__ftp",
+                                        style: "top: calc(10px + (100% - 10px) * {workout_chart::y_of(100.0, chart.ceiling) / 1000.0:.4})",
+                                        span { "FTP" }
+                                    }
+                                }
+                                div { class: "dlg-wchart__legend",
+                                    for zone in 1..=7u8 {
+                                        span {
+                                            key: "zone-{zone}",
+                                            class: "dlg-wchart__zone",
+                                            title: "{power_zone_name(zone)}",
+                                            span { class: "dlg-wchart__swatch", style: "background: {power_zone_var(zone)}" }
+                                            span { class: "dlg-wchart__zname num", "Z{zone}" }
+                                        }
+                                    }
+                                    span { class: "dlg-wchart__note num", "0–{chart.ceiling:.0}% FTP" }
+                                }
+                            }
+                        }
                         div { class: "dlg-steps__head",
                             span { class: "label", "Blokkok" }
                             span { class: "dlg-steps__sum num", "{w.steps.len()} blokk" }
@@ -281,24 +351,67 @@ mod tests {
     use super::*;
 
     fn render(selected: Option<String>) -> String {
+        render_with(selected, Vec::new())
+    }
+
+    fn render_with(selected: Option<String>, imported: Vec<Workout>) -> String {
         #[derive(Clone, PartialEq, Props)]
         struct P {
             selected: Option<String>,
+            imported: Vec<Workout>,
         }
         #[component]
         fn Host(props: P) -> Element {
+            let imported = use_signal(|| props.imported.clone());
             rsx! {
                 WorkoutsDialog {
                     open: true,
                     selected: props.selected.clone(),
+                    imported,
+                    on_import: move |_| {},
                     on_select: move |_| {},
                     on_close: move |_| {},
                 }
             }
         }
-        let mut vdom = VirtualDom::new_with_props(Host, P { selected });
+        let mut vdom = VirtualDom::new_with_props(Host, P { selected, imported });
         vdom.rebuild_in_place();
         dioxus_ssr::render(&vdom)
+    }
+
+    fn imported_workout() -> Workout {
+        use ride_model::{StepKind, WorkoutStep};
+        let step = |duration_s: u32, target: StepTarget| WorkoutStep {
+            kind: StepKind::Steady,
+            name: "blokk".into(),
+            duration_s,
+            target,
+            cadence: None,
+            note: None,
+            messages: Vec::new(),
+        };
+        Workout {
+            id: "import-00000000000000aa".into(),
+            name: "Pacing #2".into(),
+            category: WorkoutCategory::Endurance,
+            goal: "Judge your pacing.".into(),
+            description: "Importált leírás".into(),
+            ftp_pct: 70,
+            duration_min: 20,
+            tags: vec![],
+            sources: vec!["Pacing #2.xml".into()],
+            steps: vec![
+                step(600, StepTarget::PctFtp { value: 50.0 }),
+                step(300, StepTarget::PctFtp { value: 90.0 }),
+                step(
+                    300,
+                    StepTarget::RampPct {
+                        from: 60.0,
+                        to: 105.0,
+                    },
+                ),
+            ],
+        }
     }
 
     #[test]
@@ -330,6 +443,44 @@ mod tests {
         assert!(html.contains(&w.steps[0].name), "the first step is listed");
         assert!(html.contains("Bemelegítés"), "step kind labels");
         assert!(html.contains("FTP"), "targets are explained");
+    }
+
+    #[test]
+    fn the_selected_workout_is_drawn_as_zone_coloured_blocks() {
+        let workout = imported_workout();
+        let html = render_with(Some(workout.id.clone()), vec![workout.clone()]);
+        assert!(html.contains("dlg-wchart"), "the chart is missing");
+        // three steps, three blocks; the ramp is a trapezoid, so every block is a polygon
+        assert_eq!(html.matches("<polygon").count(), 3, "one block per step");
+        assert!(html.contains("var(--z1)"), "the 50 % block is zone 1");
+        assert!(html.contains("var(--z4)"), "the 90 % block is zone 4");
+        assert!(
+            html.contains("0–110% FTP"),
+            "the axis tops out above the ramp"
+        );
+        assert!(
+            html.contains("dlg-wchart__legend"),
+            "the zone legend is missing"
+        );
+        assert!(!html.contains("NaN"));
+    }
+
+    #[test]
+    fn an_imported_workout_is_listed_marked_and_importable() {
+        let workout = imported_workout();
+        let html = render_with(None, vec![workout.clone()]);
+        assert!(html.contains("Pacing #2"), "the imported workout is listed");
+        assert!(html.contains("Importált"), "it is marked as imported");
+        assert_eq!(
+            html.matches("dlg-workout\"").count(),
+            WorkoutLibrary::embedded().len() + 1,
+            "the library keeps its size plus the import"
+        );
+        assert!(html.contains("1 importált"), "the count is shown");
+        assert!(
+            html.contains("Edzés importálása"),
+            "the import button is there"
+        );
     }
 
     #[test]

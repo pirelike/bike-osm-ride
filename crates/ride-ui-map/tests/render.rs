@@ -176,3 +176,28 @@ fn follow_mode_marks_the_map_and_the_button() {
         "follow button not pressed"
     );
 }
+
+#[test]
+fn the_ghost_of_an_earlier_ride_gets_its_own_marker() {
+    let route = Arc::new(straight_route(&[(500.0, 4.0)], 80.0));
+    let mut snapshot = riding_snapshot(&route, 200.0);
+    snapshot.ghost = Some(ride_model::GhostLive {
+        dist: 260.0,
+        pos: route.locate(260.0),
+        delta_s: Some(12.0),
+    });
+    let html = render(Some(Arc::clone(&route)), snapshot.clone(), false);
+    assert!(html.contains("map-marker--ghost"), "ghost marker missing");
+    assert!(html.contains("Szellem"), "ghost label missing");
+    assert!(html.contains("map-ghost__wedge"), "ghost wedge missing");
+    assert_eq!(html.matches("map-ghost__dot").count(), 1, "one ghost dot");
+    // the rider keeps its own marker next to it
+    assert!(html.contains("map-marker--rider"));
+    assert!(html.contains("Jelenlegi pozíció"));
+
+    // without a ghost the map stays exactly as it was
+    snapshot.ghost = None;
+    let plain = render(Some(route), snapshot, false);
+    assert!(!plain.contains("map-marker--ghost"), "no ghost, no marker");
+    assert!(plain.contains("map-marker--rider"));
+}

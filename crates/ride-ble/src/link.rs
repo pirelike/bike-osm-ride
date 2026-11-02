@@ -136,6 +136,10 @@ impl HubConfig {
                 retry_delay: ms(10),
                 reclaim_limit: 3,
                 notice_cooldown: ms(200),
+                // The status-storm rules run at the same scale as the rest of the fast config.
+                status_storm_window: ms(400),
+                grant_grace: ms(100),
+                restart_interval: ms(150),
             },
         }
     }

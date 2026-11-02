@@ -8,6 +8,8 @@
 //! * [`Dialog`], [`Segmented`], [`Tabs`], [`Switch`], [`Slider`], [`NumberField`], [`TextField`],
 //!   [`ToastHost`] — the interactive primitives, all keyboard accessible.
 //! * [`format`] — every number the UI shows goes through these helpers.
+//! * [`protocol`] — the base URL of the app's own custom protocols (`tiles`, `svimg`) on the
+//!   current webview: Windows `http://`, macOS/Linux `scheme://`, Android `https://`.
 
 use dioxus::prelude::*;
 use ride_model::Theme;
@@ -19,6 +21,8 @@ pub mod color;
 pub mod format;
 mod icons;
 pub mod palette;
+pub mod protocol;
+pub mod workout_chart;
 
 pub use icons::{icon_inner, icon_svg, IconName, ICON_LINECAP, ICON_LINEJOIN, ICON_STROKE_WIDTH};
 

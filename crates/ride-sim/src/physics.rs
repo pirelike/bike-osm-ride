@@ -1,9 +1,13 @@
 //! Power → speed model.
 //!
-//! `P·η = (F_grav + F_roll + F_aero)·v + m_eff·v·dv/dt`, integrated in kinetic energy:
-//! that form stays stable around `v ≈ 0`, where the force form would divide by zero.
-//! Reference values (see `docs/ARCHITECTURE.md`): 75 kg rider + 9 kg bike, CdA 0.32,
-//! Crr 0.004, η 0.975, ρ 1.225 → 250 W on the flat ≈ 36.7 km/h, at 8 % ≈ 12.4 km/h.
+//! The road-cycling power model of Martin et al. (1998, J. Appl. Biomech. 14:276–291, validated
+//! against SRM power on the road: R² = 0.97, SE 2.7 W):
+//! `P·η = (F_grav + F_roll + F_bearing + F_aero)·v + m_eff·v·dv/dt`, with the wheel-bearing
+//! friction `(91 + 8.7·v)·10⁻³ N` and the spoke drag area `F_w = 0.0044 m²` added to CdA.
+//! Integrated in kinetic energy: that form stays stable around `v ≈ 0`, where the force form
+//! would divide by zero. Cross-checked against the open-source `rouleur` implementation of the
+//! same paper (see the tests). Reference values: 75 kg rider + 9 kg bike, CdA 0.32, Crr 0.004,
+//! η 0.975, ρ 1.225 → 250 W on the flat ≈ 36.3 km/h, at 8 % ≈ 12.3 km/h.
 
 use ride_model::RiderSettings;
 
@@ -15,6 +19,11 @@ pub const ROTATIONAL_MASS_KG: f64 = 1.5;
 pub const GRAVITY: f64 = 9.806_65;
 /// Largest integration step, s (the engine sub-steps internally).
 const SUBSTEP_S: f64 = 0.05;
+/// Wheel-bearing friction of Martin et al. (1998): `BEARING_N + BEARING_NS_PER_M · v` newtons.
+pub const BEARING_N: f64 = 0.091;
+pub const BEARING_NS_PER_M: f64 = 0.0087;
+/// Drag area of the spinning spokes (Martin et al. 1998), m², added to the rider's CdA.
+pub const SPOKE_DRAG_M2: f64 = 0.0044;
 /// Grades beyond this magnitude are meaningless (and numerically hostile), percent.
 const MAX_GRADE_PCT: f64 = 30.0;
 
@@ -94,13 +103,25 @@ impl PhysicsParams {
         let v = if v_ms.is_finite() { v_ms } else { 0.0 };
         let rel = v + finite_or(self.wind_ms, 0.0).clamp(-40.0, 40.0);
         let rho = finite_or(self.air_density, 1.225).clamp(0.5, 1.6);
-        let cda = finite_or(self.cda, 0.32).clamp(0.0, 2.0);
+        let cda = finite_or(self.cda, 0.32).clamp(0.0, 2.0) + SPOKE_DRAG_M2;
         0.5 * rho * cda * rel * rel.abs()
+    }
+
+    /// Wheel-bearing friction, N (only while rolling: it never pushes a standing bike).
+    pub fn bearing_force(&self, v_ms: f64) -> f64 {
+        if v_ms.is_finite() && v_ms > 0.0 {
+            BEARING_N + BEARING_NS_PER_M * v_ms
+        } else {
+            0.0
+        }
     }
 
     /// Total force opposing motion at `v` on `grade_pct`, N (may be negative downhill).
     pub fn resistance_force(&self, v_ms: f64, grade_pct: f64) -> f64 {
-        self.gravity_force(grade_pct) + self.rolling_force(grade_pct) + self.aero_force(v_ms)
+        self.gravity_force(grade_pct)
+            + self.rolling_force(grade_pct)
+            + self.bearing_force(v_ms)
+            + self.aero_force(v_ms)
     }
 }
 
@@ -212,10 +233,48 @@ mod tests {
         let p = params();
         let flat = steady_state_speed(250.0, 0.0, &p);
         let kmh = flat * 3.6;
-        assert!((kmh - 36.7).abs() < 1.0, "flat 250 W → {kmh:.1} km/h");
+        assert!((kmh - 36.3).abs() < 0.5, "flat 250 W → {kmh:.1} km/h");
 
         let climb = steady_state_speed(250.0, 8.0, &p) * 3.6;
-        assert!((climb - 12.4).abs() < 1.0, "8 % at 250 W → {climb:.1} km/h");
+        assert!((climb - 12.3).abs() < 0.5, "8 % at 250 W → {climb:.1} km/h");
+    }
+
+    /// The worked example of the open-source `rouleur` package (an implementation of Martin et
+    /// al. 1998): Wiggins' hour record, 54.526 km/h at CdA 0.19, Crr 0.0025, η 0.98, 82 kg and
+    /// ρ(30 °C, 777 mmHg, 60 %) ≈ 1.1793 kg/m³ needs 440.96 W. The same speed must come out of
+    /// that power here.
+    #[test]
+    fn agrees_with_the_rouleur_implementation_of_martin_1998() {
+        let p = PhysicsParams {
+            total_mass_kg: 82.0,
+            rotational_mass_kg: 0.0,
+            cda: 0.19,
+            crr: 0.0025,
+            drivetrain_eff: 0.98,
+            air_density: 1.1793,
+            wind_ms: 0.0,
+        };
+        let v = 54.526 / 3.6;
+        let needed = p.resistance_force(v, 0.0) * v / p.drivetrain_eff;
+        assert!((needed - 440.96).abs() < 1.0, "{needed:.2} W");
+        let kmh = steady_state_speed(440.96, 0.0, &p) * 3.6;
+        assert!((kmh - 54.526).abs() < 0.05, "{kmh:.3} km/h");
+    }
+
+    /// Ferrari's rule of thumb for steady climbs, VAM ≈ W/kg · (200 + 10·grade) on the rider's
+    /// weight, holds within about 10 % on a 6–10 % grade.
+    #[test]
+    fn climbing_speed_matches_the_vam_rule_of_thumb() {
+        let p = params();
+        for grade in [6.0, 8.0, 10.0] {
+            let v = steady_state_speed(300.0, grade, &p);
+            let vam = v * 3600.0 * (grade / 100.0_f64).atan().sin();
+            let rule = 300.0 / 75.0 * (200.0 + 10.0 * grade);
+            assert!(
+                (vam / rule - 1.0).abs() < 0.12,
+                "{grade} %: VAM {vam:.0} vs {rule:.0}"
+            );
+        }
     }
 
     #[test]

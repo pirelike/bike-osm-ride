@@ -1,5 +1,14 @@
-# `dx` configuration, used for the Android package (`dx bundle --platform android`).
-# The Windows build does not need it: `cargo build -p ride-app` is enough there.
+# `dx` configuration: the Android package (`dx bundle --platform android`) and the Linux
+# packages (`dx bundle --platform linux --package-types appimage --package-types deb`).
+#
+# Windows does not need it: `cargo build --release -p ride-app` produces the exe, and that single
+# file is the installer. macOS does not either: `packaging/macos/bundle.sh` assembles the
+# universal .app and the .dmg (an unsigned bundle needs its own Info.plist and an ad-hoc
+# signature, which `dx` does not do).
+#
+# The icons are generated from `src/icon.rs` (the same function that draws the window icon):
+#   cargo run -p ride-app --example export_icon
+# The paths below are relative to this file.
 
 [application]
 name = "bike-osm-ride"
@@ -8,6 +17,30 @@ name = "bike-osm-ride"
 identifier = "hu.borbelyhuba.bikeosmride"
 publisher = "bike-osm-ride"
 short_description = "Virtuális tekerés GPX-útvonalakon okos trainerrel."
+icon = [
+  "../../packaging/icons/32.png",
+  "../../packaging/icons/128.png",
+  "../../packaging/icons/256.png",
+  "../../packaging/icons/512.png",
+  "../../packaging/icons/1024.png",
+]
+
+[bundle.deb]
+# Runtime dependencies of the .deb (the AppImage brings its own copies of these libraries).
+# WebKitGTK is the webview, GTK 3 is its host window, BlueZ is the D-Bus backend btleplug talks
+# to for Bluetooth LE.
+depends = ["libwebkit2gtk-4.1-0", "libgtk-3-0", "bluez"]
+
+[android]
+# Pinned on purpose. Android 15 draws every app that targets SDK 35 or newer edge-to-edge: the
+# page would run under the status bar, the camera punch hole / notch and the gesture bar. With 34
+# the system keeps the status bar as its own strip above the app (the cutout lives in it), so
+# nothing of ours is covered. The CSS already pads the top bar and the tabs by the safe-area
+# insets, so raising this later (the Play Store asks for 35) needs a check on a phone, not a
+# redesign.
+min_sdk = 24
+target_sdk = 34
+compile_sdk = 34
 
 [permissions]
 # Bluetooth LE for the trainer and the sensors; Android 11 and older also ask for location.

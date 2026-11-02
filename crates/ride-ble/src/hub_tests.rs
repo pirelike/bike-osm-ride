@@ -515,6 +515,50 @@ async fn one_outstanding_procedure_with_the_response_timeout() {
 }
 
 #[tokio::test]
+async fn a_trainer_that_reports_reset_after_every_write_still_gets_the_grade() {
+    // Captured firmware behaviour (ble.log, 2026-11-01): the trainer answers every Control
+    // Point write and then sends Machine Status 0x01 (Reset). Treating that as a permission
+    // loss produced an endless Request Control loop and the trainer never received a single
+    // simulation or target write, so ERG and the hills did nothing.
+    let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
+    trainer.report_reset_after_every_write();
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.send(SensorCommand::SetSimulation(sim(5.0)));
+    hub.send(SensorCommand::TrainerStart);
+
+    hub.wait_until("the simulation despite the reset storm", || {
+        !writes_of(&trainer, 0x11).is_empty()
+    })
+    .await;
+    assert_eq!(grade_of(&writes_of(&trainer, 0x11)[0]), 500);
+
+    // A new grade reaches the trainer too, and the control permission is not fought over.
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let requests = writes_of(&trainer, 0x00).len();
+    assert!(
+        requests <= 1,
+        "no Request Control loop: {requests} requests"
+    );
+    hub.send(SensorCommand::SetSimulation(sim(7.0)));
+    hub.wait_until("the new grade", || {
+        writes_of(&trainer, 0x11).iter().any(|b| grade_of(b) == 700)
+    })
+    .await;
+    assert_eq!(
+        writes_of(&trainer, 0x00).len(),
+        requests,
+        "still the original grant"
+    );
+}
+
+#[tokio::test]
 async fn simulation_keepalive_repeats_the_target() {
     let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
     let adapter = FakeAdapter::new(vec![trainer.clone()]);

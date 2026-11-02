@@ -3,21 +3,29 @@
 //! This crate is the shell: window configuration, the tile proxy, application state, the
 //! controller that wires the ride engine to the sensor hub, and the page layout. All
 //! user-visible text is Hungarian. See `hooks.rs` for the `RIDE_*` test environment variables.
+//!
+//! The same shell runs on Windows (WebView2), macOS (WKWebView), Linux (WebKitGTK) and Android;
+//! what differs per platform is listed in `docs/ARCHITECTURE.md`.
 
 // Release builds are GUI-subsystem executables (no console window); debug builds keep the console for logs.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+#[cfg(target_os = "android")]
+mod android_share;
 mod browser;
 mod controller;
 mod dock;
 mod gearbox;
 mod guard;
+mod history;
 mod hooks;
 mod icon;
 mod paths;
 mod ride_core;
 mod shell;
 mod state;
+#[cfg(not(target_os = "android"))]
+mod strava;
 mod streetview_images;
 mod tiles;
 mod updater;
@@ -27,7 +35,19 @@ use dioxus::desktop::tao::event::Event;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::LaunchBuilder;
 
+/// WebKitGTK's DMA-BUF renderer leaves the window empty on some NVIDIA and Wayland setups; the
+/// documented workaround is to switch it off. An explicit user setting always wins, so this only
+/// fills in the default before the webview exists.
+#[cfg(target_os = "linux")]
+fn init_linux_webkit() {
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "linux")]
+    init_linux_webkit();
     #[cfg(target_os = "android")]
     paths::init_android_data_dir();
     #[cfg(not(target_os = "android"))]
@@ -51,7 +71,6 @@ fn main() {
 
     let config = Config::new()
         .with_window(window)
-        .with_menu(None)
         .with_background_color(shell::background_rgba(theme))
         .with_disable_context_menu(true)
         .with_data_directory(paths::webview_dir())
@@ -61,6 +80,11 @@ fn main() {
                 controller::flush_pending_settings();
             }
         });
+    // macOS keeps the default menu: WKWebView takes Cmd+C / Cmd+V / Cmd+Q from it, so without it
+    // the rider cannot paste a Google key or quit with the keyboard. Elsewhere the menu bar would
+    // only take room (and Windows would show it inside the window).
+    #[cfg(not(target_os = "macos"))]
+    let config = config.with_menu(None);
     let config = tiles::register(config);
     let config = streetview_images::register(config);
     // Diagnostics: RIDE_DEBUG_PORT=9222 opens the WebView2 DevTools protocol on that port

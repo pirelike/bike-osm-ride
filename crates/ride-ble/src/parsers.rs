@@ -123,21 +123,26 @@ fn clean(m: &RawMeasurement) -> bool {
 ///
 /// Bits 13–15 are reserved; if a newer trainer sets them, the known fields (which come
 /// first) are still returned and the unknown tail is ignored.
+///
+/// The same holds for a **complete** packet that carries more bytes than the flags define:
+/// the layout is fixed by the flags, so every known field is exact and the tail is unknown.
+/// Real firmware does this (a captured trainer sends 8 flagged bytes followed by 12 bytes of
+/// its own), and rejecting the whole notification would throw away power, cadence and speed.
+/// With a resistance field the tail could also be a shifted 16-bit layout, so that ambiguity
+/// keeps its own error instead of guessing.
 pub fn parse_indoor_bike(bytes: &[u8]) -> Result<IndoorBike, ParseError> {
     let narrow = MeasurementOptions::default(); // Uint8Whole
     let m8 = decode_measurement(MeasurementKind::IndoorBike, bytes, narrow)
         .map_err(|_| ParseError::Truncated)?;
     let has_resistance = m8.flags & IBD_RESISTANCE_FLAG != 0;
+    let narrow_width = if has_resistance {
+        ResistanceWidth::U8
+    } else {
+        ResistanceWidth::Absent
+    };
 
     let (m, width) = if clean(&m8) {
-        (
-            m8,
-            if has_resistance {
-                ResistanceWidth::U8
-            } else {
-                ResistanceWidth::Absent
-            },
-        )
+        (m8, narrow_width)
     } else {
         let wide_pick = if has_resistance {
             let wide = MeasurementOptions {
@@ -153,15 +158,9 @@ pub fn parse_indoor_bike(bytes: &[u8]) -> Result<IndoorBike, ParseError> {
         };
         match wide_pick {
             Some(pick) => pick,
-            None if m8.reserved_flags && !m8.truncated => (
-                m8,
-                if has_resistance {
-                    ResistanceWidth::U8
-                } else {
-                    ResistanceWidth::Absent
-                },
-            ),
             None if m8.truncated => return Err(ParseError::Truncated),
+            // A complete narrow parse with an unknown tail: keep the known fields.
+            None if !has_resistance || m8.reserved_flags => (m8, narrow_width),
             None => return Err(ParseError::Trailing),
         }
     };
@@ -461,14 +460,48 @@ mod tests {
             parse_indoor_bike(&[0x44, 0x00, 0x00]),
             Err(ParseError::Truncated)
         );
-        // trailing byte without a resistance flag
+        // trailing bytes without a resistance flag: the flagged fields are complete, so the
+        // known part is kept and the unknown tail ignored
+        let b = parse_indoor_bike(&[0x41, 0x00, 0xFA, 0x00, 0x99]).unwrap();
+        assert_eq!(b.power_w, Some(250.0));
+        assert_eq!(b.resistance_width, ResistanceWidth::Absent);
+        // with a resistance field a tail is ambiguous (it may be the 16-bit layout), so it
+        // stays an error rather than shifting the fields after it
         assert_eq!(
-            parse_indoor_bike(&[0x41, 0x00, 0xFA, 0x00, 0x99]),
+            parse_indoor_bike(&[0x61, 0x00, 25, 0xC8, 0x00, 0x99, 0x99]),
             Err(ParseError::Trailing)
         );
         // a newer trainer sets reserved bit 13 and appends an unknown field: keep the known part
         let b = parse_indoor_bike(&[0x41, 0x20, 0xFA, 0x00, 0xAA, 0xBB]).unwrap();
         assert_eq!(b.power_w, Some(250.0));
+    }
+
+    #[test]
+    fn captured_trainer_frames_with_a_vendor_tail() {
+        // Captured from a real FTMS trainer (2026-11-01, ble.log): flags 0x0044 = speed,
+        // cadence and power, followed by 12 bytes the specification does not define. Before,
+        // every one of these 271 frames was rejected as "trailing bytes" and the ride had no
+        // FTMS speed, cadence or power at all.
+        let riding = parse_indoor_bike(&hex("44000803aa0026006f06c200070130010e0f7401")).unwrap();
+        assert!(
+            (riding.speed_ms.unwrap() * 3.6 - 7.76).abs() < 1e-9,
+            "7.76 km/h"
+        );
+        assert_eq!(riding.cadence_rpm, Some(85.0));
+        assert_eq!(riding.power_w, Some(38.0));
+
+        let idle = parse_indoor_bike(&hex("44000000000000000000feff00002e0100106801")).unwrap();
+        assert_eq!(idle.speed_ms, Some(0.0));
+        assert_eq!(idle.cadence_rpm, Some(0.0));
+        assert_eq!(idle.power_w, Some(0.0));
+        assert_eq!(idle.resistance_width, ResistanceWidth::Absent);
+    }
+
+    fn hex(text: &str) -> Vec<u8> {
+        (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).expect("hex"))
+            .collect()
     }
 
     #[test]

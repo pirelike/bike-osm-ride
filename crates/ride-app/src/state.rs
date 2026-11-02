@@ -9,10 +9,10 @@ use std::time::Duration;
 
 use dioxus::prelude::*;
 use ride_model::{
-    ConnState, DeviceInfo, DeviceKind, MapStyle, RecentRoute, RecordPoint, RideSnapshot,
-    RideSummary, Route, Settings, Theme,
+    ConnState, DeviceInfo, DeviceKind, GhostStatus, MapStyle, RecentRoute, RecordPoint,
+    RideComparison, RideSnapshot, RideSummary, Route, Settings, Theme, Workout,
 };
-use ride_ui_dialogs::DeviceSlot;
+use ride_ui_dialogs::{DeviceSlot, RideDetails};
 use ride_ui_kit::{Toast, ToastKind};
 
 use crate::dock::{Availability, Divider, Dock, DropTarget, PanelId, Workspace};
@@ -153,11 +153,23 @@ pub struct AppState {
     pub busy: Signal<bool>,
     pub welcome_error: Signal<Option<String>>,
     pub summary: Signal<Option<RideSummary>>,
+    /// What the finished ride did against the history (ghost difference, segment PRs).
+    pub comparison: Signal<Option<RideComparison>>,
+    /// PR time of every climb of the loaded route, indexed like `Route::climbs`.
+    pub segment_prs: Signal<Vec<Option<f64>>>,
+    /// What the ride log of the loaded route holds (the settings dialog explains the ghost with it).
+    pub ghost_status: Signal<GhostStatus>,
+    /// Workouts imported from files (MyWhoosh / Zwift), on top of the embedded library.
+    pub imported_workouts: Signal<Vec<Workout>>,
     pub dialog: Signal<Option<DialogKind>>,
     /// Power of the simulated rider, watts.
     pub virtual_power: Signal<f64>,
     /// The simulated rider is connected in at least one slot.
     pub sim_connected: Signal<bool>,
+    /// A workout is selected and not finished yet: the trainer holds its watts (ERG), so the
+    /// virtual gearbox has nothing to do and is not shown. Kept by the controller, so the layout
+    /// does not have to read the 10 Hz snapshot.
+    pub erg: Signal<bool>,
     pub fullscreen: Signal<bool>,
     /// A file is being dragged over the window.
     pub drag_active: Signal<bool>,
@@ -169,6 +181,12 @@ pub struct AppState {
     pub workspace: Signal<Workspace>,
     /// What the browser panel says instead of Firefox (not installed, starting, failed).
     pub browser_note: Signal<Option<String>>,
+    /// What the rider says about the finished ride (title, sport, notes...), edited in the summary.
+    pub ride_details: Signal<RideDetails>,
+    /// A Strava upload is running (in the background, or in the visible view).
+    pub strava_busy: Signal<bool>,
+    /// The Strava view is shown (sign-in or a step that needs the rider) and its bar says this.
+    pub strava_status: Signal<Option<String>>,
     /// A newer release found on GitHub (the top bar offers it).
     pub update: Signal<Option<crate::updater::UpdateInfo>>,
     /// The update is being downloaded / installed.
@@ -181,7 +199,7 @@ impl AppState {
         Availability {
             workout: self.settings.peek().ui.workout_id.is_some(),
             rider: *self.sim_connected.peek(),
-            gears: self.settings.peek().ui.virtual_gears,
+            gears: self.settings.peek().ui.virtual_gears && !*self.erg.peek(),
         }
     }
 
@@ -190,12 +208,21 @@ impl AppState {
         Availability {
             workout: self.settings.read().ui.workout_id.is_some(),
             rider: *self.sim_connected.read(),
-            gears: self.settings.read().ui.virtual_gears,
+            gears: self.settings.read().ui.virtual_gears && !*self.erg.read(),
         }
     }
 }
 
 impl AppState {
+    /// A Zwift Click / Play shifter is connected: it changes the gear, the screen only has to
+    /// say which one.
+    pub fn shifter_connected(self) -> bool {
+        self.slots
+            .read()
+            .iter()
+            .any(|s| s.kind == DeviceKind::Shifter && s.state == ConnState::Connected)
+    }
+
     /// Creates all signals; call once, from the root component.
     pub fn new() -> Self {
         let settings = boot().settings.clone();
@@ -220,15 +247,23 @@ impl AppState {
             busy: Signal::new(false),
             welcome_error: Signal::new(None),
             summary: Signal::new(None),
+            comparison: Signal::new(None),
+            segment_prs: Signal::new(Vec::new()),
+            ghost_status: Signal::new(GhostStatus::default()),
+            imported_workouts: Signal::new(Vec::new()),
             dialog: Signal::new(first_dialog),
             virtual_power: Signal::new(150.0),
             sim_connected: Signal::new(false),
+            erg: Signal::new(false),
             fullscreen: Signal::new(false),
             drag_active: Signal::new(false),
             dock: Signal::new(dock),
             drag: Signal::new(None),
             workspace: Signal::new(Workspace::default()),
             browser_note: Signal::new(None),
+            ride_details: Signal::new(RideDetails::default()),
+            strava_busy: Signal::new(false),
+            strava_status: Signal::new(None),
             update: Signal::new(None),
             updating: Signal::new(false),
         }
@@ -236,6 +271,7 @@ impl AppState {
 
     /// Shows a toast (Hungarian text); identical visible text is not repeated.
     pub fn toast(self, kind: ToastKind, text: impl Into<String>) {
+        let lifetime = toast_lifetime(kind);
         static SEQ: AtomicU64 = AtomicU64::new(1);
         let text = text.into();
         let mut toasts = self.toasts;
@@ -243,7 +279,6 @@ impl AppState {
         if !push_toast(&mut toasts.write(), Toast { id, kind, text }) {
             return;
         }
-        let lifetime = toast_lifetime(kind);
         spawn(async move {
             tokio::time::sleep(lifetime).await;
             toasts.write().retain(|t| t.id != id);

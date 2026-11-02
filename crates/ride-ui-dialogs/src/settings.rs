@@ -2,13 +2,14 @@
 //! settings, applied immediately.
 
 use dioxus::prelude::*;
-use ride_model::Settings;
+use ride_model::{GhostStatus, Settings};
 use ride_ui_kit::{Dialog, NumberField, Segmented, Slider, Switch};
 
 use crate::helpers::{
-    api_key_hint, check_api_key, map_style_from_value, map_style_value, normalize_api_key,
-    profile_mode_from_value, profile_mode_value, theme_from_value, theme_value,
-    trainer_scale_from_percent, trainer_scale_percent, ApiKeyCheck,
+    api_key_hint, check_api_key, ghost_hint, ghost_mode_from_value, ghost_mode_value,
+    map_style_from_value, map_style_value, normalize_api_key, profile_mode_from_value,
+    profile_mode_value, theme_from_value, theme_value, trainer_scale_from_percent,
+    trainer_scale_percent, ApiKeyCheck,
 };
 
 /// Rider (weight, bike, FTP, max HR, CdA, Crr), trainer difficulty (grade scale), speed
@@ -18,6 +19,10 @@ use crate::helpers::{
 pub fn SettingsDialog(
     open: bool,
     settings: ReadSignal<Settings>,
+    /// What the ride log of the loaded route holds, so the ghost selector can say why it is
+    /// empty (no route, no ride yet, only simulated rides).
+    #[props(default)]
+    ghost_status: ReadSignal<GhostStatus>,
     on_change: EventHandler<Settings>,
     on_close: EventHandler<()>,
 ) -> Element {
@@ -27,6 +32,7 @@ pub fn SettingsDialog(
     let current = settings.read().clone();
     let rider = current.rider.clone();
     let ui = current.ui.clone();
+    let ghost_hint = ghost_hint(*ghost_status.read(), ui.ghost);
 
     // Every control emits the whole updated `Settings`; unknown fields survive the patch.
     let set_kg = setter(&current, on_change, |s: &mut Settings, v: f64| {
@@ -70,6 +76,9 @@ pub fn SettingsDialog(
     });
     let set_lookahead = setter(&current, on_change, |s: &mut Settings, v: f64| {
         s.ui.lookahead_m = v;
+    });
+    let set_ghost = setter(&current, on_change, |s: &mut Settings, v: String| {
+        s.ui.ghost = ghost_mode_from_value(&v);
     });
     let reset_layout = {
         let base = current.clone();
@@ -260,6 +269,25 @@ pub fn SettingsDialog(
                             hint: "Csak előretekintő nézetben számít.".to_string(),
                             on_change: set_lookahead,
                         }
+                    }
+                    div { class: "dlg-control",
+                        span { class: "label", "Szellem" }
+                        div { class: "dlg-segrow",
+                            Segmented {
+                                options: vec![
+                                    ("off".to_string(), "Ki".to_string()),
+                                    ("route".to_string(), "Az útvonal ideje".to_string()),
+                                    ("last".to_string(), "Legutóbbi menet".to_string()),
+                                    ("best".to_string(), "Legjobb (PR)".to_string()),
+                                ],
+                                value: ghost_mode_value(ui.ghost),
+                                aria_label: "Szellem".to_string(),
+                                small: true,
+                                on_change: set_ghost,
+                            }
+                        }
+                        span { class: "dlg-note dlg-note--ghost", "{ghost_hint}" }
+                        span { class: "dlg-note", "A korábbi, ugyanezen az útvonalon tekert menet visszajátszása a térképen és a profilon, másodpercben mért előnnyel vagy hátránnyal. A „Legjobb” a legkisebb idejű teljes menet; a szimulált menetek nem PR-ok. Az „Az útvonal ideje” a betöltött GPX saját időbélyegeit játssza vissza, mentett menet nélkül is." }
                     }
                 }
 
@@ -483,24 +511,32 @@ mod tests {
 
     /// Renders the dialog server-side for a given settings value.
     fn render(settings: Settings) -> String {
+        render_with_status(settings, GhostStatus::default())
+    }
+
+    fn render_with_status(settings: Settings, status: GhostStatus) -> String {
         #[derive(Clone, PartialEq, Props)]
         struct Harness {
             settings: Settings,
+            status: GhostStatus,
         }
         #[component]
         fn Host(props: Harness) -> Element {
             let initial = props.settings.clone();
+            let status = props.status;
             let settings = use_signal(move || initial);
+            let ghost_status = use_signal(move || status);
             rsx! {
                 SettingsDialog {
                     open: true,
                     settings,
+                    ghost_status,
                     on_change: move |_| {},
                     on_close: move |_| {},
                 }
             }
         }
-        let mut vdom = VirtualDom::new_with_props(Host, Harness { settings });
+        let mut vdom = VirtualDom::new_with_props(Host, Harness { settings, status });
         vdom.rebuild_in_place();
         dioxus_ssr::render(&vdom)
     }
@@ -573,6 +609,155 @@ mod tests {
         for text in ["Elrendezés", "Elrendezés visszaállítása"] {
             assert!(html.contains(text), "missing {text:?}");
         }
+    }
+
+    #[test]
+    fn the_ghost_selector_offers_the_four_modes() {
+        let html = render(Settings::default());
+        for text in [
+            "Szellem",
+            "Ki",
+            "Az útvonal ideje",
+            "Legutóbbi menet",
+            "Legjobb (PR)",
+            "másodpercben mért előnnyel",
+        ] {
+            assert!(html.contains(text), "missing {text:?}");
+        }
+        // the default is "Best": the segmented control marks exactly one option per group
+        assert_eq!(
+            html.matches(r#"aria-checked="true""#).count(),
+            4,
+            "theme, map style, profile mode and ghost each have one selected option"
+        );
+        // choosing "Ki" moves the selection to that option
+        let mut off = Settings::default();
+        off.ui.ghost = ride_model::GhostMode::Off;
+        let html = render(off);
+        assert_eq!(html.matches(r#"aria-checked="true""#).count(), 4);
+        // inside the ghost group the selected option is the first one ("Ki")
+        let group = html.find("Szellem</span>").expect("the ghost group label");
+        let after = &html[group..];
+        let active = after.find("is-active").expect("a selected ghost mode");
+        assert!(
+            active < after.find(">Ki</button>").expect("the Ki option"),
+            "Ki must be the selected ghost mode"
+        );
+    }
+
+    #[test]
+    fn the_ghost_selector_says_why_there_is_no_ghost_yet() {
+        // no ride on the route: the hint explains that the first ride creates the ghost
+        let html = render_with_status(
+            Settings::default(),
+            GhostStatus {
+                loaded: true,
+                rides: 0,
+                simulated: 0,
+                replayable: false,
+                partial: false,
+                route_time_s: None,
+            },
+        );
+        assert!(
+            html.contains("még nincs mentett menet"),
+            "the no-history hint is missing"
+        );
+        // ... and with a GPX timeline it offers the route's own time instead
+        let html = render_with_status(
+            Settings::default(),
+            GhostStatus {
+                loaded: true,
+                rides: 0,
+                simulated: 0,
+                replayable: false,
+                partial: false,
+                route_time_s: Some(5_025.0),
+            },
+        );
+        assert!(
+            html.contains("A GPX saját ideje 1:23:45"),
+            "the GPX offer is missing: {html}"
+        );
+        // only simulated rides with the "Best" mode: point at "Last"
+        let html = render_with_status(
+            Settings::default(),
+            GhostStatus {
+                loaded: true,
+                rides: 2,
+                simulated: 2,
+                replayable: false,
+                partial: false,
+                route_time_s: None,
+            },
+        );
+        assert!(
+            html.contains("mind szimulált"),
+            "the simulated hint is missing"
+        );
+        // a replayable ride: the hint says the ghost is waiting on the start line
+        let html = render_with_status(
+            Settings::default(),
+            GhostStatus {
+                loaded: true,
+                rides: 3,
+                simulated: 1,
+                replayable: true,
+                partial: false,
+                route_time_s: None,
+            },
+        );
+        assert!(html.contains("3 korábbi menet"), "the count is missing");
+        assert!(
+            html.contains("rajtvonalon vár"),
+            "the waiting hint is missing"
+        );
+        // a ride that never reached the end is still replayed: say where the ghost stops
+        let html = render_with_status(
+            Settings::default(),
+            GhostStatus {
+                loaded: true,
+                rides: 1,
+                simulated: 0,
+                replayable: true,
+                partial: true,
+                route_time_s: None,
+            },
+        );
+        assert!(
+            html.contains("egyik sem ért célba"),
+            "the partial hint is missing"
+        );
+    }
+
+    #[test]
+    fn the_route_mode_explains_itself_with_and_without_a_gpx_timeline() {
+        let mut settings = Settings::default();
+        settings.ui.ghost = ride_model::GhostMode::Route;
+        let html = render_with_status(
+            settings.clone(),
+            GhostStatus {
+                loaded: true,
+                rides: 0,
+                simulated: 0,
+                replayable: true,
+                partial: false,
+                route_time_s: Some(4_500.0),
+            },
+        );
+        assert!(html.contains("A GPX-be írt menet ideje 1:15:00"), "{html}");
+        let html = render_with_status(
+            settings,
+            GhostStatus {
+                loaded: true,
+                rides: 0,
+                simulated: 0,
+                replayable: false,
+                partial: false,
+                route_time_s: None,
+            },
+        );
+        assert!(html.contains("nincsenek időbélyegek"), "{html}");
     }
 
     #[test]

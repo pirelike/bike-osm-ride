@@ -103,9 +103,11 @@ pub fn image_path(data_dir: &Path, route_id: &str, bucket: u32) -> Option<PathBu
     route_dir(data_dir, route_id).map(|d| d.join(format!("{bucket}.jpg")))
 }
 
-/// Webview URL of a downloaded image (served by the `svimg` protocol of the shell).
+/// Webview URL of a downloaded image (served by the `svimg` protocol of the shell). The base
+/// (`http://svimg.localhost`, `svimg://localhost` or `https://svimg.localhost`) depends on the
+/// webview; the handler only reads `uri().path()`.
 pub fn image_url(route_id: &str, bucket: u32) -> String {
-    format!("http://svimg.localhost/streetview/{route_id}/{bucket}.jpg")
+    ride_ui_kit::protocol::url("svimg", &format!("streetview/{route_id}/{bucket}.jpg"))
 }
 
 /// Parses the protocol path `/streetview/<route id>/<bucket>.jpg`.
@@ -534,7 +536,10 @@ mod tests {
     fn paths_and_urls_round_trip_and_reject_traversal() {
         assert_eq!(
             image_url("abc123", 7),
-            "http://svimg.localhost/streetview/abc123/7.jpg"
+            format!(
+                "{}/streetview/abc123/7.jpg",
+                ride_ui_kit::protocol::base("svimg")
+            )
         );
         assert_eq!(
             parse_image_path("/streetview/abc123/7.jpg"),

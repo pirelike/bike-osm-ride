@@ -1405,7 +1405,34 @@ wk("f-mixed-long-vo2-finish", "Hosszú alap VO2max befejezéssel 2 óra", "mixed
 
 
 # ───────────────────────────── finish ─────────────────────────────
+# Timed coaching messages (`scripts/coach_messages.json`, workout id -> [{step, at_s, text}]):
+# shown during the ride at `at_s` seconds into their step, next to the step's note (which shows
+# at second 0). Kept apart from the workouts so the texts can be rewritten without touching them.
+import os
+
+COACH_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "coach_messages.json")
+COACH = json.load(open(COACH_PATH, encoding="utf-8")) if os.path.exists(COACH_PATH) else {}
+
+
+def attach_messages(w):
+    steps = w["steps"]
+    for m in COACH.get(w["id"], []):
+        i, at, text = m["step"], int(m["at_s"]), m["text"].strip()
+        if not (0 <= i < len(steps)):
+            raise SystemExit(f"{w['id']}: coach message for missing step {i}")
+        st = steps[i]
+        if not (0 <= at < st["duration_s"]) or not text or len(text) > 160:
+            raise SystemExit(f"{w['id']} step {i}: bad coach message {m}")
+        if at == 0 and st.get("note"):
+            raise SystemExit(f"{w['id']} step {i}: a message at 0 s would hide under the note")
+        st.setdefault("messages", []).append({"at_s": at, "text": text})
+    for st in steps:
+        if "messages" in st:
+            st["messages"].sort(key=lambda m: m["at_s"])
+
+
 def finish(w):
+    attach_messages(w)
     steps = w["steps"]
     total = sum(st["duration_s"] for st in steps)
     if total % 60:

@@ -1,5 +1,7 @@
 //! The `svimg` protocol: serves the downloaded Street View images of the offline cache to
-//! the panel (`http://svimg.localhost/streetview/<route id>/<bucket>.jpg` on Windows).
+//! the panel (`http://svimg.localhost/streetview/<route id>/<bucket>.jpg` on Windows,
+//! `svimg://localhost/...` on macOS/Linux, `https://svimg.localhost/...` on Android — the
+//! handler only reads the path).
 //!
 //! The handler only reads files below `<data>/streetview/img/`, and only for a route id and
 //! bucket that `ride_ui_streetview::imagestore::parse_image_path` accepts, so a crafted URL

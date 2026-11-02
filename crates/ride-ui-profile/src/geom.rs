@@ -203,6 +203,40 @@ pub fn y_range(min_ele: f64, max_ele: f64) -> (f64, f64) {
     (lo - span * 0.10, hi + span * 0.18)
 }
 
+/// The y axis of a look-ahead window that keeps its scale while it can: `prev` (the axis drawn
+/// last time) stays as long as it still contains the terrain `[min_ele, max_ele]` and the
+/// terrain fills at least [`Y_KEEP_FILL`] of it; otherwise the axis jumps once to the fresh
+/// [`y_range`]. Without this the whole profile rescaled whenever a summit or a valley entered or
+/// left the sliding window, which read as the curve "jumping" while riding.
+pub fn stable_y_range(prev: Option<(f64, f64)>, min_ele: f64, max_ele: f64) -> (f64, f64) {
+    // a new axis gets some slack on both sides, so the next small summit fits in it too
+    let fresh = {
+        let (a, b) = (finite_or(min_ele, 0.0), finite_or(max_ele, 0.0));
+        let slack = ((b - a).abs().max(MIN_Y_SPAN_M)) * Y_SLACK;
+        y_range(a.min(b) - slack, a.max(b) + slack)
+    };
+    let Some((lo, hi)) = prev.filter(|(lo, hi)| lo.is_finite() && hi.is_finite() && hi > lo) else {
+        return fresh;
+    };
+    let (a, b) = (finite_or(min_ele, lo), finite_or(max_ele, hi));
+    let (a, b) = if b >= a { (a, b) } else { (b, a) };
+    let span = hi - lo;
+    // the terrain must stay inside the axis, below its headroom (labels live up there)
+    let inside = a >= lo && b <= hi - span * 0.12;
+    let fills = (b - a).max(MIN_Y_SPAN_M) >= span * Y_KEEP_FILL;
+    if inside && fills {
+        (lo, hi)
+    } else {
+        fresh
+    }
+}
+
+/// Share of the axis the terrain has to fill for [`stable_y_range`] to keep the axis.
+pub const Y_KEEP_FILL: f64 = 0.3;
+
+/// Slack a freshly chosen axis keeps on both sides, as a share of the terrain's span.
+pub const Y_SLACK: f64 = 0.25;
+
 /// Height of `ele` inside `[lo, hi]` as `0..=1` measured from the bottom (`0` at `lo`).
 /// Non-finite elevations become `0.5` so a broken sample cannot place a marker off-canvas.
 pub fn elevation_frac(ele: f64, lo: f64, hi: f64) -> f64 {
@@ -801,6 +835,67 @@ mod tests {
     }
 
     // ── y range ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_look_ahead_axis_keeps_its_scale_until_it_must_change() {
+        let first = stable_y_range(None, 200.0, 260.0);
+        assert!(first.0 < 200.0 && first.1 > 260.0);
+        // a little more or less terrain: same axis, no jump
+        assert_eq!(stable_y_range(Some(first), 205.0, 258.0), first);
+        assert_eq!(stable_y_range(Some(first), 210.0, 250.0), first);
+        // a summit above the axis: a new axis that contains it
+        let higher = stable_y_range(Some(first), 200.0, 340.0);
+        assert!(higher.1 > 340.0 && higher != first);
+        // nearly flat terrain in a tall axis: it shrinks
+        let flat = stable_y_range(Some(higher), 240.0, 245.0);
+        assert!(flat.1 - flat.0 < higher.1 - higher.0);
+        assert_eq!(
+            stable_y_range(Some((f64::NAN, 1.0)), 0.0, 50.0),
+            stable_y_range(None, 0.0, 50.0)
+        );
+    }
+
+    /// Riding a rolling route in 10 m steps: the old per-window axis changed scale over and over,
+    /// the kept axis changes rarely.
+    #[test]
+    fn riding_through_rolling_terrain_rescales_rarely() {
+        let mut segments = Vec::new();
+        for i in 0..40 {
+            let grade = [3.0, -2.0, 6.0, -5.0, 1.0][i % 5];
+            segments.push((400.0 + 50.0 * (i % 3) as f64, grade));
+        }
+        let route = ride_model::testing::straight_route(&segments, 200.0);
+        let look = 3_000.0;
+        let (mut old_changes, mut new_changes) = (0, 0);
+        let mut old_prev: Option<(f64, f64)> = None;
+        let mut new_prev: Option<(f64, f64)> = None;
+        let mut d = 0.0;
+        while d < route.total_dist {
+            let (d0, d1) = window_bounds(route.total_dist, ProfileMode::Lookahead, d, look);
+            let (lo, hi) = elevation_range(&route, d0, d1).unwrap();
+            let old = y_range(lo, hi);
+            if old_prev.is_some_and(|p| p != old) {
+                old_changes += 1;
+            }
+            old_prev = Some(old);
+            let ahead = (d1 + (d1 - d0)).min(route.total_dist);
+            let (lo, hi) = elevation_range(&route, d0, ahead).unwrap();
+            let new = stable_y_range(new_prev, lo, hi);
+            if new_prev.is_some_and(|p| p != new) {
+                new_changes += 1;
+            }
+            new_prev = Some(new);
+            d += 10.0;
+        }
+        eprintln!(
+            "axis changes over {:.0} m: old {old_changes}, new {new_changes}",
+            route.total_dist
+        );
+        assert!(
+            new_changes * 4 <= old_changes,
+            "old {old_changes}, new {new_changes}"
+        );
+    }
 
     #[test]
     fn y_range_pads_and_never_collapses() {

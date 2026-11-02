@@ -19,16 +19,16 @@ use dioxus::desktop::use_window;
 use dioxus::document;
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
-use ride_model::{ConnState, DeviceKind, ProfileMode, Theme};
+use ride_model::{ConnState, DeviceKind, ProfileMode, ProfileView, Theme, WorkoutLibrary};
 use ride_ui_dialogs::{
     AboutDialog, DeviceSlot, DevicesDialog, RouteDialog, SettingsDialog, SummaryDialog,
     VirtualRiderPanel, WorkoutsDialog,
 };
-use ride_ui_hud::{ClimbCard, MetricTiles, RideControls, StatsPanel, WorkoutCard};
+use ride_ui_hud::{ClimbCard, MetricTiles, RideControls, RideDash, StatsPanel, WorkoutCard};
 use ride_ui_kit::format::fmt_km;
 use ride_ui_kit::{Icon, IconName, ToastHost};
 use ride_ui_map::MapView;
-use ride_ui_profile::{ChartMetric, ElevationProfile, LiveChart};
+use ride_ui_profile::{ChartMetric, ElevationProfile, LiveChart, Pages, WorkoutProfile};
 use ride_ui_streetview::StreetViewPanel;
 
 use crate::browser;
@@ -48,7 +48,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .shell {
   --top-h: 40px;
   position: fixed; inset: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--top-h) minmax(0, 1fr); grid-auto-rows: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: calc(var(--top-h) + var(--safe-top)) minmax(0, 1fr); grid-auto-rows: 0;
   background: var(--bg); color: var(--text);
   font: 400 var(--t-13)/1.4 var(--font-ui);
   overflow: hidden;
@@ -57,12 +57,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .shell *, .shell *::before, .shell *::after { box-sizing: border-box; }
 .shell input, .shell textarea, .shell [contenteditable] { -webkit-user-select: text; user-select: text; }
 
-/* ── top bar: 40 px, cells separated by rules ── */
+/* ── top bar: 40 px, cells separated by rules ──
+   Below the safe area: on a phone drawn edge-to-edge (Android 15 with targetSdk 35+, or a
+   WebView that reports the camera cutout) the status bar, the punch hole or the notch sit over
+   the top of the page, and the bar starts under them. Everywhere else the insets are 0. */
+.shell { --safe-top: env(safe-area-inset-top, 0px); }
 .shell-top {
   grid-row: 1;
   position: relative; z-index: 10;
   display: flex; align-items: stretch;
-  height: var(--top-h);
+  height: calc(var(--top-h) + var(--safe-top));
+  padding: var(--safe-top) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   background: var(--bg-1);
   border-bottom: 1px solid var(--rule-strong);
 }
@@ -296,6 +301,21 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 }
 .shell-drop__title { font: 600 var(--t-28)/1.1 var(--font-display); }
 .shell-drop__sub { color: var(--text-dim); font-size: var(--t-13); }
+/* ── Strava upload: the native view fills the window below this strip ── */
+.shell-strava {
+  position: fixed; inset: 0; z-index: 1200;
+  background: var(--bg-1);
+}
+.shell-strava__bar {
+  display: flex; align-items: center; gap: var(--space-3);
+  height: 52px; padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.shell-strava__title { font: 600 var(--t-15)/1 var(--font-display); white-space: nowrap; }
+.shell-strava__status {
+  flex: 1; min-width: 0; color: var(--text-dim); font-size: var(--t-13);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 @keyframes shell-fade { from { opacity: 0; } }
 
 /* ── compact layout (phone, portrait tablet): tabs instead of the tiling ── */
@@ -308,7 +328,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; padding: 8px;
 }
-.compact[data-tab="map"] .compact-stage { padding: 0; grid-template-rows: minmax(0, 1fr); align-content: stretch; overflow: hidden; }
+.compact[data-tab="map"] .compact-stage { padding: 0; gap: 0; grid-template-rows: auto minmax(0, 1fr) 176px; align-content: stretch; overflow: hidden; }
+.compact-extra { border: 0; }
+.compact-extra--power { order: -1; border-bottom: 1px solid var(--rule-strong); }
+.compact-extra--profile { order: 1; border-top: 1px solid var(--rule-strong); }
+/* the ride tab: the head unit at its own height, the profile takes the rest of the screen */
+.compact[data-tab="ride"] .compact-stage { grid-template-rows: auto minmax(200px, 1fr); align-content: stretch; }
 .compact-panel {
   display: flex; flex-direction: column; min-width: 0;
   background: var(--bg-1); border: 1px solid var(--rule-strong); overflow: hidden;
@@ -318,16 +343,32 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .compact-panel__body > * { flex: 1 1 auto; min-height: 0; }
 .compact-panel[data-panel="map"] { border: 0; min-height: 0; height: 100%; }
 /* the panels were made to fill a tile: give each a tile-like height */
-.compact-panel[data-panel="metrics"] { height: 470px; }
-.compact-panel[data-panel="workout"] { height: 240px; }
+.compact-panel[data-panel="metrics"] { height: auto; }
 .compact-panel[data-panel="climb"] { height: 230px; }
 .compact-panel[data-panel="gears"] { height: 240px; }
 .compact-panel[data-panel="rider"] { height: 360px; }
-.compact-panel[data-panel="profile"] { height: 280px; }
+.compact-panel[data-panel="profile"] { height: auto; min-height: 200px; }
 .compact-panel[data-panel="charts"] { height: 600px; }
 .compact-panel[data-panel="stats"] { height: 340px; }
 .shell--compact .hud-controls__kbd { display: none; }
-.compact-controls { border-top: 1px solid var(--rule-strong); background: var(--bg-1); padding: 6px 8px; }
+/* the transport bar of the phone: full-width, thumb-sized buttons (pause twice as wide as
+   finish), the gear buttons beside them while the virtual gearbox is on */
+.compact-controls {
+  display: flex; align-items: stretch; gap: 8px;
+  border-top: 1px solid var(--rule-strong); background: var(--bg-1); padding: 8px;
+}
+.compact-controls .hud-controls { flex: 1 1 auto; height: auto; padding: 0; min-width: 0; }
+.compact-controls .btn-group { display: flex; gap: 8px; width: 100%; background: transparent; }
+.compact-controls .hud-controls__btn {
+  --btn-h: 48px; flex: 1 1 0; min-width: 0; padding: 0 12px;
+  border-radius: var(--radius-md); font: 600 var(--t-15)/1 var(--font-ui);
+}
+.compact-controls .hud-controls__btn.btn--primary { flex-grow: 2; }
+.compact-gears { flex: none; display: flex; align-items: center; gap: 4px; }
+.compact-gears__btn { --btn-h: 48px; width: 44px; padding: 0; }
+.compact-gears__num { min-width: 2ch; text-align: center; font: 600 var(--t-20)/1 var(--font-num); }
+.compact-gears--readout { flex-direction: column; justify-content: center; gap: 2px; padding: 0 8px; border: 1px solid var(--rule-strong); }
+.compact-gears__label { font: 500 var(--t-11)/1 var(--font-ui); color: var(--text-dim); }
 .compact-tabs {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid var(--rule-strong); background: var(--bg-1);
@@ -348,6 +389,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 @media (min-width: 700px) {
   .compact:not([data-tab="map"]) .compact-stage { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compact-panel[data-panel="charts"], .compact-panel[data-panel="profile"] { grid-column: 1 / -1; }
+  .compact[data-tab="ride"] .compact-stage { grid-template-columns: minmax(0, 1fr); }
+}
+/* compact layout: notifications (coach messages among them) drop in under the top bar, clear of
+   the transport buttons and the tabs at the bottom (same width limit as `COMPACT_BELOW_PX`) */
+@media (max-width: 999.98px) {
+  :root .toasts { top: calc(48px + env(safe-area-inset-top, 0px)); bottom: auto; left: 8px; right: 8px; max-width: none; }
 }
 /* phones: the top bar keeps only the route length */
 @media (max-width: 699px) {
@@ -551,6 +598,7 @@ pub fn App() -> Element {
                 DragCatcher { op }
             }
             Dialogs {}
+            StravaBar {}
             DropOverlay {}
         }
     }
@@ -1067,62 +1115,88 @@ const VIEWPORT_SCRIPT: &str = r#"(function () {
   return new Promise(function () {});
 })();"#;
 
-/// The tabs of the compact layout.
+/// The tabs of the compact layout. "Tekerés" is the screen to ride with: everything needed
+/// mid-effort (workout block, power against its target, cadence / heart rate / speed / grade and
+/// the profile or the workout blocks) is on it, so no tab switch is needed while pedalling.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompactTab {
-    Map,
     Ride,
-    Profile,
+    Map,
+    Charts,
     Data,
 }
 
 impl CompactTab {
     pub const ALL: [CompactTab; 4] = [
-        CompactTab::Map,
         CompactTab::Ride,
-        CompactTab::Profile,
+        CompactTab::Map,
+        CompactTab::Charts,
         CompactTab::Data,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            CompactTab::Map => "Térkép",
             CompactTab::Ride => "Tekerés",
-            CompactTab::Profile => "Profil",
+            CompactTab::Map => "Térkép",
+            CompactTab::Charts => "Grafikonok",
             CompactTab::Data => "Adatok",
         }
     }
 
     fn key(self) -> &'static str {
         match self {
-            CompactTab::Map => "map",
             CompactTab::Ride => "ride",
-            CompactTab::Profile => "profile",
+            CompactTab::Map => "map",
+            CompactTab::Charts => "charts",
             CompactTab::Data => "data",
         }
     }
 
     fn icon(self) -> IconName {
         match self {
-            CompactTab::Map => IconName::Route,
             CompactTab::Ride => IconName::Gauge,
-            CompactTab::Profile => IconName::Mountain,
+            CompactTab::Map => IconName::Route,
+            CompactTab::Charts => IconName::Bolt,
             CompactTab::Data => IconName::Clock,
         }
     }
 }
 
-/// Which tab shows a panel; `None` for the controls (always on screen) and the docked browser
-/// (a desktop-only feature).
+/// Which tab shows a panel; `None` for the controls (always on screen, with the gear buttons),
+/// the workout card (the ride tab's head unit carries the workout) and the docked browser (a
+/// desktop-only feature). On the ride tab the "metrics" panel is the phone head unit
+/// ([`RideDash`]) and the profile follows the Elevation / Workout switch.
 pub fn compact_tab_of(id: PanelId) -> Option<CompactTab> {
     match id {
+        PanelId::Metrics | PanelId::Profile => Some(CompactTab::Ride),
         PanelId::Map => Some(CompactTab::Map),
-        PanelId::Workout | PanelId::Metrics | PanelId::Climb | PanelId::Gears | PanelId::Rider => {
-            Some(CompactTab::Ride)
-        }
-        PanelId::Profile | PanelId::Charts => Some(CompactTab::Profile),
-        PanelId::Stats => Some(CompactTab::Data),
-        PanelId::Controls | PanelId::Browser => None,
+        PanelId::Charts => Some(CompactTab::Charts),
+        PanelId::Climb | PanelId::Stats | PanelId::Gears | PanelId::Rider => Some(CompactTab::Data),
+        PanelId::Workout | PanelId::Controls | PanelId::Browser => None,
+    }
+}
+
+/// Order of the panels inside a compact tab (stable, so the keyed DOM nodes never move): the
+/// head unit above the profile, the next climb before the statistics.
+fn compact_rank(id: PanelId) -> u8 {
+    match id {
+        PanelId::Metrics => 0,
+        PanelId::Profile => 1,
+        PanelId::Climb => 2,
+        PanelId::Stats => 3,
+        PanelId::Gears => 4,
+        PanelId::Rider => 5,
+        _ => 6,
+    }
+}
+
+/// The content of a panel in the compact layout: like the tiling's, except the live numbers,
+/// which become the phone head unit, and the profile, whose views are turned by swiping.
+fn compact_panel_body(id: PanelId) -> Element {
+    match id {
+        PanelId::Metrics => rsx! { DashPanel {} },
+        PanelId::Profile => rsx! { ProfilePanel { phone: true } },
+        _ => panel_body(id),
     }
 }
 
@@ -1133,13 +1207,14 @@ pub fn compact_tab_of(id: PanelId) -> Option<CompactTab> {
 fn CompactArea() -> Element {
     let st = use_context::<AppState>();
     let av = st.availability_live();
-    let mut tab = use_signal(|| CompactTab::Map);
+    let mut tab = use_signal(|| CompactTab::Ride);
     let active = *tab.read();
-    let panels: Vec<(PanelId, CompactTab)> = PanelId::ALL
+    let mut panels: Vec<(PanelId, CompactTab)> = PanelId::ALL
         .into_iter()
         .filter(|id| av.has(*id))
         .filter_map(|id| compact_tab_of(id).map(|t| (id, t)))
         .collect();
+    panels.sort_by_key(|(id, _)| compact_rank(*id));
 
     rsx! {
         main {
@@ -1154,11 +1229,28 @@ fn CompactArea() -> Element {
                         class: if t == active { "compact-panel" } else { "compact-panel is-hidden" },
                         "data-panel": id.key(),
                         aria_label: "{id.title()}",
-                        div { class: "compact-panel__body", {panel_body(id)} }
+                        div { class: "compact-panel__body", {compact_panel_body(id)} }
                     }
                 }
+                // the map tab also carries the power line above the map and the elevation under it,
+                // so the route can be followed without losing sight of the effort
+                section {
+                    key: "map-power",
+                    class: if active == CompactTab::Map { "compact-panel compact-extra compact-extra--power" } else { "compact-panel compact-extra compact-extra--power is-hidden" },
+                    aria_label: "Teljesítmény",
+                    StripPanel {}
+                }
+                section {
+                    key: "map-profile",
+                    class: if active == CompactTab::Map { "compact-panel compact-extra compact-extra--profile" } else { "compact-panel compact-extra compact-extra--profile is-hidden" },
+                    aria_label: "Magassági profil",
+                    div { class: "compact-panel__body", MapProfile {} }
+                }
             }
-            div { class: "compact-controls", ControlsPanel {} }
+            div { class: "compact-controls",
+                ControlsPanel {}
+                CompactGears {}
+            }
             nav { class: "compact-tabs", role: "tablist", aria_label: "Nézetek",
                 for t in CompactTab::ALL {
                     button {
@@ -1334,14 +1426,42 @@ fn MapPanel() -> Element {
     }
 }
 
+/// The profile: the terrain, or the workout's blocks while one is selected and the rider chose
+/// them. `phone` turns the header buttons into swipe pages.
 #[component]
-fn ProfilePanel() -> Element {
+fn ProfilePanel(#[props(default)] phone: bool) -> Element {
     let st = use_context::<AppState>();
     let ctl = use_context::<Controller>();
     let settings = st.settings;
+    let imported = st.imported_workouts;
     let theme = use_memo(move || settings.read().ui.theme);
     let mode = use_memo(move || settings.read().ui.profile_mode);
     let lookahead = use_memo(move || settings.read().ui.lookahead_m);
+    let ftp = use_memo(move || settings.read().rider.ftp_w);
+    let workout_id = use_memo(move || settings.read().ui.workout_id.clone());
+    // the selected workout itself (its steps are drawn), resolved like the controller does
+    let workout = use_memo(move || {
+        let id = workout_id.read().clone()?;
+        WorkoutLibrary::with_imported(imported.read().clone())
+            .get(&id)
+            .cloned()
+    });
+    let has_workout = workout.read().is_some();
+    let view = settings.read().ui.profile_view;
+    let pages = phone.then(|| phone_pages(st, ctl, has_workout));
+    if has_workout && view == ProfileView::Workout {
+        return rsx! {
+            WorkoutProfile {
+                workout,
+                snapshot: st.snapshot,
+                ftp_w: ftp,
+                mode,
+                on_mode: move |mode: ProfileMode| ctl.set_profile_mode(mode),
+                on_view: move |view| ctl.set_profile_view(view),
+                pages,
+            }
+        };
+    }
     rsx! {
         ElevationProfile {
             route: st.route,
@@ -1351,6 +1471,8 @@ fn ProfilePanel() -> Element {
             theme,
             on_seek: move |dist| ctl.seek(dist),
             on_mode: move |mode: ProfileMode| ctl.set_profile_mode(mode),
+            on_view: has_workout.then_some(EventHandler::new(move |view| ctl.set_profile_view(view))),
+            pages,
         }
     }
 }
@@ -1385,7 +1507,7 @@ fn ClimbPanel() -> Element {
     let st = use_context::<AppState>();
     let settings = st.settings;
     let theme = use_memo(move || settings.read().ui.theme);
-    rsx! { ClimbCard { route: st.route, snapshot: st.snapshot, theme } }
+    rsx! { ClimbCard { route: st.route, snapshot: st.snapshot, theme, prs: st.segment_prs } }
 }
 
 #[component]
@@ -1404,6 +1526,158 @@ fn ChartsPanel() -> Element {
         LiveChart { history: st.history, metric: ChartMetric::Power, rider, theme }
         LiveChart { history: st.history, metric: ChartMetric::HeartRate, rider, theme }
         LiveChart { history: st.history, metric: ChartMetric::Cadence, rider, theme }
+    }
+}
+
+/// The head unit above the phone's map: the same numbers as on the ride tab, the workout in one
+/// line.
+#[component]
+fn StripPanel() -> Element {
+    let st = use_context::<AppState>();
+    let settings = st.settings;
+    let theme = use_memo(move || settings.read().ui.theme);
+    let rider = use_memo(move || settings.read().rider.clone());
+    rsx! { RideDash { snapshot: st.snapshot, rider, theme, slim: true } }
+}
+
+/// One page of the phone's profile: what it draws and how far it looks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProfilePage {
+    pub view: ProfileView,
+    pub mode: ProfileMode,
+}
+
+impl ProfilePage {
+    pub fn label(self) -> &'static str {
+        match (self.view, self.mode) {
+            (ProfileView::Workout, ProfileMode::Lookahead) => "Edzés · előre",
+            (ProfileView::Workout, ProfileMode::Full) => "Edzés · teljes",
+            (ProfileView::Elevation, ProfileMode::Lookahead) => "Szint · előre",
+            (ProfileView::Elevation, ProfileMode::Full) => "Szint · teljes",
+        }
+    }
+}
+
+/// The pages a swipe turns through: the workout's two (when one is selected and `workout` is
+/// allowed), then the terrain's two, the look-ahead first.
+pub fn profile_pages(workout: bool) -> Vec<ProfilePage> {
+    let views: &[ProfileView] = if workout {
+        &[ProfileView::Workout, ProfileView::Elevation]
+    } else {
+        &[ProfileView::Elevation]
+    };
+    views
+        .iter()
+        .flat_map(|&view| {
+            [ProfileMode::Lookahead, ProfileMode::Full]
+                .into_iter()
+                .map(move |mode| ProfilePage { view, mode })
+        })
+        .collect()
+}
+
+/// The swipe pages of a phone profile, at the page the settings describe.
+fn phone_pages(st: AppState, ctl: Controller, workout: bool) -> Pages {
+    let ui = st.settings.read().ui.clone();
+    let list = profile_pages(workout);
+    let now = ProfilePage {
+        view: if workout {
+            ui.profile_view
+        } else {
+            ProfileView::Elevation
+        },
+        mode: ui.profile_mode,
+    };
+    let current = list.iter().position(|p| *p == now).unwrap_or(0);
+    Pages {
+        labels: list.iter().map(|p| p.label().to_string()).collect(),
+        current,
+        hint: !ui.profile_swipe_learned,
+        on_page: EventHandler::new(move |i: usize| {
+            if let Some(page) = list.get(i) {
+                ctl.set_profile_page(page.view, page.mode);
+            }
+        }),
+    }
+}
+
+/// The elevation under the phone's map: always the terrain (the workout blocks are on the ride
+/// tab); a swipe switches between the look-ahead and the whole route.
+#[component]
+fn MapProfile() -> Element {
+    let st = use_context::<AppState>();
+    let ctl = use_context::<Controller>();
+    let settings = st.settings;
+    let theme = use_memo(move || settings.read().ui.theme);
+    let mode = use_memo(move || settings.read().ui.profile_mode);
+    let lookahead = use_memo(move || settings.read().ui.lookahead_m);
+    let pages = phone_pages(st, ctl, false);
+    rsx! {
+        ElevationProfile {
+            route: st.route,
+            snapshot: st.snapshot,
+            mode,
+            lookahead_m: lookahead,
+            theme,
+            on_seek: move |dist| ctl.seek(dist),
+            on_mode: move |mode: ProfileMode| ctl.set_profile_mode(mode),
+            grid_steps: 3,
+            pages,
+        }
+    }
+}
+
+/// The phone head unit of the ride tab.
+#[component]
+fn DashPanel() -> Element {
+    let st = use_context::<AppState>();
+    let settings = st.settings;
+    let theme = use_memo(move || settings.read().ui.theme);
+    let rider = use_memo(move || settings.read().rider.clone());
+    rsx! { RideDash { snapshot: st.snapshot, rider, theme } }
+}
+
+/// The virtual gear next to the transport buttons of the phone layout. Shown only when the rider
+/// switched the virtual gearbox on and no workout holds the trainer in ERG (there the gear does
+/// nothing). With a Zwift Click / Play the hardware shifts, so only the gear is shown; otherwise
+/// the shift buttons are there too, so a gear change never needs a tab switch.
+#[component]
+fn CompactGears() -> Element {
+    let st = use_context::<AppState>();
+    let ctl = use_context::<Controller>();
+    if !st.availability_live().gears {
+        return rsx! {};
+    }
+    let index = gearbox::index_from_saved(st.settings.read().ui.gear);
+    let count = gearbox::gears().len();
+    if st.shifter_connected() {
+        return rsx! {
+            div { class: "compact-gears compact-gears--readout", role: "status", aria_label: "Fokozat: {index + 1}",
+                span { class: "compact-gears__label", "Fokozat" }
+                span { class: "compact-gears__num num", "{index + 1}" }
+            }
+        };
+    }
+    rsx! {
+        div { class: "compact-gears", role: "group", aria_label: "Virtuális váltó",
+            button {
+                class: "btn compact-gears__btn",
+                r#type: "button",
+                disabled: index == 0,
+                aria_label: "Könnyebb fokozat",
+                onclick: move |_| ctl.shift_gear(-1),
+                Icon { name: IconName::Minus, size: 18 }
+            }
+            span { class: "compact-gears__num num", "{index + 1}" }
+            button {
+                class: "btn compact-gears__btn",
+                r#type: "button",
+                disabled: index + 1 == count,
+                aria_label: "Nehezebb fokozat",
+                onclick: move |_| ctl.shift_gear(1),
+                Icon { name: IconName::Plus, size: 18 }
+            }
+        }
     }
 }
 
@@ -1575,24 +1849,64 @@ fn Dialogs() -> Element {
         SettingsDialog {
             open: open == Some(DialogKind::Settings),
             settings: st.settings,
+            ghost_status: st.ghost_status,
             on_change: move |settings| ctl.apply_settings(settings),
             on_close: move |_| ctl.close_dialog(),
         }
         WorkoutsDialog {
             open: open == Some(DialogKind::Workouts),
             selected: st.settings.read().ui.workout_id.clone(),
+            imported: st.imported_workouts,
+            ftp_w: st.settings.read().rider.ftp_w,
+            on_import: move |_| ctl.import_workout(),
             on_select: move |id| ctl.select_workout(id),
             on_close: move |_| ctl.close_dialog(),
         }
         SummaryDialog {
             open: open == Some(DialogKind::Summary),
             summary: st.summary,
+            route: st.route,
+            comparison: st.comparison,
+            details: st.ride_details,
+            on_details: move |details| ctl.set_ride_details(details),
             on_save_tcx: move |_| ctl.save_tcx(),
+            uploading: *st.strava_busy.read(),
+            on_upload_strava: move |_| ctl.upload_strava(),
             on_close: move |_| ctl.close_dialog(),
             on_new_ride: move |_| ctl.new_ride(),
         }
         AboutDialog { open: open == Some(DialogKind::About), on_close: move |_| ctl.close_dialog() }
         ToastHost { toasts: st.toasts, on_dismiss: move |id| st.dismiss_toast(id) }
+    }
+}
+
+/// The strip above the Strava upload view (a native child WebView fills the rest of the
+/// window): what to do next, and the way back to the summary.
+#[component]
+fn StravaBar() -> Element {
+    let st = use_context::<AppState>();
+    let ctl = use_context::<Controller>();
+    let Some(status) = st.strava_status.read().clone() else {
+        return rsx! {};
+    };
+    rsx! {
+        div { class: "shell-strava", role: "dialog", "aria-label": "Feltöltés Stravára",
+            div { class: "shell-strava__bar",
+                div { class: "shell-strava__title", "Feltöltés Stravára" }
+                div { class: "shell-strava__status", "{status}" }
+                button {
+                    class: "btn",
+                    r#type: "button",
+                    onclick: move |_| {
+                        #[cfg(not(target_os = "android"))]
+                        ctl.close_strava();
+                        #[cfg(target_os = "android")]
+                        let _ = ctl;
+                    },
+                    "Kész"
+                }
+            }
+        }
     }
 }
 
@@ -1672,7 +1986,11 @@ mod tests {
     fn the_conditional_panels_depend_on_the_ride_setup() {
         let nothing = dock::Availability::default();
         for id in PanelId::ALL {
-            let always = !matches!(id, PanelId::Workout | PanelId::Rider | PanelId::Gears);
+            // the browser panel exists only where it can be implemented (Windows)
+            let always = !matches!(
+                id,
+                PanelId::Workout | PanelId::Rider | PanelId::Gears | PanelId::Browser
+            ) || (id == PanelId::Browser && cfg!(windows));
             assert_eq!(nothing.has(id), always, "{id:?}");
         }
         let workout = dock::Availability {
@@ -1813,5 +2131,45 @@ mod tests {
             hex(":root[data-theme=\"light\"] {"),
             rgb(background_rgba(Theme::Light))
         );
+    }
+
+    #[test]
+    fn the_ride_tab_carries_what_is_needed_while_riding() {
+        assert_eq!(
+            CompactTab::ALL[0],
+            CompactTab::Ride,
+            "the phone opens on the ride tab"
+        );
+        assert_eq!(compact_tab_of(PanelId::Metrics), Some(CompactTab::Ride));
+        assert_eq!(compact_tab_of(PanelId::Profile), Some(CompactTab::Ride));
+        assert_eq!(
+            compact_tab_of(PanelId::Workout),
+            None,
+            "the head unit carries the workout"
+        );
+        for id in PanelId::ALL {
+            let placed = compact_tab_of(id).is_some();
+            let expected = !matches!(id, PanelId::Workout | PanelId::Controls | PanelId::Browser);
+            assert_eq!(placed, expected, "{id:?}");
+        }
+        assert!(compact_rank(PanelId::Metrics) < compact_rank(PanelId::Profile));
+    }
+
+    #[test]
+    fn the_phone_profile_pages_cover_every_view_once() {
+        let with = profile_pages(true);
+        assert_eq!(with.len(), 4);
+        assert_eq!(
+            with[0].view,
+            ProfileView::Workout,
+            "the workout comes first"
+        );
+        let mut labels: Vec<_> = with.iter().map(|p| p.label()).collect();
+        labels.sort();
+        labels.dedup();
+        assert_eq!(labels.len(), 4);
+        let without = profile_pages(false);
+        assert_eq!(without.len(), 2);
+        assert!(without.iter().all(|p| p.view == ProfileView::Elevation));
     }
 }

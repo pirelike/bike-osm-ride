@@ -915,7 +915,10 @@ mod tests {
         v.dist_text = "3.00".into();
         let html = render(v);
         assert!(html.contains("<img"), "{html}");
-        assert!(html.contains("http://svimg.localhost/streetview/route1/7.jpg"));
+        assert!(
+            html.contains(&image_url("route1", 7)),
+            "the image comes from the svimg protocol: {html}"
+        );
         assert!(
             !html.contains("<iframe"),
             "no embed when the image is local"

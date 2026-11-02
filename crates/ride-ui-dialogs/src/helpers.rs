@@ -3,8 +3,8 @@
 //! and unit-tested; the components only render what these functions return.
 
 use ride_model::{
-    ConnState, DeviceInfo, DeviceKind, MapStyle, ProfileMode, RecentRoute, RideSummary,
-    RiderSettings, RouteSource, Settings, Theme, UiSettings,
+    ConnState, DeviceInfo, DeviceKind, GhostMode, GhostStatus, MapStyle, ProfileMode, RecentRoute,
+    RideComparison, RideSummary, RiderSettings, Route, RouteSource, Settings, Theme, UiSettings,
 };
 use ride_ui_kit::format;
 use ride_ui_kit::IconName;
@@ -423,7 +423,130 @@ pub fn profile_mode_from_value(value: &str) -> ProfileMode {
     }
 }
 
+/// `Segmented` value of the ghost mode.
+pub fn ghost_mode_value(mode: GhostMode) -> String {
+    match mode {
+        GhostMode::Off => "off".into(),
+        GhostMode::Route => "route".into(),
+        GhostMode::Last => "last".into(),
+        GhostMode::Best => "best".into(),
+    }
+}
+
+/// Inverse of [`ghost_mode_value`].
+pub fn ghost_mode_from_value(value: &str) -> GhostMode {
+    match value {
+        "off" => GhostMode::Off,
+        "route" => GhostMode::Route,
+        "last" => GhostMode::Last,
+        _ => GhostMode::Best,
+    }
+}
+
+/// One sentence under the ghost selector: what the ride log of the loaded route can replay.
+///
+/// The ghost is invisible until there is something to replay, so this is the place that says why
+/// it is missing: no route, no ride yet, only simulated rides, no ride that qualifies, or a GPX
+/// without `<time>` stamps.
+pub fn ghost_hint(status: GhostStatus, mode: GhostMode) -> String {
+    let route_time = status
+        .route_time_s
+        .filter(|t| t.is_finite() && *t > 0.0)
+        .map(format::fmt_duration);
+    if mode == GhostMode::Off {
+        return "A szellem ki van kapcsolva. A szegmensek PR-idői ettől még látszanak.".into();
+    }
+    if !status.loaded {
+        return "Tölts be egy útvonalat: a szellem az adott útvonal korábbi meneteiből jön.".into();
+    }
+    if mode == GhostMode::Route {
+        return match route_time {
+            Some(time) => format!(
+                "A GPX-be írt menet ideje {time}. Ez a szellem a fájl időbélyegeiből jön, saját mentett menet nélkül is."
+            ),
+            None => "Ebben a GPX-ben nincsenek időbélyegek (nincs <time>), ezért az útvonal saját ideje nem játszható vissza.".into(),
+        };
+    }
+    if status.rides == 0 {
+        return match route_time {
+            Some(time) => format!(
+                "Ehhez az útvonalhoz még nincs mentett menet. A GPX saját ideje {time}: válaszd az „Az útvonal ideje” módot, és már most van szellem."
+            ),
+            None => "Ehhez az útvonalhoz még nincs mentett menet. Az első befejezett menet (legalább 1 perc és 200 m) után a szellem már a rajtvonalon vár.".into(),
+        };
+    }
+    let rides = format!("{} korábbi menet", status.rides);
+    if status.replayable {
+        if status.partial {
+            return format!(
+                "{rides}, de egyik sem ért célba: a szellem a legtovább jutott menetet játssza vissza, és annak a végénél megáll."
+            );
+        }
+        if status.simulated > 0 {
+            return format!(
+                "{rides} (ebből {} szimulált). A szellem a következő tekerésnél a rajtvonalon vár.",
+                status.simulated
+            );
+        }
+        return format!("{rides}. A szellem a következő tekerésnél a rajtvonalon vár.");
+    }
+    if status.simulated == status.rides {
+        return format!(
+            "{rides}, de mind szimulált. A „Legjobb” szellem csak valódi menet lehet: válaszd a „Legutóbbi menet” módot."
+        );
+    }
+    format!(
+        "{rides}, de egyik sem indult a rajtból, ezért nem lehet belőle szellem. Indíts egy menetet a rajtvonaltól, vagy válaszd az „Az útvonal ideje” módot."
+    )
+}
+
 // ───────────────────────────── summary ─────────────────────────────
+
+/// One row of the segment table of the summary.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SegmentRow {
+    /// Index into `Route::climbs` (0-based; the display name is 1-based).
+    pub climb: usize,
+    /// `"2. emelkedő"`, or just `"2."` when the route is not available any more.
+    pub name: String,
+    /// `"12.40–16.80 km"`; empty when the climb cannot be resolved.
+    pub range: String,
+    /// The time of this ride, `"8:12"`.
+    pub time: String,
+    /// The PR before this ride, `"—"` when there was none.
+    pub previous: String,
+    pub is_pr: bool,
+}
+
+/// Table rows for the comparison, in climb order. Segments whose climb is not in `route` are
+/// still shown (the ride is real even if the route changed), only without a distance range.
+pub fn segment_rows(comparison: &RideComparison, route: Option<&Route>) -> Vec<SegmentRow> {
+    let mut rows: Vec<SegmentRow> = comparison
+        .segments
+        .iter()
+        .map(|segment| {
+            let climb = route.and_then(|route| route.climbs.get(segment.climb));
+            SegmentRow {
+                climb: segment.climb,
+                name: format!("{}. emelkedő", segment.climb + 1),
+                range: climb.map_or_else(String::new, |climb| {
+                    format!(
+                        "{}–{} km",
+                        format::fmt_km(climb.start_dist),
+                        format::fmt_km(climb.end_dist)
+                    )
+                }),
+                time: format::fmt_duration(segment.time_s),
+                previous: segment
+                    .previous_pr_s
+                    .map_or_else(|| format::fmt_opt0(None), format::fmt_duration),
+                is_pr: segment.is_pr,
+            }
+        })
+        .collect();
+    rows.sort_by_key(|row| row.climb);
+    rows
+}
 
 /// One zone row of the summary: zone number (1-based), seconds and percentage of the ride.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -592,6 +715,7 @@ mod tests {
     fn summary() -> RideSummary {
         RideSummary {
             route_name: "Budai kör".into(),
+            route_id: "demo-route".into(),
             started_unix_s: 1_790_000_000.0,
             elapsed_s: 6_129.0,
             dist: 24_100.0,

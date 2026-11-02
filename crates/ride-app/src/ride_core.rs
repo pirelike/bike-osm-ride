@@ -231,6 +231,12 @@ impl RideCore {
         self.workout.as_ref()
     }
 
+    /// Sets what is replayed next to the rider: the ghost ride and the per-climb PR rides.
+    /// Ignored while riding (the engine keeps the comparison of a running ride stable).
+    pub fn set_ghost(&mut self, ghost: Option<ride_sim::ghost::GhostSet>) {
+        self.call(|e| e.set_ghost(ghost));
+    }
+
     /// Creates an engine for `route`. A previous ride is stopped first (its transition and
     /// the neutral grade are part of the returned output).
     pub fn load(
@@ -876,6 +882,7 @@ mod tests {
                     target: StepTarget::PctFtp { value: 60.0 },
                     cadence: None,
                     note: None,
+                    messages: Vec::new(),
                 },
                 WorkoutStep {
                     kind: StepKind::Interval,
@@ -884,6 +891,7 @@ mod tests {
                     target: StepTarget::PctFtp { value: 90.0 },
                     cadence: None,
                     note: None,
+                    messages: Vec::new(),
                 },
             ],
         })

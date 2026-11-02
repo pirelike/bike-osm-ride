@@ -34,6 +34,9 @@ struct FakeState {
     cp_results: HashMap<u8, u8>,
     /// Never answer Control Point writes of these op codes.
     cp_silent: HashSet<u8>,
+    /// Report `Machine Status 0x01 (Reset)` after every Control Point write, the way some
+    /// FTMS firmware does (captured from a real trainer on 2026-11-01).
+    reset_status_after_write: bool,
     adv: Advertisement,
 }
 
@@ -300,6 +303,12 @@ impl FakePeripheral {
         self.st.lock().unwrap().cp_silent.insert(opcode);
     }
 
+    /// Report `Machine Status 0x01 (Reset)` after every Control Point write, like the FTMS
+    /// firmware of a captured trainer.
+    pub fn report_reset_after_every_write(&self) {
+        self.st.lock().unwrap().reset_status_after_write = true;
+    }
+
     pub fn set_rssi(&self, rssi: i16) {
         self.st.lock().unwrap().adv.rssi = Some(rssi);
     }
@@ -384,6 +393,15 @@ impl GattPeripheral for FakePeripheral {
                         });
                     }
                 }
+            }
+        }
+        if c.uuid == sig_uuid(0x2AD9) && st.reset_status_after_write {
+            if let Some(tx) = &st.notif_tx {
+                // Machine Status 0x01 = Reset, sent right after the answer (as captured)
+                let _ = tx.send(Notification {
+                    uuid: sig_uuid(0x2ADA),
+                    value: vec![0x01],
+                });
             }
         }
         Ok(())

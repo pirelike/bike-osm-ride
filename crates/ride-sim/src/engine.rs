@@ -5,10 +5,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use ride_model::{
-    RecordPoint, RideSnapshot, RideState, RideSummary, RiderSettings, Route, RoutePoint,
-    SensorSample, TrainerSim, Workout,
+    GhostLive, RecordPoint, RideSnapshot, RideState, RideSummary, RiderSettings, Route, RoutePoint,
+    SegmentLive, SensorSample, TrainerSim, Workout,
 };
 
+use crate::ghost::{Ghost, GhostSet};
 use crate::physics::{self, PhysicsParams, MAX_SPEED_MS};
 use crate::workout::WorkoutSession;
 use crate::zones;
@@ -137,6 +138,13 @@ pub struct RideEngine {
 
     /// Selected workout (ERG targets) or `None` for a free ride.
     workout: Option<WorkoutSession>,
+
+    // Ghost replay and the live segment (climb) comparison.
+    ghost_set: Option<GhostSet>,
+    /// The ghost aligned to this ride's start; `None` before the start or when there is none.
+    ghost: Option<Ghost>,
+    /// `(climb index, elapsed time when its foot was crossed)` while inside that climb.
+    segment_entry: Option<(usize, f64)>,
 }
 
 impl RideEngine {
@@ -179,6 +187,9 @@ impl RideEngine {
             next_record_t: 0.0,
             sim_grade: 0.0,
             workout: None,
+            ghost_set: None,
+            ghost: None,
+            segment_entry: None,
         };
         engine.sim_grade = engine
             .target_grade(0.0)
@@ -202,6 +213,37 @@ impl RideEngine {
 
     pub fn workout(&self) -> Option<&WorkoutSession> {
         self.workout.as_ref()
+    }
+
+    /// Sets (or clears) what is replayed next to the rider: the ghost ride and the per-climb PR
+    /// rides. Ignored during a ride (`Riding` / `Paused`): the comparison must not change under
+    /// the rider, exactly like the workout. After the finish the new set is stored for the next
+    /// ride, but the summary keeps the ghost of the ride that just ended. In `Ready` the ghost
+    /// waits on the start line, so it is visible before the ride begins.
+    pub fn set_ghost(&mut self, ghost: Option<GhostSet>) {
+        if matches!(self.state, RideState::Riding | RideState::Paused) {
+            return;
+        }
+        self.ghost_set = ghost.filter(|set| !set.is_empty());
+        self.segment_entry = None;
+        if self.state == RideState::Finished {
+            return;
+        }
+        self.align_ghost();
+    }
+
+    /// Places the ghost at the rider's current distance: zero difference on the start line.
+    fn align_ghost(&mut self) {
+        self.ghost = self
+            .ghost_set
+            .as_ref()
+            .and_then(|set| set.main.clone())
+            .and_then(|track| Ghost::align(track, self.dist));
+    }
+
+    /// The ghost of this ride (aligned), if there is one: it waits on the start line in `Ready`.
+    pub fn ghost(&self) -> Option<&Ghost> {
+        self.ghost.as_ref()
     }
 
     /// ERG target of the current workout step, `None` without a workout, before the start,
@@ -232,6 +274,9 @@ impl RideEngine {
         self.sim_grade = self
             .target_grade(self.dist)
             .clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
+        // The ghost is aligned to where the ride starts: the difference is zero on the start line.
+        self.align_ghost();
+        self.segment_entry = None;
         self.record(self.started_unix);
         self.power_3s = self.compute_power_3s();
     }
@@ -281,6 +326,8 @@ impl RideEngine {
         self.next_record_t = 0.0;
         self.power_hist.clear();
         self.power_3s = None;
+        self.align_ghost();
+        self.segment_entry = None;
         if let Some(w) = &mut self.workout {
             w.reset();
         }
@@ -300,6 +347,10 @@ impl RideEngine {
         self.sim_grade = self
             .target_grade(self.dist)
             .clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
+        // A ride that has not started yet replays from wherever it will start.
+        if self.state == RideState::Ready {
+            self.align_ghost();
+        }
     }
 
     /// Advance by `dt` seconds with the latest sensor values; returns the new snapshot.
@@ -329,8 +380,11 @@ impl RideEngine {
                     physics::step_speed(self.speed, power, grade, &self.params, h)
                 };
                 self.speed = next;
+                let before_dist = self.dist;
+                let before_elapsed = self.elapsed;
                 self.dist = (self.dist + next * h).clamp(0.0, total);
                 self.elapsed += h;
+                self.track_segment(before_dist, before_elapsed);
                 if let Some(w) = &mut self.workout {
                     w.advance(h);
                 }
@@ -409,6 +463,8 @@ impl RideEngine {
             next_climb_in,
             trainer_grade: self.sim_grade,
             workout: self.workout.as_ref().map(|w| w.progress(&self.rider)),
+            ghost: self.ghost_live(),
+            segment: self.segment_live(),
         }
     }
 
@@ -451,6 +507,7 @@ impl RideEngine {
         };
         RideSummary {
             route_name: self.route.name.clone(),
+            route_id: self.route.id.clone(),
             started_unix_s: self.started_unix,
             elapsed_s: self.elapsed,
             dist: self.dist,
@@ -694,6 +751,90 @@ impl RideEngine {
         self.sim_grade = (self.sim_grade + delta).clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
     }
 
+    /// Records the crossing of a climb foot so the live segment can count the time inside it.
+    /// Entry and exit times are interpolated inside the sub-step that crossed the line.
+    fn track_segment(&mut self, before_dist: f64, before_elapsed: f64) {
+        if self.segment_entry.is_none() {
+            let crossed = self.route.climbs.iter().enumerate().find(|(_, climb)| {
+                before_dist < climb.start_dist
+                    && self.dist >= climb.start_dist
+                    && self.dist < climb.end_dist
+            });
+            if let Some((index, climb)) = crossed {
+                let span = self.dist - before_dist;
+                let frac = if span > 1e-9 {
+                    ((climb.start_dist - before_dist) / span).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                self.segment_entry = Some((
+                    index,
+                    before_elapsed + (self.elapsed - before_elapsed) * frac,
+                ));
+            }
+        }
+        if let Some((index, _)) = self.segment_entry {
+            let still_inside = self
+                .route
+                .climbs
+                .get(index)
+                .is_some_and(|climb| self.dist < climb.end_dist);
+            if !still_inside {
+                self.segment_entry = None;
+            }
+        }
+    }
+
+    /// The ghost's position and the time difference, as the ride screen shows them. In `Ready`
+    /// the ghost waits on the start line: it is drawn before the ride begins.
+    fn ghost_live(&self) -> Option<GhostLive> {
+        let ghost = self.ghost.as_ref()?;
+        if !matches!(
+            self.state,
+            RideState::Ready | RideState::Riding | RideState::Paused | RideState::Finished
+        ) {
+            return None;
+        }
+        let total = finite_or(self.route.total_dist, 0.0).max(0.0);
+        let dist = ghost.dist_at(self.elapsed).clamp(0.0, total);
+        Some(GhostLive {
+            dist,
+            pos: self.route.locate(dist),
+            delta_s: ghost.delta_at(self.elapsed, self.dist),
+        })
+    }
+
+    /// The climb the rider is inside, measured against the PR ride at the same distance.
+    fn segment_live(&self) -> Option<SegmentLive> {
+        let (index, entry) = self.segment_entry?;
+        let climb = self.route.climbs.get(index)?;
+        if !(self.dist >= climb.start_dist && self.dist < climb.end_dist) {
+            return None;
+        }
+        let elapsed_s = (self.elapsed - entry).max(0.0);
+        let pride = self
+            .ghost_set
+            .as_ref()
+            .and_then(|set| set.segments.get(index))
+            .and_then(|value| value.as_ref());
+        let (pr_s, delta_s) = match pride {
+            Some((pr_s, track)) => {
+                let comparable = track.covers(climb.start_dist) && track.covers(self.dist);
+                let delta = comparable.then(|| {
+                    elapsed_s - (track.time_at(self.dist) - track.time_at(climb.start_dist))
+                });
+                (Some(*pr_s), delta.filter(|d| d.is_finite()))
+            }
+            None => (None, None),
+        };
+        Some(SegmentLive {
+            climb: index,
+            elapsed_s,
+            pr_s,
+            delta_s,
+        })
+    }
+
     fn eta(&self) -> Option<f64> {
         let total = finite_or(self.route.total_dist, 0.0).max(0.0);
         let remaining = (total - self.dist).max(0.0);
@@ -735,6 +876,7 @@ fn sanitize_sample(s: &SensorSample) -> SensorSample {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ghost::Track;
     use ride_model::testing::straight_route;
 
     fn engine(segments: &[(f64, f64)]) -> RideEngine {
@@ -925,6 +1067,218 @@ mod tests {
         assert!((e.summary().ascent - s.ascent_done).abs() < 1e-6);
     }
 
+    // ───── ghost and segments ─────
+
+    fn record_point(t: f64, dist: f64) -> RecordPoint {
+        RecordPoint {
+            t,
+            unix_s: 1_700_000_000.0 + t,
+            dist,
+            lat: 47.5,
+            lon: 19.0,
+            ele: 100.0,
+            speed_ms: 10.0,
+            power_w: Some(200.0),
+            cadence_rpm: Some(85.0),
+            hr_bpm: Some(140.0),
+            grade: 0.0,
+        }
+    }
+
+    /// A constant-speed trace up to `len_m` metres.
+    fn trace(len_m: f64, speed: f64) -> Track {
+        let n = (len_m / speed).ceil() as usize;
+        let points: Vec<RecordPoint> = (0..=n)
+            .map(|i| record_point(i as f64, (i as f64 * speed).min(len_m)))
+            .collect();
+        Track::from_points(&points).expect("a usable trace")
+    }
+
+    #[test]
+    fn the_ghost_is_aligned_at_the_start_and_runs_ahead() {
+        let mut e = engine(&[(2_000.0, 0.0)]);
+        // 15 m/s (54 km/h): faster than the 300 W rider, so the rider falls behind
+        e.set_ghost(Some(GhostSet {
+            main: Some(trace(2_000.0, 15.0)),
+            segments: vec![],
+        }));
+        // before the start the ghost waits on the start line, so the rider sees that it is there
+        let waiting = e.snapshot().ghost.expect("waiting at the start");
+        assert_eq!(waiting.dist, 0.0);
+        assert_eq!(waiting.delta_s, Some(0.0));
+
+        e.start(0.0);
+        let first = e.snapshot().ghost.expect("aligned at the start line");
+        assert_eq!(first.dist, 0.0);
+        assert_eq!(first.delta_s, Some(0.0));
+
+        for _ in 0..300 {
+            e.step(0.1, &sample(300.0), 0.0);
+        }
+        let snapshot = e.snapshot();
+        let ghost = snapshot.ghost.expect("still there");
+        // 30 s at 15 m/s: the ghost is at 450 m
+        assert!((ghost.dist - 450.0).abs() < 15.0, "ghost at {}", ghost.dist);
+        let delta = ghost.delta_s.expect("covered");
+        assert!(delta > 0.0, "the rider is behind: {delta}");
+        assert!(delta < 60.0, "but not a whole ghost ride behind: {delta}");
+        // the ghost marker is on the route
+        assert!((ghost.pos.dist - ghost.dist).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_ghost_freezes_while_paused_and_follows_a_time_scaled_step() {
+        let mut e = engine(&[(5_000.0, 0.0)]);
+        e.set_ghost(Some(GhostSet {
+            main: Some(trace(5_000.0, 7.0)),
+            segments: vec![],
+        }));
+        e.start(0.0);
+        e.step(0.1, &sample(250.0), 0.0);
+        let moving = e.snapshot().ghost.expect("ghost").dist;
+
+        e.pause();
+        for _ in 0..50 {
+            let snapshot = e.step(0.1, &sample(250.0), 0.0);
+            assert_eq!(
+                snapshot.ghost.expect("ghost").dist,
+                moving,
+                "a pause stops the ghost too"
+            );
+        }
+
+        e.resume();
+        // one time-scaled step of a minute: the ghost moves 60 s × 7 m/s
+        let snapshot = e.step(60.0, &sample(250.0), 0.0);
+        let ghost = snapshot.ghost.expect("ghost");
+        assert!(
+            (ghost.dist - (moving + 420.0)).abs() < 1.0,
+            "ghost at {}",
+            ghost.dist
+        );
+    }
+
+    #[test]
+    fn a_ghost_cannot_be_swapped_under_a_running_ride() {
+        let mut e = engine(&[(1_000.0, 0.0)]);
+        e.set_ghost(Some(GhostSet {
+            main: Some(trace(1_000.0, 5.0)),
+            segments: vec![],
+        }));
+        e.start(0.0);
+        e.step(0.1, &sample(200.0), 0.0);
+        e.set_ghost(Some(GhostSet {
+            main: Some(trace(1_000.0, 20.0)),
+            segments: vec![],
+        }));
+        let running = e.snapshot().ghost.expect("kept while riding");
+        assert!(running.dist > 0.0, "the running ghost is not replaced");
+        e.pause();
+        e.set_ghost(None);
+        assert!(
+            e.snapshot().ghost.is_some(),
+            "a pause does not swap the ghost either"
+        );
+        assert!(e.snapshot().segment.is_none());
+    }
+
+    #[test]
+    fn a_finished_ride_keeps_its_ghost() {
+        let mut e = engine(&[(1_000.0, 0.0)]);
+        e.set_ghost(Some(GhostSet {
+            main: Some(trace(1_000.0, 10.0)),
+            segments: vec![],
+        }));
+        e.start(0.0);
+        for _ in 0..20 {
+            e.step(0.1, &sample(250.0), 0.0);
+        }
+        e.finish();
+        let finished = e
+            .snapshot()
+            .ghost
+            .expect("the ghost stays after the finish");
+        // the history is reloaded when the ride has been stored; the summary keeps its ghost
+        e.set_ghost(None);
+        let kept = e.snapshot().ghost.expect("kept after the finish");
+        assert_eq!(kept.dist, finished.dist);
+        // ... but the next ride starts without one, because the reloaded set was empty
+        e.reset();
+        assert!(e.snapshot().ghost.is_none());
+    }
+
+    #[test]
+    fn a_ghost_waits_where_the_ride_will_start() {
+        let mut e = engine(&[(2_000.0, 0.0)]);
+        e.seek(400.0);
+        e.set_ghost(Some(GhostSet {
+            main: Some(trace(2_000.0, 10.0)),
+            segments: vec![],
+        }));
+        let ghost = e.snapshot().ghost.expect("waiting where the ride starts");
+        assert!((ghost.dist - 400.0).abs() < 1e-6, "ghost at {}", ghost.dist);
+        assert_eq!(ghost.delta_s, Some(0.0));
+        // the start aligns to the same place: zero difference on the start line
+        e.start(0.0);
+        assert_eq!(e.snapshot().ghost.expect("aligned").delta_s, Some(0.0));
+    }
+
+    #[test]
+    fn the_live_segment_counts_time_inside_the_climb_against_the_pr() {
+        let mut route = straight_route(&[(2_000.0, 0.0)], 100.0);
+        route.climbs = vec![ride_model::Climb {
+            start_dist: 500.0,
+            end_dist: 1_500.0,
+            length: 1_000.0,
+            gain: 50.0,
+            avg_grade: 5.0,
+            max_grade: 5.0,
+            start_ele: 100.0,
+            end_ele: 150.0,
+            category: None,
+        }];
+        let mut e = RideEngine::new(Arc::new(route), RiderSettings::default());
+        // the PR ride rode the whole route at 5 m/s: 200 s for the climb
+        e.set_ghost(Some(GhostSet {
+            main: None,
+            segments: vec![Some((200.0, trace(2_000.0, 5.0)))],
+        }));
+        e.start(0.0);
+
+        // before the climb there is no segment
+        let snapshot = e.step(0.1, &sample(300.0), 0.0);
+        assert!(snapshot.segment.is_none());
+
+        let mut seen = None;
+        for _ in 0..600 {
+            let snapshot = e.step(0.1, &sample(300.0), 0.0);
+            if let Some(segment) = snapshot.segment {
+                seen = Some((snapshot.dist, segment));
+            }
+            if snapshot.dist > 1_200.0 {
+                break;
+            }
+        }
+        let (dist, segment) = seen.expect("inside the climb");
+        assert!(dist > 500.0 && dist < 1_500.0, "dist {dist}");
+        assert_eq!(segment.climb, 0);
+        assert_eq!(segment.pr_s, Some(200.0));
+        // the rider is much faster than 5 m/s, so the difference is negative (ahead)
+        let delta = segment.delta_s.expect("comparable");
+        assert!(delta < 0.0, "ahead of the PR: {delta}");
+        // the time inside the climb is about the time it took to cover (dist - 500) m
+        assert!((segment.elapsed_s - (dist - 500.0) / e.snapshot().avg_speed_ms).abs() < 6.0);
+
+        // after the summit the segment is gone again
+        for _ in 0..600 {
+            let snapshot = e.step(0.1, &sample(300.0), 0.0);
+            if snapshot.dist > 1_600.0 {
+                assert!(snapshot.segment.is_none(), "segment ended at the summit");
+                break;
+            }
+        }
+    }
+
     #[test]
     fn no_route_points_does_not_panic() {
         let mut route = straight_route(&[], 0.0);
@@ -982,6 +1336,7 @@ mod tests {
                     target: StepTarget::PctFtp { value: 60.0 },
                     cadence: None,
                     note: None,
+                    messages: Vec::new(),
                 },
                 WorkoutStep {
                     kind: StepKind::Interval,
@@ -990,6 +1345,7 @@ mod tests {
                     target: StepTarget::PctFtp { value: 90.0 },
                     cadence: None,
                     note: None,
+                    messages: Vec::new(),
                 },
             ],
         });

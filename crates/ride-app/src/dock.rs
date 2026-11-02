@@ -13,9 +13,13 @@
 
 use ride_model::TileNode;
 
+/// Cells per step of the original 24 x 16 grid. Dividers snap to whole cells, so this decides how
+/// finely the panels can be sized (a quarter of the old step: about 20 px on a 1920 px screen).
+pub const FINE: f64 = 4.0;
+
 /// Grid size of the workspace, in cells.
-pub const COLS: f64 = 24.0;
-pub const ROWS: f64 = 16.0;
+pub const COLS: f64 = 24.0 * FINE;
+pub const ROWS: f64 = 16.0 * FINE;
 
 /// Pointer travel (px) below which a press on a panel or chip counts as a click, not a drag.
 pub const CLICK_SLOP: f64 = 4.0;
@@ -94,19 +98,21 @@ impl PanelId {
     /// Smallest (width, height) in cells at which the panel's content is still usable; dividers
     /// stop there.
     pub fn min_size(self) -> (f64, f64) {
-        match self {
-            PanelId::Map => (6.0, 4.0),
-            PanelId::Profile => (6.0, 3.0),
-            PanelId::Controls => (3.0, 2.0),
-            PanelId::Metrics => (5.0, 5.0),
-            PanelId::Climb => (4.0, 3.0),
-            PanelId::Stats => (5.0, 3.0),
-            PanelId::Charts => (5.0, 4.0),
-            PanelId::Workout => (5.0, 4.0),
-            PanelId::Rider => (5.0, 4.0),
-            PanelId::Gears => (5.0, 2.0),
+        // in steps of the old 24 x 16 grid, i.e. fractions of the workspace
+        let (w, h) = match self {
+            PanelId::Map => (5.0, 3.0),
+            PanelId::Profile => (5.0, 2.5),
+            PanelId::Controls => (2.5, 1.75),
+            PanelId::Metrics => (4.5, 4.5),
+            PanelId::Climb => (3.5, 2.5),
+            PanelId::Stats => (4.5, 2.5),
+            PanelId::Charts => (4.5, 3.5),
+            PanelId::Workout => (4.5, 3.5),
+            PanelId::Rider => (4.5, 3.5),
+            PanelId::Gears => (4.0, 1.75),
             PanelId::Browser => (12.0, 8.0),
-        }
+        };
+        (w * FINE, h * FINE)
     }
 
     /// The content fills the panel body and scrolls (or not) by itself.
@@ -132,6 +138,9 @@ impl Availability {
             PanelId::Workout => self.workout,
             PanelId::Rider => self.rider,
             PanelId::Gears => self.gears,
+            // The browser panel embeds the installed Firefox as a Win32 child window, so it only
+            // exists on Windows; elsewhere it is not offered (no tile, no chip, no compact tab).
+            PanelId::Browser => cfg!(windows),
             _ => true,
         }
     }
@@ -1073,6 +1082,11 @@ mod tests {
 
     #[test]
     fn a_panel_that_needs_room_gets_it_when_it_is_dropped_in() {
+        // The browser panel is the only panel with a very large minimum; off Windows it does not
+        // exist at all (`Availability::has`), so the rule cannot be checked with it there.
+        if !NONE_OF_THEM.has(PanelId::Browser) {
+            return;
+        }
         let mut dock = Dock::default();
         dock.show(PanelId::Browser, None, NONE_OF_THEM);
         let layout = dock.layout(NONE_OF_THEM);
@@ -1165,25 +1179,25 @@ mod tests {
             .copied()
             .find(|d| d.axis == Axis::Cols && d.rect == Rect::GRID)
             .expect("root divider");
-        assert!((divider.line().x - 16.0).abs() < 1e-9);
-        // to cell 14: the map shrinks, the right column grows by exactly two cells
-        dock.set_ratio(divider.path, divider.ratio_for(14.0));
+        assert!((divider.line().x - 16.0 * FINE).abs() < 1e-9);
+        // to cell 14: the map shrinks, the right column grows by exactly two old steps
+        dock.set_ratio(divider.path, divider.ratio_for(14.0 * FINE));
         let moved = dock.layout(NONE_OF_THEM);
         assert_tiles_the_grid(&moved);
         let metrics = moved.tile(PanelId::Metrics).unwrap().rect;
-        assert!((metrics.x - 14.0).abs() < 1e-9 && (metrics.w - 10.0).abs() < 1e-9);
+        assert!((metrics.x - 14.0 * FINE).abs() < 1e-9 && (metrics.w - 10.0 * FINE).abs() < 1e-9);
         // dragging way past the edge stops at the smallest sizes of what is on the other side
         let ratio = divider.ratio_for(-50.0);
         assert!(ratio * COLS >= divider.min_a - 1e-9);
         let ratio = divider.ratio_for(500.0);
         assert!((1.0 - ratio) * COLS >= divider.min_b - 1e-9);
         // the dragged line sits on a whole cell
-        let snapped = divider.ratio_for(13.6) * COLS;
-        assert!((snapped - 14.0).abs() < 1e-9, "{snapped}");
+        let snapped = divider.ratio_for(53.6) * COLS;
+        assert!((snapped - 54.0).abs() < 1e-9, "{snapped}");
         // a divider that has no room at all stays where it is
         let cramped = Divider {
-            min_a: 20.0,
-            min_b: 20.0,
+            min_a: 20.0 * FINE,
+            min_b: 20.0 * FINE,
             ..divider
         };
         assert_eq!(cramped.ratio_for(3.0), cramped.ratio);
@@ -1198,11 +1212,11 @@ mod tests {
             .dividers
             .iter()
             .copied()
-            .find(|d| d.axis == Axis::Rows && d.rect.x == 16.0 && d.rect.y == 0.0)
+            .find(|d| d.axis == Axis::Rows && d.rect.x == 16.0 * FINE && d.rect.y == 0.0)
             .expect("metrics | rest");
-        assert!((divider.line().y - 8.0).abs() < 1e-9);
-        let ratio = divider.ratio_for(10.0);
-        assert!((ratio * divider.rect.h - 10.0).abs() < 1e-9);
+        assert!((divider.line().y - 8.0 * FINE).abs() < 1e-9);
+        let ratio = divider.ratio_for(41.0);
+        assert!((ratio * divider.rect.h - 41.0).abs() < 1e-9);
     }
 
     #[test]
@@ -1335,10 +1349,10 @@ mod tests {
     #[test]
     fn css_geometry_is_in_percent_of_the_grid() {
         let style = Rect {
-            x: 12.0,
-            y: 8.0,
-            w: 6.0,
-            h: 4.0,
+            x: COLS / 2.0,
+            y: ROWS / 2.0,
+            w: COLS / 4.0,
+            h: ROWS / 4.0,
         }
         .style();
         assert!(style.contains("left:50.0000%"), "{style}");
@@ -1355,7 +1369,7 @@ mod tests {
             width: 1200.0,
             height: 640.0,
         };
-        assert_eq!(w.cell_pos(600.0, 360.0), Some((12.0, 8.0)));
+        assert_eq!(w.cell_pos(600.0, 360.0), Some((COLS / 2.0, ROWS / 2.0)));
         assert_eq!(
             w.cell_pos(10.0, 20.0),
             None,
@@ -1364,7 +1378,7 @@ mod tests {
         assert_eq!(w.cell_pos(1200.0, 100.0), None);
         assert_eq!(w.cell_pos(f64::NAN, 100.0), None);
         let (ux, uy) = w.cell_pos_unbounded(-60.0, 40.0).unwrap();
-        assert!((ux + 1.2).abs() < 1e-9 && uy.abs() < 1e-9);
+        assert!((ux + 0.05 * COLS).abs() < 1e-9 && uy.abs() < 1e-9);
         assert_eq!(Workspace::default().cell_pos(1.0, 1.0), None);
     }
 }

@@ -20,7 +20,7 @@
 //!    cleaned geometry quantised to 1e-5°, so the same track gives the same id whether
 //!    it comes from a file or from BRouter).
 
-use ride_model::{Bounds, Route, RoutePoint, RouteSource, Waypoint};
+use ride_model::{Bounds, Route, RoutePoint, RouteSegment, RouteSource, Waypoint};
 
 use crate::geo;
 use crate::gpx::{GpxData, RawPoint};
@@ -45,6 +45,11 @@ pub const MIN_ROUTE_M: f64 = 20.0;
 pub const MAX_ROUTE_M: f64 = 5_000_000.0;
 /// Share of points that must have a usable elevation for `has_elevation`.
 pub const MIN_ELEVATION_COVERAGE: f64 = 0.8;
+/// A GPX timeline shorter than this is not a ride (a broken or synthetic file).
+pub const MIN_TIMELINE_S: f64 = 10.0;
+/// A timeline longer than this means the file spans several days (a broken recording, or a
+/// route with a timestamp per waypoint): it is not replayed as a ghost.
+pub const MAX_TIMELINE_S: f64 = 24.0 * 3600.0;
 
 /// Waypoints farther than this from the route are not shown (their position on the
 /// route would be meaningless).
@@ -58,6 +63,8 @@ pub struct CleanPoint {
     pub lon: f64,
     pub ele: Option<f64>,
     pub dist: f64,
+    /// Absolute time from the file's `<time>`, seconds since the Unix epoch.
+    pub time: Option<f64>,
 }
 
 /// Step 1: validity filter, duplicate/jitter removal, cumulative distance.
@@ -70,12 +77,14 @@ pub fn clean(raw: &[RawPoint]) -> Vec<CleanPoint> {
     let mut out: Vec<CleanPoint> = Vec::with_capacity(valid.len());
     for p in &valid {
         let ele = p.ele.filter(|e| e.is_finite());
+        let time = p.time.filter(|t| t.is_finite() && *t > 0.0);
         let Some(last) = out.last().copied() else {
             out.push(CleanPoint {
                 lat: p.lat,
                 lon: p.lon,
                 ele,
                 dist: 0.0,
+                time,
             });
             continue;
         };
@@ -93,9 +102,61 @@ pub fn clean(raw: &[RawPoint]) -> Vec<CleanPoint> {
             lon: p.lon,
             ele,
             dist: last.dist + d,
+            time,
         });
     }
     out
+}
+
+/// The file's own timestamps as elapsed seconds at every resampled point.
+///
+/// Only a complete timeline is used: every cleaned point must carry a `<time>`, the total must be
+/// a plausible ride ([`MIN_TIMELINE_S`]..[`MAX_TIMELINE_S`]), and the values are clamped to be
+/// non-decreasing (a GPS glitch must not rewind the ghost). The result is indexed like
+/// [`Route::points`], so `timeline[0] == 0.0` and `timeline.last()` is the route's own time.
+/// Empty when the file has no usable timeline.
+pub fn timeline(cleaned: &[CleanPoint], samples: &[Sample]) -> Vec<f64> {
+    if cleaned.len() < 2 || samples.len() < 2 {
+        return Vec::new();
+    }
+    let Some(first) = cleaned[0].time else {
+        return Vec::new();
+    };
+    let mut times: Vec<f64> = Vec::with_capacity(cleaned.len());
+    for point in cleaned {
+        let Some(time) = point.time else {
+            return Vec::new();
+        };
+        let time = time.max(times.last().copied().unwrap_or(time));
+        times.push(time);
+    }
+    let total = times[times.len() - 1] - first;
+    if !(MIN_TIMELINE_S..=MAX_TIMELINE_S).contains(&total) {
+        return Vec::new();
+    }
+    // The same walk `resample` does, but on time instead of elevation.
+    let mut out = Vec::with_capacity(samples.len());
+    let mut j = 0usize;
+    for sample in samples {
+        let d = sample.dist;
+        while j + 2 < cleaned.len() && cleaned[j + 1].dist < d {
+            j += 1;
+        }
+        let (a, b) = (&cleaned[j], &cleaned[j + 1]);
+        let span = b.dist - a.dist;
+        let frac = if span > 0.0 {
+            ((d - a.dist) / span).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let elapsed = (times[j] + (times[j + 1] - times[j]) * frac) - first;
+        out.push(elapsed.max(0.0));
+    }
+    if out.last().is_some_and(|end| end.is_finite() && *end > 0.0) {
+        out
+    } else {
+        Vec::new()
+    }
 }
 
 /// Step 2: decide whether the cleaned points carry elevation; repair/interpolate it.
@@ -403,6 +464,53 @@ fn map_waypoints(data: &GpxData, points: &[RoutePoint]) -> Vec<Waypoint> {
     out
 }
 
+/// A segment's ends must lie this close to the route, metres.
+const SEGMENT_MATCH_M: f64 = 40.0;
+
+/// The named segments of the file (tracks lying on the route) as distances along the route. A
+/// segment whose ends cannot be found on the route in riding order, or whose length along the
+/// route does not fit its own length, is dropped.
+fn map_segments(data: &GpxData, points: &[RoutePoint]) -> Vec<RouteSegment> {
+    let nearest = |lat: f64, lon: f64, from: usize| -> Option<usize> {
+        let (i, d2) = points
+            .iter()
+            .enumerate()
+            .skip(from)
+            .map(|(i, p)| (i, geo::approx_dist2_m(lat, lon, p.lat, p.lon)))
+            .min_by(|a, b| a.1.total_cmp(&b.1))?;
+        (d2.sqrt() <= SEGMENT_MATCH_M).then_some(i)
+    };
+    let mut out = Vec::new();
+    for track in &data.segment_tracks {
+        let (Some(first), Some(last)) = (track.points.first(), track.points.last()) else {
+            continue;
+        };
+        let own: f64 = track
+            .points
+            .windows(2)
+            .map(|w| geo::haversine_m(w[0].lat, w[0].lon, w[1].lat, w[1].lon))
+            .sum();
+        let Some(a) = nearest(first.lat, first.lon, 0) else {
+            continue;
+        };
+        let Some(b) = nearest(last.lat, last.lon, a + 1) else {
+            continue;
+        };
+        let (start, end) = (points[a].dist, points[b].dist);
+        let along = end - start;
+        if along <= 0.0 || (own > 0.0 && !(own * 0.5..=own * 1.5).contains(&along)) {
+            continue;
+        }
+        out.push(RouteSegment {
+            name: track.name.clone(),
+            start_dist: start,
+            end_dist: end,
+        });
+    }
+    out.sort_by(|x, y| x.start_dist.total_cmp(&y.start_dist));
+    out
+}
+
 /// Run the whole pipeline on parsed GPX data.
 pub fn build_route(data: &GpxData, name_hint: &str, source: RouteSource) -> Result<Route> {
     if data.points.len() < 2 {
@@ -482,6 +590,10 @@ pub fn build_route(data: &GpxData, name_hint: &str, source: RouteSource) -> Resu
         Vec::new()
     };
     let waypoints = map_waypoints(data, &points);
+    let segments = map_segments(data, &points);
+    // The GPX's own `<time>` stamps become the route's timeline: its own ghost, available before
+    // the first ride of this route.
+    let timeline = timeline(&cleaned, &samples);
 
     Ok(Route {
         id,
@@ -489,6 +601,7 @@ pub fn build_route(data: &GpxData, name_hint: &str, source: RouteSource) -> Resu
         source,
         total_dist: points.last().map_or(0.0, |p| p.dist),
         points,
+        timeline,
         ascent,
         descent,
         min_ele,
@@ -497,6 +610,7 @@ pub fn build_route(data: &GpxData, name_hint: &str, source: RouteSource) -> Resu
         climbs,
         waypoints,
         has_elevation,
+        segments,
     })
 }
 
@@ -516,6 +630,7 @@ pub(crate) mod testutil {
             lat: 47.5,
             lon: 19.0,
             ele: Some(start_ele),
+            time: None,
         }];
         let (mut d, mut e) = (0.0, start_ele);
         for &(len, g) in segments {
@@ -528,6 +643,7 @@ pub(crate) mod testutil {
                     lat: 47.5,
                     lon: 19.0 + d / m_per_deg_lon,
                     ele: Some(e),
+                    time: None,
                 });
             }
         }
@@ -557,7 +673,12 @@ mod tests {
     use super::*;
 
     fn rp(lat: f64, lon: f64, ele: Option<f64>) -> RawPoint {
-        RawPoint { lat, lon, ele }
+        RawPoint {
+            lat,
+            lon,
+            ele,
+            time: None,
+        }
     }
 
     #[test]
@@ -601,6 +722,7 @@ mod tests {
                     lon: 19.0 + i as f64 * 1e-3,
                     ele: e,
                     dist: i as f64 * 75.0,
+                    time: None,
                 })
                 .collect()
         };
@@ -641,6 +763,7 @@ mod tests {
                     lon: 19.0 + i as f64 * 1e-3,
                     ele: Some(e),
                     dist: i as f64 * 75.0,
+                    time: None,
                 })
                 .collect()
         };
@@ -665,6 +788,7 @@ mod tests {
                     lon: 19.0,
                     ele: Some(e),
                     dist: i as f64 * spacing,
+                    time: None,
                 })
                 .collect()
         };
@@ -862,6 +986,29 @@ mod tests {
     }
 
     #[test]
+    fn segment_tracks_become_distances_along_the_route() {
+        let mut data = gpx_data(raw_from_segments(&[(3000.0, 2.0)], 100.0, 20.0));
+        // the stretch from 1000 m to 1600 m of the route, as its own track
+        data.segment_tracks.push(crate::gpx::RawTrack {
+            name: "Emelkedő sprint".into(),
+            points: data.points[50..=80].to_vec(),
+        });
+        // reversed: ridden the other way, so it is not a segment of this route
+        let mut back = data.points[50..=80].to_vec();
+        back.reverse();
+        data.segment_tracks.push(crate::gpx::RawTrack {
+            name: "Visszafelé".into(),
+            points: back,
+        });
+        let r = build_route(&data, "x", RouteSource::GpxFile).unwrap();
+        assert_eq!(r.segments.len(), 1, "{:?}", r.segments);
+        let seg = &r.segments[0];
+        assert_eq!(seg.name, "Emelkedő sprint");
+        assert!((seg.start_dist - 1000.0).abs() < 15.0, "{seg:?}");
+        assert!((seg.end_dist - 1600.0).abs() < 15.0, "{seg:?}");
+    }
+
+    #[test]
     fn waypoints_are_attached_to_the_nearest_route_point() {
         let mut data = gpx_data(raw_from_segments(&[(3000.0, 0.0)], 100.0, 20.0));
         let m_per_deg_lon = 111_320.0 * 47.5f64.to_radians().cos();
@@ -886,5 +1033,68 @@ mod tests {
         assert!((r.waypoints[0].dist_on_route - 500.0).abs() < 6.0);
         assert!((r.waypoints[1].dist_on_route - 1500.0).abs() < 6.0);
         assert_eq!(r.waypoints[2].name, "Vége");
+    }
+
+    /// Raw points 10 m apart, heading east, one timestamp per second (10 m/s).
+    fn timed_line(points: usize, times: Option<f64>) -> Vec<RawPoint> {
+        let m_per_deg_lon = 111_320.0 * 47.5f64.to_radians().cos();
+        (0..points)
+            .map(|i| RawPoint {
+                lat: 47.5,
+                lon: 19.0 + i as f64 * 10.0 / m_per_deg_lon,
+                ele: Some(100.0),
+                time: times.map(|start| start + i as f64),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_gpx_timeline_becomes_the_route_timeline() {
+        // 1 km, one point per second at 10 m/s: the file's own 100 s
+        let route = build_route(
+            &gpx_data(timed_line(101, Some(1_700_000_000.0))),
+            "t",
+            RouteSource::GpxFile,
+        )
+        .unwrap();
+        assert_eq!(route.timeline.len(), route.points.len());
+        assert_eq!(route.timeline[0], 0.0);
+        assert!(
+            route.timeline.windows(2).all(|pair| pair[0] <= pair[1]),
+            "the timeline never goes backwards"
+        );
+        let end = *route.timeline.last().unwrap();
+        assert!((end - 100.0).abs() < 1.0, "the file says 100 s: {end}");
+        // the timeline follows the resampled geometry
+        assert!((end - route.total_dist / 10.0).abs() < 2.0);
+    }
+
+    #[test]
+    fn a_missing_or_absurd_timeline_is_dropped() {
+        // no `<time>` at all (a BRouter route): no timeline
+        let plain =
+            build_route(&gpx_data(timed_line(101, None)), "t", RouteSource::GpxFile).unwrap();
+        assert!(plain.timeline.is_empty());
+
+        // one point without a time: the whole timeline is unusable
+        let mut partial = timed_line(101, Some(1_700_000_000.0));
+        partial[50].time = None;
+        let route = build_route(&gpx_data(partial), "t", RouteSource::GpxFile).unwrap();
+        assert!(route.timeline.is_empty());
+
+        // timestamps spanning days: a broken recording, not a ride
+        let mut days = timed_line(101, Some(1_700_000_000.0));
+        for (i, point) in days.iter_mut().enumerate() {
+            point.time = Some(1_700_000_000.0 + i as f64 * 3600.0);
+        }
+        let route = build_route(&gpx_data(days), "t", RouteSource::GpxFile).unwrap();
+        assert!(route.timeline.is_empty());
+
+        // a timestamp that rewinds is clamped instead of breaking the ghost
+        let mut rewound = timed_line(101, Some(1_700_000_000.0));
+        rewound[50].time = Some(1_699_999_990.0);
+        let route = build_route(&gpx_data(rewound), "t", RouteSource::GpxFile).unwrap();
+        assert_eq!(route.timeline.len(), route.points.len());
+        assert!(route.timeline.windows(2).all(|pair| pair[0] <= pair[1]));
     }
 }

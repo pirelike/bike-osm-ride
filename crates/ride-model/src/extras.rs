@@ -49,6 +49,8 @@ impl RideSnapshot {
             next_climb_in: None,
             trainer_grade: 0.0,
             workout: None,
+            ghost: None,
+            segment: None,
         }
     }
 }
@@ -199,6 +201,8 @@ pub mod testing {
             climbs: vec![],
             waypoints: vec![],
             has_elevation: true,
+            segments: Vec::new(),
+            timeline: Vec::new(),
             points,
         }
     }
