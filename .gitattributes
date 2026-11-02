@@ -1,0 +1,5 @@
+# binary assets: never touch their line endings
+*.png binary
+*.jpg binary
+*.woff2 binary
+*.ico binary

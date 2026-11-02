@@ -20,6 +20,8 @@ version="${1:?usage: fallback.sh <version> [output directory]}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 out="${2:-$root/dist}"
 mkdir -p "$out"
+# absolute: the AppImage step runs from inside "$out", where a relative path would not resolve
+out="$(cd "$out" && pwd)"
 cd "$root"
 
 echo "== fallback packaging: bike-osm-ride $version =="

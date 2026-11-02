@@ -169,9 +169,20 @@ async fn downloaded_images_ride_without_a_key_or_a_request() {
         !html.contains("svimg.localhost"),
         "the missing bucket uses the embed: {html}"
     );
-    assert_eq!(
-        server.request_count(),
-        requests_before,
-        "the id was in the cache, no lookup"
+    // The rider's own spot is not looked up: its id comes from the cache. (With a key and an
+    // incomplete download the prefetcher may already resolve ids further ahead, so the total
+    // count is not the measure; on a slow runner it got there first.)
+    let (lat, lng, _) = ride_ui_streetview::prefetch::bucket_point(
+        &route,
+        ride_ui_streetview::cache::bucket_of(475.0),
+    );
+    let here = format!(
+        "location={}",
+        ride_ui_streetview::url::pct_encode(&format!("{lat:.6},{lng:.6}"))
+    );
+    let new_lines = server.request_lines().split_off(requests_before);
+    assert!(
+        new_lines.iter().all(|line| !line.contains(&here)),
+        "the id was in the cache, no lookup for the rider's spot: {new_lines:?}"
     );
 }

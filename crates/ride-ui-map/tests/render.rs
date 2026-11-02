@@ -101,7 +101,12 @@ fn renders_a_full_map() {
     }
 
     // tiles come from the app's own proxy and the attribution is visible
-    assert!(html.contains("tiles.localhost"), "tile proxy URLs missing");
+    // (the base of the proxy differs per webview: `http://tiles.localhost` on Windows,
+    // `tiles://localhost` on macOS / Linux)
+    assert!(
+        html.contains(&ride_ui_kit::protocol::base("tiles")),
+        "tile proxy URLs missing"
+    );
     assert!(html.contains("map-tile"), "no tile elements");
     assert!(
         html.contains("© OpenStreetMap contributors"),

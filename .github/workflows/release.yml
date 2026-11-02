@@ -82,7 +82,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      # only platform-tools: the action's default list still has the long-gone "tools" package,
+      # which makes sdkmanager fail
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Android NDK
         run: sdkmanager "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"
       - uses: cargo-bins/cargo-binstall@main
