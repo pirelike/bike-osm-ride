@@ -1074,3 +1074,84 @@
   .dlg-zonecard { padding-right: 0; }
   .dlg-zonecard + .dlg-zonecard { padding-left: 0; border-left: 0; padding-top: var(--space-4); }
 }
+
+/* ───────────────────────────── workout picker on a phone ─────────────────────────────
+   Three columns do not fit 400 px: the dialog becomes two pages (Lista | Részletek) under a row
+   of tabs, the categories a sideways-scrolling strip, the tag filters behind the Címkék button.
+   The tabs only exist on a phone; above this width none of it applies. */
+
+.dlg-cats { display: contents; }
+.dlg-phonebar { display: none; }
+
+@media (max-width: 699px) {
+  .dlg-workouts {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .dlg-phonebar {
+    flex: none;
+    display: flex;
+    border-bottom: 1px solid var(--rule-strong);
+    background: var(--bg-1);
+  }
+  .dlg-phonetab {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: 44px;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-right: 1px solid var(--rule);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-dim);
+    font: 600 var(--t-13)/1 var(--font-ui);
+  }
+  .dlg-phonetab:last-child { border-right: 0; }
+  .dlg-phonetab--on { background: var(--text); color: var(--bg-1); }
+  .dlg-phonetab__n { font: 600 var(--t-11)/1 var(--font-num); opacity: 0.8; }
+
+  /* the categories: one row that scrolls sideways */
+  .dlg-workouts__cats {
+    flex: none;
+    max-height: 55%;
+    overflow: hidden auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  .dlg-cats {
+    display: flex;
+    flex: none;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--rule);
+  }
+  .dlg-cats .dlg-cat {
+    flex: none;
+    height: 40px;
+    gap: var(--space-2);
+    border-bottom: 0;
+    border-right: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  /* the tag filters only while the Címkék button is on */
+  .dlg-workouts[data-tags="closed"] .dlg-tags { display: none; }
+
+  .dlg-workouts__list,
+  .dlg-workouts__detail {
+    flex: 1 1 0;
+    min-height: 0;
+    border-right: 0;
+  }
+  /* one page at a time */
+  .dlg-workouts[data-page="details"] .dlg-workouts__cats,
+  .dlg-workouts[data-page="details"] .dlg-workouts__list { display: none; }
+  .dlg-workouts[data-page="list"] .dlg-workouts__detail { display: none; }
+
+  /* the footer: the explanation on its own line, the buttons under it */
+  .dlg-foot__note { flex: 1 1 100%; font-size: var(--t-11); }
+  .dlg-foot__end { flex: 1 1 100%; justify-content: flex-end; margin-left: 0; }
+}

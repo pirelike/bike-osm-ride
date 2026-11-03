@@ -373,6 +373,18 @@ pub fn trainer_scale_from_percent(percent: f64) -> f64 {
     format::snap_to_step(percent / 100.0, 0.0, 1.5, 0.05)
 }
 
+/// `text_scale` (0.8…1.6) as the percentage the slider shows (80…160), in steps of 5.
+pub fn text_scale_percent(scale: f64) -> f64 {
+    let scale = if scale.is_finite() { scale } else { 1.0 };
+    format::snap_to_step(scale * 100.0, 80.0, 160.0, 5.0)
+}
+
+/// Percentage from the slider back to `text_scale`.
+pub fn text_scale_from_percent(percent: f64) -> f64 {
+    let percent = if percent.is_finite() { percent } else { 100.0 };
+    format::snap_to_step(percent / 100.0, 0.8, 1.6, 0.05)
+}
+
 /// `Segmented` value of a theme.
 pub fn theme_value(theme: Theme) -> String {
     match theme {
@@ -1039,6 +1051,18 @@ mod tests {
         // An identity patch is a true round trip.
         let identity = with_rider(&stored, |_| {});
         assert_eq!(identity, stored);
+    }
+
+    #[test]
+    fn the_text_scale_slider_round_trips_and_stays_in_range() {
+        for percent in (80..=160).step_by(5) {
+            let scale = text_scale_from_percent(f64::from(percent));
+            assert_eq!(text_scale_percent(scale), f64::from(percent), "{percent}");
+        }
+        assert_eq!(text_scale_percent(f64::NAN), 100.0);
+        assert_eq!(text_scale_percent(9.0), 160.0);
+        assert_eq!(text_scale_from_percent(10.0), 0.8);
+        assert_eq!(text_scale_from_percent(f64::NAN), 1.0);
     }
 
     #[test]

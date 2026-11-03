@@ -1019,14 +1019,16 @@ mod tests {
                 }
             }
         }
+        // every step is its design size times the rider's text scale
         let scale = [
-            "--t-11: 11px",
-            "--t-13: 13px",
-            "--t-15: 15px",
-            "--t-20: 20px",
-            "--t-28: 28px",
-            "--t-56: 56px",
-            "--t-96: 96px",
+            "--t-11: calc(11px * var(--ui-scale))",
+            "--t-13: calc(13px * var(--ui-scale))",
+            "--t-15: calc(15px * var(--ui-scale))",
+            "--t-20: calc(20px * var(--ui-scale))",
+            "--t-28: calc(28px * var(--ui-scale))",
+            "--t-56: calc(56px * var(--ui-scale))",
+            "--t-96: calc(96px * var(--ui-scale))",
+            "--ui-scale: 1",
         ];
         for s in scale {
             assert!(KIT_CSS.contains(s), "scale step {s}");

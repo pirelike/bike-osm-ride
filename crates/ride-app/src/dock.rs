@@ -215,6 +215,12 @@ impl Path {
     fn steps(self) -> impl Iterator<Item = bool> {
         (0..self.len).map(move |i| self.bits >> i & 1 == 1)
     }
+
+    /// The split at `self` lies inside the subtrees of the split at `ancestor`.
+    fn is_below(self, ancestor: Path) -> bool {
+        let mask = (1u32 << ancestor.len).wrapping_sub(1);
+        self.len > ancestor.len && self.bits & mask == ancestor.bits
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -576,6 +582,28 @@ impl Divider {
         }
     }
 
+    /// Where the line is along its axis, cells from the workspace edge.
+    fn position(self) -> f64 {
+        match self.axis {
+            Axis::Cols => self.rect.x + self.rect.w * self.ratio,
+            Axis::Rows => self.rect.y + self.rect.h * self.ratio,
+        }
+    }
+
+    /// The ratio that puts the line exactly at `boundary` (no snapping), kept inside what both
+    /// sides can be squeezed to.
+    fn ratio_at(self, boundary: f64) -> f64 {
+        let (start, len) = match self.axis {
+            Axis::Cols => (self.rect.x, self.rect.w),
+            Axis::Rows => (self.rect.y, self.rect.h),
+        };
+        let (low, high) = (self.min_a, len - self.min_b);
+        if len <= 0.0 || !boundary.is_finite() || low > high {
+            return self.ratio;
+        }
+        ((boundary - start).clamp(low, high) / len).clamp(0.05, 0.95)
+    }
+
     /// The ratio that puts the line on the grid line `boundary` (cells from the workspace edge),
     /// kept inside what both sides can be squeezed to. Unchanged when there is no room at all.
     pub fn ratio_for(self, boundary: f64) -> f64 {
@@ -687,6 +715,37 @@ impl Dock {
         {
             *r = ratio.clamp(0.05, 0.95);
         }
+    }
+
+    /// This dock with the divider at `path` moved to `ratio`, the way a tiling window manager
+    /// resizes: only the two panels touching the line change. The ratios of the splits are
+    /// relative to their parent, so on their own the lines nested behind the moved one (in the
+    /// same direction) would slide along with it and resize panels that do not touch it; here
+    /// they keep where they were, unless a panel next to the moved line is at its minimum and
+    /// pushes them. Call it on the dock as it was when the drag started, so a line pushed on the
+    /// way out comes back on the way back.
+    pub fn resized(&self, path: Path, ratio: f64, av: Availability) -> Dock {
+        let before = self.layout(av);
+        let mut dock = self.clone();
+        dock.set_ratio(path, ratio);
+        let Some(moved) = before.dividers.iter().find(|d| d.path == path).copied() else {
+            return dock;
+        };
+        let mut nested: Vec<Divider> = before
+            .dividers
+            .iter()
+            .copied()
+            .filter(|d| d.axis == moved.axis && d.path.is_below(path))
+            .collect();
+        // outer lines first: an inner line's rect depends on them
+        nested.sort_by_key(|d| d.path.len);
+        for old in nested {
+            let now = dock.layout(av);
+            if let Some(d) = now.dividers.iter().find(|d| d.path == old.path) {
+                dock.set_ratio(old.path, d.ratio_at(old.position()));
+            }
+        }
+        dock
     }
 
     /// Closes a panel: its neighbour takes the space, and its place is remembered.
@@ -1202,6 +1261,70 @@ mod tests {
         };
         assert_eq!(cramped.ratio_for(3.0), cramped.ratio);
         assert_eq!(divider.ratio_for(f64::NAN), divider.ratio);
+    }
+
+    /// The bug report: dragging the bottom edge of the map also resized the profile, two panels
+    /// away. Only the controls, which touch the line, may change.
+    #[test]
+    fn dragging_a_line_resizes_only_the_panels_that_touch_it() {
+        let dock = Dock::default();
+        let before = dock.layout(NONE_OF_THEM);
+        let map = before.tile(PanelId::Map).unwrap().rect;
+        let line = before
+            .dividers
+            .iter()
+            .copied()
+            .find(|d| d.axis == Axis::Rows && (d.line().y - map.bottom()).abs() < 1e-9)
+            .expect("the line under the map");
+        // the map gives two old steps to the controls
+        let moved = dock.resized(
+            line.path,
+            line.ratio_for(map.bottom() - 2.0 * FINE),
+            NONE_OF_THEM,
+        );
+        let after = moved.layout(NONE_OF_THEM);
+        assert_tiles_the_grid(&after);
+        let (p0, p1) = (
+            before.tile(PanelId::Profile).unwrap().rect,
+            after.tile(PanelId::Profile).unwrap().rect,
+        );
+        assert!(
+            (p0.y - p1.y).abs() < 1e-9 && (p0.h - p1.h).abs() < 1e-9,
+            "{p0:?} -> {p1:?}"
+        );
+        let (c0, c1) = (
+            before.tile(PanelId::Controls).unwrap().rect,
+            after.tile(PanelId::Controls).unwrap().rect,
+        );
+        assert!(
+            (c1.h - (c0.h + 2.0 * FINE)).abs() < 1e-9,
+            "the controls take the room"
+        );
+        assert!((after.tile(PanelId::Map).unwrap().rect.h - (map.h - 2.0 * FINE)).abs() < 1e-9);
+
+        // pushed further than the controls can shrink: they stop at their minimum and the
+        // profile gives the rest; dragged back from the same start, the profile is whole again
+        let far = dock.resized(line.path, line.ratio_for(ROWS), NONE_OF_THEM);
+        let far = far.layout(NONE_OF_THEM);
+        assert_tiles_the_grid(&far);
+        let controls = far.tile(PanelId::Controls).unwrap().rect;
+        assert!(
+            (controls.h - PanelId::Controls.min_size().1).abs() < 1e-9,
+            "{controls:?}"
+        );
+        assert!(far.tile(PanelId::Profile).unwrap().rect.h < p0.h);
+        let back = dock.resized(line.path, line.ratio, NONE_OF_THEM);
+        assert_eq!(back.layout(NONE_OF_THEM), before);
+    }
+
+    #[test]
+    fn paths_know_their_ancestors() {
+        let root = Path::default();
+        let a = root.child(false);
+        let ab = a.child(true);
+        let b = root.child(true);
+        assert!(a.is_below(root) && ab.is_below(root) && ab.is_below(a));
+        assert!(!ab.is_below(b) && !a.is_below(a) && !root.is_below(a));
     }
 
     #[test]

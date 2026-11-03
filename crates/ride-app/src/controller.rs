@@ -843,7 +843,9 @@ impl Controller {
         if *dock_sig.peek() != dock {
             dock_sig.set(dock.clone());
         }
-        self.update_settings(|s| s.ui.tiles = dock.to_settings());
+        // into the layout of the situation in force: with a workout selected that is the
+        // workout's own, so the free-ride arrangement stays as it was
+        self.update_settings(|s| s.ui.set_active_tiles(dock.to_settings()));
         if now {
             self.with(|i| i.flush_settings());
         }
@@ -851,15 +853,16 @@ impl Controller {
 
     pub fn toggle_profile_mode(self) {
         self.update_settings(|s| {
-            s.ui.profile_mode = match s.ui.profile_mode {
+            let next = match s.ui.active_profile_mode() {
                 ProfileMode::Full => ProfileMode::Lookahead,
                 ProfileMode::Lookahead => ProfileMode::Full,
             };
+            s.ui.set_active_profile_mode(next);
         });
     }
 
     pub fn set_profile_mode(self, mode: ProfileMode) {
-        self.update_settings(|s| s.ui.profile_mode = mode);
+        self.update_settings(|s| s.ui.set_active_profile_mode(mode));
     }
 
     pub fn set_profile_view(self, view: ProfileView) {
@@ -871,7 +874,7 @@ impl Controller {
     pub fn set_profile_page(self, view: ProfileView, mode: ProfileMode) {
         self.update_settings(|s| {
             s.ui.profile_view = view;
-            s.ui.profile_mode = mode;
+            s.ui.set_active_profile_mode(mode);
             s.ui.profile_swipe_learned = true;
         });
     }
@@ -1941,7 +1944,7 @@ impl Inner {
             self.reload_ghost();
         }
         if self.st.drag.peek().is_none() {
-            let dock = Dock::from_settings(new.ui.tiles.as_ref());
+            let dock = Dock::from_settings(new.ui.active_tiles());
             if *self.st.dock.peek() != dock {
                 self.st.dock.set(dock);
             }

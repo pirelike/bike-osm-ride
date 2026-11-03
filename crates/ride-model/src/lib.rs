@@ -246,6 +246,9 @@ pub struct UiSettings {
     pub theme: Theme,
     pub map_style: MapStyle,
     pub profile_mode: ProfileMode,
+    /// The profile mode while a workout is selected (`None`: the same as without one, until the
+    /// rider changes it there). See [`UiSettings::active_profile_mode`].
+    pub profile_mode_workout: Option<ProfileMode>,
     /// Elevation or workout blocks in the profile panel while a workout is selected.
     pub profile_view: ProfileView,
     /// The rider has turned the profile's pages by swiping on a phone: the hint is not shown
@@ -278,9 +281,75 @@ pub struct UiSettings {
     pub workout_id: Option<String>,
     /// Which earlier ride of the same route is replayed as a ghost during the ride.
     pub ghost: GhostMode,
-    /// How the ride screen is tiled: which panels are shown and how the space is divided between
-    /// them. `None` = the default layout; panels that are not in the tree are parked in the top bar.
+    /// How the ride screen is tiled without a workout: which panels are shown and how the space
+    /// is divided between them. `None` = the default layout; panels that are not in the tree
+    /// are parked in the top bar.
     pub tiles: Option<TileNode>,
+    /// The tiling while a workout is selected: a ride with a workout wants other panels (the
+    /// workout card, no gears) than a free one. `None` = the same as without a workout, until
+    /// the rider arranges it there. See [`UiSettings::active_tiles`].
+    pub tiles_workout: Option<TileNode>,
+    /// Size of all text as a factor of the design's sizes (`1.0` = as designed), for small or
+    /// large screens. Use [`UiSettings::text_scale`], which keeps it in range.
+    pub text_scale: f64,
+}
+
+/// Range of [`UiSettings::text_scale`].
+pub const TEXT_SCALE_MIN: f64 = 0.8;
+pub const TEXT_SCALE_MAX: f64 = 1.6;
+
+impl UiSettings {
+    /// A workout is selected: the ride screen is the workout's one.
+    pub fn with_workout(&self) -> bool {
+        self.workout_id.is_some()
+    }
+
+    /// The tiling in force: with a workout its own, which falls back to the free-ride one while
+    /// the rider has not arranged it; without a workout the free-ride one.
+    pub fn active_tiles(&self) -> Option<&TileNode> {
+        if self.with_workout() {
+            self.tiles_workout.as_ref().or(self.tiles.as_ref())
+        } else {
+            self.tiles.as_ref()
+        }
+    }
+
+    /// Stores a tiling for the situation in force (see [`UiSettings::active_tiles`]); the other
+    /// one is left alone.
+    pub fn set_active_tiles(&mut self, tiles: Option<TileNode>) {
+        if self.with_workout() {
+            self.tiles_workout = tiles;
+        } else {
+            self.tiles = tiles;
+        }
+    }
+
+    /// The profile mode in force, chosen like [`UiSettings::active_tiles`].
+    pub fn active_profile_mode(&self) -> ProfileMode {
+        if self.with_workout() {
+            self.profile_mode_workout.unwrap_or(self.profile_mode)
+        } else {
+            self.profile_mode
+        }
+    }
+
+    pub fn set_active_profile_mode(&mut self, mode: ProfileMode) {
+        if self.with_workout() {
+            self.profile_mode_workout = Some(mode);
+        } else {
+            self.profile_mode = mode;
+        }
+    }
+
+    /// The text scale, clamped to [`TEXT_SCALE_MIN`]`..=`[`TEXT_SCALE_MAX`] (a damaged file
+    /// must not make the page unreadable); `1.0` when it is not a number.
+    pub fn text_scale(&self) -> f64 {
+        if self.text_scale.is_finite() {
+            self.text_scale.clamp(TEXT_SCALE_MIN, TEXT_SCALE_MAX)
+        } else {
+            1.0
+        }
+    }
 }
 
 /// The tiling of the modular ride screen as a binary tree: a leaf is one panel (by its stable key),
@@ -308,6 +377,7 @@ impl std::fmt::Debug for UiSettings {
             .field("theme", &self.theme)
             .field("map_style", &self.map_style)
             .field("profile_mode", &self.profile_mode)
+            .field("profile_mode_workout", &self.profile_mode_workout)
             .field("profile_view", &self.profile_view)
             .field("profile_swipe_learned", &self.profile_swipe_learned)
             .field("follow_rider", &self.follow_rider)
@@ -329,6 +399,8 @@ impl std::fmt::Debug for UiSettings {
             .field("workout_id", &self.workout_id)
             .field("ghost", &self.ghost)
             .field("tiles", &self.tiles.is_some())
+            .field("tiles_workout", &self.tiles_workout.is_some())
+            .field("text_scale", &self.text_scale)
             .finish()
     }
 }
@@ -339,6 +411,7 @@ impl Default for UiSettings {
             theme: Theme::Dark,
             map_style: MapStyle::Dark,
             profile_mode: ProfileMode::Lookahead,
+            profile_mode_workout: None,
             profile_view: ProfileView::Workout,
             profile_swipe_learned: false,
             follow_rider: true,
@@ -353,6 +426,8 @@ impl Default for UiSettings {
             workout_id: None,
             ghost: GhostMode::default(),
             tiles: None,
+            tiles_workout: None,
+            text_scale: 1.0,
         }
     }
 }
@@ -643,5 +718,59 @@ mod ui_settings_debug_tests {
         let old: RideSummary = serde_json::from_value(value).unwrap();
         assert_eq!(old.route_id, "");
         assert_eq!(old.route_name, "Régi túra");
+    }
+
+    #[test]
+    fn a_workout_has_its_own_layout_and_profile_mode() {
+        let leaf = |panel: &str| TileNode::Leaf {
+            panel: panel.to_string(),
+        };
+        let mut ui = UiSettings {
+            tiles_workout: Some(leaf("workout")),
+            ..UiSettings::default()
+        };
+        // free ride: the free-ride layout, whatever the workout one says
+        assert_eq!(ui.active_tiles(), None);
+        ui.set_active_tiles(Some(leaf("map")));
+        assert_eq!(ui.tiles, Some(leaf("map")));
+        assert_eq!(
+            ui.tiles_workout,
+            Some(leaf("workout")),
+            "the other one is untouched"
+        );
+
+        // with a workout: its own layout
+        ui.workout_id = Some("w".into());
+        assert_eq!(ui.active_tiles(), Some(&leaf("workout")));
+        ui.set_active_tiles(Some(leaf("profile")));
+        assert_eq!(ui.tiles, Some(leaf("map")));
+
+        // until the rider has arranged it, the workout one follows the free-ride one
+        ui.tiles_workout = None;
+        assert_eq!(ui.active_tiles(), Some(&leaf("map")));
+
+        // the profile mode works the same way
+        assert_eq!(ui.active_profile_mode(), ProfileMode::Lookahead);
+        ui.set_active_profile_mode(ProfileMode::Full);
+        assert_eq!(ui.profile_mode, ProfileMode::Lookahead);
+        assert_eq!(ui.active_profile_mode(), ProfileMode::Full);
+        ui.workout_id = None;
+        assert_eq!(ui.active_profile_mode(), ProfileMode::Lookahead);
+    }
+
+    #[test]
+    fn the_text_scale_stays_in_range_and_old_settings_files_load() {
+        let mut ui = UiSettings::default();
+        assert_eq!(ui.text_scale(), 1.0);
+        ui.text_scale = 9.0;
+        assert_eq!(ui.text_scale(), TEXT_SCALE_MAX);
+        ui.text_scale = 0.1;
+        assert_eq!(ui.text_scale(), TEXT_SCALE_MIN);
+        ui.text_scale = f64::NAN;
+        assert_eq!(ui.text_scale(), 1.0);
+        // a file written before the setting existed
+        let old: Settings = serde_json::from_str(r#"{"ui":{"theme":"Light"}}"#).expect("loads");
+        assert_eq!(old.ui.text_scale(), 1.0);
+        assert!(old.ui.tiles_workout.is_none() && old.ui.profile_mode_workout.is_none());
     }
 }

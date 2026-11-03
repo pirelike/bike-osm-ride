@@ -226,7 +226,7 @@ impl AppState {
     /// Creates all signals; call once, from the root component.
     pub fn new() -> Self {
         let settings = boot().settings.clone();
-        let dock = Dock::from_settings(settings.ui.tiles.as_ref());
+        let dock = Dock::from_settings(settings.ui.active_tiles());
         // A fresh start asks for a route first; the hooks that load one themselves skip the dialog.
         let hooks = &boot().hooks;
         let first_dialog = if hooks.gpx.is_none() && !hooks.demo && hooks.sim_watts.is_none() {

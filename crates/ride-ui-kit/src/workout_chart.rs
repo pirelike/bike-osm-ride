@@ -8,6 +8,11 @@
 
 use ride_model::{power_zone_of_pct, StepTarget, Workout};
 
+/// Room above the hardest block: the axis tops out at this multiple of it (rounded up to ten),
+/// so even a 120 % interval reaches only about two thirds of the height and the chart does not
+/// look like a wall.
+const HEADROOM: f64 = 1.25;
+
 /// Intensity a free (unprescribed) step is drawn at, percent of FTP.
 const FREE_PCT: f64 = 50.0;
 
@@ -58,7 +63,8 @@ impl Block {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Chart {
     pub blocks: Vec<Block>,
-    /// Top of the y axis, percent of FTP (at least 100, rounded up to ten).
+    /// Top of the y axis, percent of FTP: [`HEADROOM`] above the hardest block (at least 100 %),
+    /// rounded up to ten.
     pub ceiling: f64,
     /// Length of the workout, seconds.
     pub total_s: f64,
@@ -126,7 +132,7 @@ pub fn chart(workout: &Workout, ftp_w: f64) -> Chart {
     }
     Chart {
         blocks,
-        ceiling: ((top + 9.9) / 10.0).floor() * 10.0,
+        ceiling: ((top * HEADROOM + 9.9) / 10.0).floor() * 10.0,
         total_s: total,
     }
 }
@@ -224,7 +230,7 @@ mod tests {
             250.0,
         );
         assert_eq!(c.blocks.len(), 3);
-        assert_eq!(c.ceiling, 100.0);
+        assert_eq!(c.ceiling, 130.0, "headroom over the 100 % block");
         assert_eq!(c.total_s, 1200.0);
         assert!((c.blocks[0].width - 25.0).abs() < 1e-9);
         assert!((c.blocks[1].width - 50.0).abs() < 1e-9);
@@ -238,7 +244,7 @@ mod tests {
         // the polygon is a rectangle from the baseline up to the target
         assert_eq!(
             polygon(&c.blocks[1], c.ceiling),
-            "250.0,1000 250.0,0.0 750.0,0.0 750.0,1000"
+            "250.0,1000 250.0,230.8 750.0,230.8 750.0,1000"
         );
         assert_eq!(c.block_at(301.0).unwrap().step, 1);
         assert_eq!(
@@ -274,13 +280,13 @@ mod tests {
             )]),
             200.0,
         );
-        assert_eq!(c.ceiling, 130.0);
+        assert_eq!(c.ceiling, 170.0);
         let points = polygon(&c.blocks[0], c.ceiling);
         let points: Vec<&str> = points.split(' ').collect();
         assert_eq!(points.len(), 4);
-        // the left edge starts at 60 % of 130 % and ends at the top
-        assert!(points[1].ends_with(",538.5"), "{}", points[1]);
-        assert!(points[2].ends_with(",0.0"), "{}", points[2]);
+        // the left edge starts at 60 % of 170 %, the right one ends at 130 %, below the top
+        assert!(points[1].ends_with(",647.1"), "{}", points[1]);
+        assert!(points[2].ends_with(",235.3"), "{}", points[2]);
     }
 
     #[test]
@@ -301,7 +307,7 @@ mod tests {
         // window 900..1200 s: only the second half of the ramp
         assert_eq!(polygon_in(&c.blocks[0], c.ceiling, 900.0, 1200.0), None);
         let p = polygon_in(&c.blocks[1], c.ceiling, 900.0, 1200.0).unwrap();
-        assert_eq!(p, "0.0,1000 0.0,250.0 1000.0,0.0 1000.0,1000");
+        assert_eq!(p, "0.0,1000 0.0,423.1 1000.0,230.8 1000.0,1000");
         assert_eq!(polygon_in(&c.blocks[1], c.ceiling, 5.0, 5.0), None);
         assert!(gets_gap(5.0) && !gets_gap(0.8));
     }
@@ -310,7 +316,7 @@ mod tests {
     fn a_free_step_is_neutral_and_an_empty_workout_has_no_blocks() {
         let c = chart(&workout(vec![step(300, StepTarget::Free)]), 200.0);
         assert_eq!(c.blocks[0].zone, 0, "free steps have no zone");
-        assert_eq!(c.ceiling, 100.0);
+        assert_eq!(c.ceiling, 130.0);
         let empty = chart(&workout(vec![]), 200.0);
         assert!(empty.blocks.is_empty());
         assert_eq!(empty.ceiling, 100.0);

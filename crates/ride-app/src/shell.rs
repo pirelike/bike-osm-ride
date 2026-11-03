@@ -342,14 +342,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .compact-panel__body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .compact-panel__body > * { flex: 1 1 auto; min-height: 0; }
 .compact-panel[data-panel="map"] { border: 0; min-height: 0; height: 100%; }
-/* the panels were made to fill a tile: give each a tile-like height */
-.compact-panel[data-panel="metrics"] { height: auto; }
-.compact-panel[data-panel="climb"] { height: 230px; }
-.compact-panel[data-panel="gears"] { height: 240px; }
-.compact-panel[data-panel="rider"] { height: 360px; }
+/* the panels were made to fill a tile; here each is as tall as its content (a fixed height left
+   empty grey boxes under the short ones) */
+.compact-panel[data-panel="metrics"],
+.compact-panel[data-panel="climb"],
+.compact-panel[data-panel="stats"],
+.compact-panel[data-panel="gears"],
+.compact-panel[data-panel="rider"] { height: auto; }
 .compact-panel[data-panel="profile"] { height: auto; min-height: 200px; }
-.compact-panel[data-panel="charts"] { height: 600px; }
-.compact-panel[data-panel="stats"] { height: 340px; }
+/* the charts tab holds only the charts: they take the whole height (at least 600 px) */
+.compact[data-tab="charts"] .compact-stage { grid-template-rows: minmax(600px, 1fr); align-content: stretch; }
+.compact-panel[data-panel="charts"] { height: auto; min-height: 600px; }
+.compact-panel[data-panel="charts"] .profile-chart { flex: 1 1 0; }
+.compact-panel[data-panel="charts"] .profile-chart-plot { flex: 1 1 auto; height: auto; min-height: 64px; }
 .shell--compact .hud-controls__kbd { display: none; }
 /* the transport bar of the phone: full-width, thumb-sized buttons (pause twice as wide as
    finish), the gear buttons beside them while the virtual gearbox is on */
@@ -385,22 +390,21 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .shell--compact .shell-tb .shell-label { display: none; }
 .shell--compact .shell-route { max-width: none; flex: 1 1 auto; min-width: 0; }
 .shell--compact .shell-tb { min-width: 44px; }
-/* portrait tablet: two columns of panels */
+/* portrait tablet: one column, never wider than a table can be read (two columns left a lot of
+   empty boxes; the tabs already split the panels by purpose) */
 @media (min-width: 700px) {
-  .compact:not([data-tab="map"]) .compact-stage { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .compact-panel[data-panel="charts"], .compact-panel[data-panel="profile"] { grid-column: 1 / -1; }
-  .compact[data-tab="ride"] .compact-stage { grid-template-columns: minmax(0, 1fr); }
+  .compact[data-tab="data"] .compact-stage { grid-template-columns: minmax(0, min(100%, 720px)); justify-content: center; }
 }
 /* compact layout: notifications (coach messages among them) drop in under the top bar, clear of
    the transport buttons and the tabs at the bottom (same width limit as `COMPACT_BELOW_PX`) */
 @media (max-width: 999.98px) {
   :root .toasts { top: calc(48px + env(safe-area-inset-top, 0px)); bottom: auto; left: 8px; right: 8px; max-width: none; }
 }
-/* phones: the top bar keeps only the route length */
+/* phones: the top bar keeps only the route length (no logo: with it the length did not fit) */
 @media (max-width: 699px) {
+  .shell--compact .shell-logo { display: none; }
   .shell--compact .shell-route__name { display: none; }
-  .shell--compact .shell-route { flex: 0 1 auto; padding: 0 8px; }
-  .shell--compact .shell-logo { padding-right: 0; }
+  .shell--compact .shell-route { flex: 0 0 auto; padding: 0 12px; }
   .shell--compact .shell-tb { padding: 0 8px; min-width: 38px; justify-content: center; }
   .shell--compact .shell-tb[aria-label^="Teljes képernyő"] { display: none; }
 }
@@ -431,6 +435,18 @@ pub fn css_bundle() -> String {
     .join("\n")
 }
 
+/// `<html data-text>`: `large` from this text scale on, where layouts with several numbers in a
+/// row give each number more room (see `hud.css`).
+pub const LARGE_TEXT_FROM: f64 = 1.15;
+
+pub fn text_size_attr(scale: f64) -> &'static str {
+    if scale >= LARGE_TEXT_FROM {
+        "large"
+    } else {
+        "normal"
+    }
+}
+
 pub fn theme_attr(theme: Theme) -> &'static str {
     match theme {
         Theme::Dark => "dark",
@@ -447,13 +463,15 @@ pub fn background_rgba(theme: Theme) -> (u8, u8, u8, u8) {
     }
 }
 
-/// Content injected into `<head>`: the theme attribute (set before first paint, no flash)
-/// and all CSS.
-pub fn head_html(theme: Theme) -> String {
+/// Content injected into `<head>`: the theme attribute and the text scale (set before first
+/// paint, no flash) and all CSS.
+pub fn head_html(theme: Theme, text_scale: f64) -> String {
+    let size = text_size_attr(text_scale);
     let css = css_bundle().replace("</style", "<\\/style");
     format!(
         "<meta name=\"color-scheme\" content=\"dark light\">\
-         <script>document.documentElement.setAttribute('data-theme','{}');</script>\
+         <script>document.documentElement.setAttribute('data-theme','{}');         document.documentElement.style.setProperty('--ui-scale','{text_scale:.2}');\
+         document.documentElement.setAttribute('data-text','{size}');</script>\
          <style id=\"ride-css\">{css}</style>",
         theme_attr(theme)
     )
@@ -518,13 +536,22 @@ fn use_tile_probe() {
     });
 }
 
-/// Mirrors the theme setting into `<html data-theme>`.
+/// Mirrors the theme setting into `<html data-theme>` and the text size setting into the
+/// `--ui-scale` property every type size of the design is multiplied by.
 fn use_theme_sync(st: AppState) {
     use_effect(move || {
         let theme = st.settings.read().ui.theme;
         document::eval(&format!(
             "document.documentElement.setAttribute('data-theme', '{}');",
             theme_attr(theme)
+        ));
+    });
+    use_effect(move || {
+        let scale = st.settings.read().ui.text_scale();
+        document::eval(&format!(
+            "document.documentElement.style.setProperty('--ui-scale', '{scale:.2}');\
+             document.documentElement.setAttribute('data-text', '{}');",
+            text_size_attr(scale)
         ));
     });
 }
@@ -626,6 +653,8 @@ fn DragCatcher(op: DragOp) -> Element {
     let mut drag = st.drag;
     let mut dock_sig = st.dock;
     let workspace = st.workspace;
+    // the tiling as it was when the drag started: every move is applied to it afresh
+    let start_dock = use_hook(|| dock_sig.peek().clone());
 
     let mut apply = move |x: f64, y: f64| {
         if !x.is_finite() || !y.is_finite() {
@@ -642,8 +671,7 @@ fn DragCatcher(op: DragOp) -> Element {
                     dock::Axis::Rows => cy,
                 };
                 let ratio = divider.ratio_for(boundary);
-                let mut layout = dock_sig.peek().clone();
-                layout.set_ratio(divider.path, ratio);
+                let layout = start_dock.resized(divider.path, ratio, st.availability());
                 if layout != *dock_sig.peek() {
                     dock_sig.set(layout);
                 }
@@ -1435,7 +1463,7 @@ fn ProfilePanel(#[props(default)] phone: bool) -> Element {
     let settings = st.settings;
     let imported = st.imported_workouts;
     let theme = use_memo(move || settings.read().ui.theme);
-    let mode = use_memo(move || settings.read().ui.profile_mode);
+    let mode = use_memo(move || settings.read().ui.active_profile_mode());
     let lookahead = use_memo(move || settings.read().ui.lookahead_m);
     let ftp = use_memo(move || settings.read().rider.ftp_w);
     let workout_id = use_memo(move || settings.read().ui.workout_id.clone());
@@ -1586,7 +1614,7 @@ fn phone_pages(st: AppState, ctl: Controller, workout: bool) -> Pages {
         } else {
             ProfileView::Elevation
         },
-        mode: ui.profile_mode,
+        mode: ui.active_profile_mode(),
     };
     let current = list.iter().position(|p| *p == now).unwrap_or(0);
     Pages {
@@ -1609,7 +1637,7 @@ fn MapProfile() -> Element {
     let ctl = use_context::<Controller>();
     let settings = st.settings;
     let theme = use_memo(move || settings.read().ui.theme);
-    let mode = use_memo(move || settings.read().ui.profile_mode);
+    let mode = use_memo(move || settings.read().ui.active_profile_mode());
     let lookahead = use_memo(move || settings.read().ui.lookahead_m);
     let pages = phone_pages(st, ctl, false);
     rsx! {
@@ -2092,8 +2120,15 @@ mod tests {
 
     #[test]
     fn head_contains_theme_and_all_css() {
-        let head = head_html(Theme::Light);
+        let head = head_html(Theme::Light, 1.25);
         assert!(head.contains("setAttribute('data-theme','light')"));
+        assert!(
+            head.contains("setProperty('--ui-scale','1.25')"),
+            "the text scale is set"
+        );
+        assert!(head.contains("setAttribute('data-text','large')"));
+        assert_eq!(text_size_attr(1.0), "normal");
+        assert_eq!(text_size_attr(1.15), "large");
         assert!(head.contains(".shell-top"), "shell CSS present");
         assert!(head.contains(".sv__stage"), "street view CSS present");
         assert!(head.contains("--bg"), "kit tokens present");

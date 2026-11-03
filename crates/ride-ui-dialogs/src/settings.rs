@@ -8,8 +8,8 @@ use ride_ui_kit::{Dialog, NumberField, Segmented, Slider, Switch};
 use crate::helpers::{
     api_key_hint, check_api_key, ghost_hint, ghost_mode_from_value, ghost_mode_value,
     map_style_from_value, map_style_value, normalize_api_key, profile_mode_from_value,
-    profile_mode_value, theme_from_value, theme_value, trainer_scale_from_percent,
-    trainer_scale_percent, ApiKeyCheck,
+    profile_mode_value, text_scale_from_percent, text_scale_percent, theme_from_value, theme_value,
+    trainer_scale_from_percent, trainer_scale_percent, ApiKeyCheck,
 };
 
 /// Rider (weight, bike, FTP, max HR, CdA, Crr), trainer difficulty (grade scale), speed
@@ -59,6 +59,9 @@ pub fn SettingsDialog(
     let set_speed_source = setter(&current, on_change, |s: &mut Settings, v: bool| {
         s.rider.use_trainer_speed = v;
     });
+    let set_text_scale = setter(&current, on_change, |s: &mut Settings, v: f64| {
+        s.ui.text_scale = text_scale_from_percent(v);
+    });
     let set_gears = setter(&current, on_change, |s: &mut Settings, v: bool| {
         s.ui.virtual_gears = v;
     });
@@ -72,7 +75,7 @@ pub fn SettingsDialog(
         s.ui.follow_rider = v;
     });
     let set_profile_mode = setter(&current, on_change, |s: &mut Settings, v: String| {
-        s.ui.profile_mode = profile_mode_from_value(&v);
+        s.ui.set_active_profile_mode(profile_mode_from_value(&v));
     });
     let set_lookahead = setter(&current, on_change, |s: &mut Settings, v: f64| {
         s.ui.lookahead_m = v;
@@ -85,6 +88,7 @@ pub fn SettingsDialog(
         move |_| {
             let mut s = base.clone();
             s.ui.tiles = None;
+            s.ui.tiles_workout = None;
             on_change.call(s);
         }
     };
@@ -202,6 +206,16 @@ pub fn SettingsDialog(
                 }
 
                 Group { title: "Megjelenés".to_string(),
+                    Slider {
+                        label: "Szövegméret".to_string(),
+                        value: text_scale_percent(ui.text_scale()),
+                        min: 80.0,
+                        max: 160.0,
+                        step: 5.0,
+                        unit: "%".to_string(),
+                        hint: "Minden szöveg és szám mérete, kis vagy nagy kijelzőn érdemes állítani (100 % az alapméret). A panelek méretét az elrendezés adja, nagyobb szöveghez szükség lehet egy nagyobb panelre.".to_string(),
+                        on_change: set_text_scale,
+                    }
                     div { class: "dlg-row2",
                         div { class: "dlg-control",
                             span { class: "label", "Téma" }
@@ -252,7 +266,7 @@ pub fn SettingsDialog(
                                         ("ahead".to_string(), "Előretekintés".to_string()),
                                         ("full".to_string(), "Teljes".to_string()),
                                     ],
-                                    value: profile_mode_value(ui.profile_mode),
+                                    value: profile_mode_value(ui.active_profile_mode()),
                                     aria_label: "Profilnézet".to_string(),
                                     small: true,
                                     on_change: set_profile_mode,
@@ -293,7 +307,7 @@ pub fn SettingsDialog(
 
                 Group {
                     title: "Elrendezés".to_string(),
-                    note: "A paneleket a fejlécüknél fogva húzhatod: egy másik panel szélére ejtve megosztoznak a helyén, a közepére ejtve helyet cserélnek. Az elválasztókat húzva átméretezheted őket, és mindig kitöltik a felületet. A bezárt panelek a felső sávban várnak.".to_string(),
+                    note: "A paneleket a fejlécüknél fogva húzhatod: egy másik panel szélére ejtve megosztoznak a helyén, a közepére ejtve helyet cserélnek. Az elválasztókat húzva átméretezheted őket, és mindig kitöltik a felületet. A bezárt panelek a felső sávban várnak. Az elrendezést külön jegyzi az app arra az esetre, amikor edzés van kiválasztva, és amikor nincs: amíg edzésen belül nem alakítod át, az edzéses elrendezés a szabadét követi.".to_string(),
                     div { class: "dlg-control",
                         span { class: "label", "Alaphelyzet" }
                         button {

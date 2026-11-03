@@ -89,7 +89,10 @@
   --font-display: "Barlow Condensed", "Arial Narrow", "Barlow", "Segoe UI", system-ui, sans-serif;
   --font-num: "Barlow Condensed", "Arial Narrow", "Barlow", "Segoe UI", system-ui, sans-serif;
   /* the size scale: 11 label / 13 body / 15 emphasis / 20 title / 28 headline / 56 value / 96 hero */
-  --t-11: 11px; --t-13: 13px; --t-15: 15px; --t-20: 20px; --t-28: 28px; --t-56: 56px; --t-96: 96px;
+  --ui-scale: 1; /* the rider's text size setting (Beállítások → Megjelenés), set by the shell */
+  --t-11: calc(11px * var(--ui-scale)); --t-13: calc(13px * var(--ui-scale)); --t-15: calc(15px * var(--ui-scale));
+  --t-20: calc(20px * var(--ui-scale)); --t-28: calc(28px * var(--ui-scale)); --t-56: calc(56px * var(--ui-scale));
+  --t-96: calc(96px * var(--ui-scale));
   /* the older names map onto that scale */
   --fs-2xs: var(--t-11); --fs-xs: var(--t-11); --fs-sm: var(--t-13); --fs-md: var(--t-13); --fs-base: var(--t-13); --fs-lg: var(--t-15);
   --fs-xl: var(--t-20); --fs-2xl: var(--t-20); --fs-3xl: var(--t-28); --fs-4xl: var(--t-56); --fs-hero: var(--t-96);
@@ -514,7 +517,7 @@ button.chip:hover, a.chip:hover { background: var(--fill-2); color: var(--text);
    the window. The frame shrinks only when the window is smaller than it. */
 .dialog {
   display: flex; flex-direction: column;
-  width: min(560px, 100%); height: min(100%, 720px);
+  width: min(560px, 100%); height: min(100%, clamp(720px, 85vh, 960px));
   background: var(--bg-1); border: 1px solid var(--rule-strong); border-top: 2px solid var(--rule-ink); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
   outline: none; overflow: hidden;

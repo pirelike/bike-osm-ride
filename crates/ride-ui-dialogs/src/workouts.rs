@@ -38,6 +38,11 @@ pub fn WorkoutsDialog(
     let lib = library.read();
     let mut category = use_signal(|| None::<WorkoutCategory>);
     let mut picked = use_signal(Vec::<WorkoutTag>::new);
+    // Phone: the three columns do not fit, so the list and the details are two pages of the
+    // dialog (tabs on top) and the tag filters sit behind a button. On wider screens the CSS
+    // ignores all three.
+    let mut details_page = use_signal(|| false);
+    let mut tags_open = use_signal(|| false);
     let filter = *category.read();
     let tags = picked.read().clone();
     let workouts: Vec<&Workout> = lib.filter(filter, &tags);
@@ -86,8 +91,45 @@ pub fn WorkoutsDialog(
                     }
                 }
             },
-            div { class: "dlg-workouts",
+            div {
+                class: "dlg-workouts",
+                "data-page": if *details_page.read() { "details" } else { "list" },
+                "data-tags": if *tags_open.read() { "open" } else { "closed" },
+                div { class: "dlg-phonebar", role: "tablist", aria_label: "Edzésválasztó",
+                    button {
+                        class: if *details_page.read() { "dlg-phonetab" } else { "dlg-phonetab dlg-phonetab--on" },
+                        r#type: "button",
+                        role: "tab",
+                        "aria-selected": if *details_page.read() { "false" } else { "true" },
+                        onclick: move |_| details_page.set(false),
+                        "Lista"
+                        span { class: "dlg-phonetab__n num", "{shown}" }
+                    }
+                    button {
+                        class: if *details_page.read() { "dlg-phonetab dlg-phonetab--on" } else { "dlg-phonetab" },
+                        r#type: "button",
+                        role: "tab",
+                        "aria-selected": if *details_page.read() { "true" } else { "false" },
+                        onclick: move |_| details_page.set(true),
+                        "Részletek"
+                    }
+                    button {
+                        class: if *tags_open.read() { "dlg-phonetab dlg-phonetab--filter dlg-phonetab--on" } else { "dlg-phonetab dlg-phonetab--filter" },
+                        r#type: "button",
+                        "aria-pressed": if *tags_open.read() { "true" } else { "false" },
+                        onclick: move |_| {
+                            let open = *tags_open.peek();
+                            tags_open.set(!open);
+                            details_page.set(false);
+                        },
+                        "Címkék"
+                        if !tags.is_empty() {
+                            span { class: "dlg-phonetab__n num", "{tags.len()}" }
+                        }
+                    }
+                }
                 aside { class: "dlg-workouts__cats", aria_label: "Edzéskategóriák",
+                    div { class: "dlg-cats",
                     button {
                         class: if filter.is_none() { "dlg-cat dlg-cat--active" } else { "dlg-cat" },
                         r#type: "button",
@@ -111,6 +153,7 @@ pub fn WorkoutsDialog(
                             span { class: "dlg-cat__name", "{cat.label()}" }
                             span { class: "dlg-cat__count num", "{n}" }
                         }
+                    }
                     }
                     for group in TagGroup::ALL {
                         div { key: "tags-{group.label()}", class: "dlg-tags", role: "group", aria_label: "{group.label()}",
@@ -174,7 +217,11 @@ pub fn WorkoutsDialog(
                             "aria-pressed": if selected.as_deref() == Some(workout.id.as_str()) { "true" } else { "false" },
                             onclick: {
                                 let id = workout.id.clone();
-                                move |_| on_select.call(Some(id.clone()))
+                                move |_| {
+                                    on_select.call(Some(id.clone()));
+                                    // phone: show what was picked
+                                    details_page.set(true);
+                                }
                             },
                             div { class: "dlg-workout__top",
                                 span { class: "dlg-workout__name", "{workout.name}" }
@@ -455,7 +502,7 @@ mod tests {
         assert!(html.contains("var(--z1)"), "the 50 % block is zone 1");
         assert!(html.contains("var(--z4)"), "the 90 % block is zone 4");
         assert!(
-            html.contains("0–110% FTP"),
+            html.contains("0–140% FTP"),
             "the axis tops out above the ramp"
         );
         assert!(

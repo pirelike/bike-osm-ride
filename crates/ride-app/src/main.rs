@@ -74,7 +74,7 @@ fn main() {
         .with_background_color(shell::background_rgba(theme))
         .with_disable_context_menu(true)
         .with_data_directory(paths::webview_dir())
-        .with_custom_head(shell::head_html(theme))
+        .with_custom_head(shell::head_html(theme, boot.settings.ui.text_scale()))
         .with_custom_event_handler(|event, _| {
             if matches!(event, Event::LoopDestroyed) {
                 controller::flush_pending_settings();

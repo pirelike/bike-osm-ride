@@ -45,7 +45,12 @@ kiemelőszín, a sötét (meleg grafit) és a világos (papírfehér) téma egye
   azt, a közepére húzva helyet cserélnek (szellemkeret mutatja, mi lesz). A panel **× gombja**
   bezárja: a szomszédja kitölti a helyét, a panel pedig chipként a felső sávba kerül; a chipre
   kattintva oda tér vissza, ahol volt, a felületre húzva oda, ahová ejted. Minden mentődik; a
-  *Beállítások → Elrendezés* egy gombbal visszaállítja az alaphelyzetet.
+  *Beállítások → Elrendezés* egy gombbal visszaállítja az alaphelyzetet. Az elrendezést (és a
+  profil Teljes / Előretekintés módját) az app **külön jegyzi edzéssel és edzés nélkül**: a
+  kiválasztott edzéshez saját elrendezés tartozik, amely addig a szabadot követi, amíg ott nem
+  alakítod át. Az elválasztó húzása csak a két szomszédos panelt méretezi, a mögöttük lévőket nem.
+- **Szövegméret** – *Beállítások → Megjelenés → Szövegméret* (80–160 %): minden szöveg és szám
+  együtt nagyobb vagy kisebb, kis vagy nagy kijelzőn.
 - **Telefon és tablet** – 1000 px-nél keskenyebb ablakban (telefon, álló tablet) a csempék helyett
   füles nézet jelenik meg: alul a **Tekerés · Térkép · Grafikonok · Adatok** fülek, fölöttük mindig
   a nagy Kezdés/Szünet/Befejezés gombsor (bekapcsolt virtuális váltónál, edzésen kívül a váltó
@@ -55,7 +60,9 @@ kiemelőszín, a sötét (meleg grafit) és a világos (papírfehér) téma egye
   sebesség, meredekség, alatta a profil. A **Térkép** fülön ugyanez a műszerfal, a térkép és a
   szintgrafikon. A profil nézetei telefonon **oldalra húzással** váltanak (pöttyök mutatják, hol
   vagy; az első húzásig egy „húzd oldalra” tipp segít). A párbeszédablakok telefonon teljes
-  képernyősek. Fekvő tableten (≥ 1000 px) a megszokott csempés elrendezés marad.
+  képernyősek (az edzésválasztó telefonon két oldal: *Lista* és *Részletek*, a címkék külön gomb
+  mögött). Telefonon a felső sávban nincs logó, hogy elférjen az útvonal hossza. Fekvő tableten
+  (≥ 1000 px) a megszokott csempés elrendezés marad.
 - **Android** – ugyanez az alkalmazás APK-ként is elkészül (lásd *Android* lent). Androidon nincs
   fájlválasztó: útvonalat bikerouter-linkkel, a legutóbbiak közül vagy a bemutató útvonallal
   töltesz be, a TCX-mentés a *Letöltések* mappába kerül.

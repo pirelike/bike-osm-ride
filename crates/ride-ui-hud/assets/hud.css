@@ -523,3 +523,10 @@
   border-bottom: 1px solid var(--rule);
 }
 .hud-dash__wonext { margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
+
+/* large text on a narrow screen: the four numbers of the head unit go two by two, so that
+   "13.5 km/h" is not cut off (`<html data-text>` is set by the shell from the text scale) */
+.hud-dash { container-type: inline-size; }
+@container (max-width: 560px) {
+  html[data-text="large"] .hud-dash__cells { --cols: 2; }
+}
