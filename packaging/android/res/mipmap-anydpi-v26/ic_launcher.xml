@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's own icon (a dark tile with the accent ridge) instead of the Dioxus template's. The
+     raster layers come from `packaging/android/make-icons.py`; the glyph is the same art the
+     desktop window icon is drawn from (`crates/ride-app/src/icon.rs`). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

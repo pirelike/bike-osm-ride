@@ -1,7 +1,7 @@
 //! SSR preview of every ride-ui-dialogs screen, rendered into static HTML so it can be
 //! screenshotted with headless Edge (the same engine as the app's WebView2):
 //!
-//!   cargo run -p ride-ui-dialogs --example preview
+//!   cargo run -p ride-ui-dialogs --example dialogs_preview
 //!
 //! Writes, into `target/preview/`:
 //! * `ride-ui-dialogs-{dark,light}.html` — a gallery with all screens of that theme,

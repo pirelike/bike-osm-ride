@@ -162,6 +162,10 @@ pub struct AppState {
     /// Workouts imported from files (MyWhoosh / Zwift), on top of the embedded library.
     pub imported_workouts: Signal<Vec<Workout>>,
     pub dialog: Signal<Option<DialogKind>>,
+    /// The last internal error the app caught and carried on from (a bug, not a failed load):
+    /// the shell shows it in a banner and `crash.log` has the detail. Kept apart from the toasts
+    /// because it is the only evidence of a problem that did not stop the app.
+    pub crash: Signal<Option<String>>,
     /// Power of the simulated rider, watts.
     pub virtual_power: Signal<f64>,
     /// The simulated rider is connected in at least one slot.
@@ -252,6 +256,7 @@ impl AppState {
             ghost_status: Signal::new(GhostStatus::default()),
             imported_workouts: Signal::new(Vec::new()),
             dialog: Signal::new(first_dialog),
+            crash: Signal::new(None),
             virtual_power: Signal::new(150.0),
             sim_connected: Signal::new(false),
             erg: Signal::new(false),
@@ -288,6 +293,22 @@ impl AppState {
     pub fn dismiss_toast(self, id: u64) {
         let mut toasts = self.toasts;
         toasts.write().retain(|t| t.id != id);
+    }
+
+    /// An internal error the app caught and survived: remember it for the banner. The detail
+    /// (with the backtrace) is already in `crash.log` by the time this is called - deliberately
+    /// not written here, because the shell picks the banner text up from the log itself.
+    pub fn report_crash(self, message: impl Into<String>) {
+        let message = message.into();
+        let mut crash = self.crash;
+        if crash.peek().as_deref() != Some(message.as_str()) {
+            crash.set(Some(message));
+        }
+    }
+
+    pub fn dismiss_crash(self) {
+        let mut crash = self.crash;
+        crash.set(None);
     }
 }
 

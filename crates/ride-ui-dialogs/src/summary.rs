@@ -13,7 +13,8 @@ use crate::helpers::{fmt_date, fmt_if, hr_zone_bars, power_zone_bars, segment_ro
 use crate::ride_details::{RideDetails, RideDetailsForm};
 
 /// End-of-ride summary: headline numbers, the ghost difference and the segment table, zone
-/// distribution bars, "Csak mentés TCX-ként", "Feltöltés Stravára", "Új útvonal" / "Bezárás".
+/// distribution bars, "Csak mentés TCX-ként", "Feltöltés Stravára", "Új útvonal". Closing is the
+/// title bar's × (the footer carries actions only).
 #[component]
 pub fn SummaryDialog(
     open: bool,
@@ -56,12 +57,6 @@ pub fn SummaryDialog(
                     "Új útvonal"
                 }
                 div { class: "dlg-foot__end",
-                    button {
-                        class: "btn",
-                        r#type: "button",
-                        onclick: move |_| on_close.call(()),
-                        "Bezárás"
-                    }
                     button {
                         class: "btn",
                         r#type: "button",

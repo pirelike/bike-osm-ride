@@ -30,9 +30,9 @@ only its own prefixed classes (`map-`, `profile-`, `hud-`, `dlg-`, `shell-`), us
 (no literal colours; data colours from `ride_ui_kit::palette`), no emoji, icons from
 `ride_ui_kit::Icon`.
 
-Reference renderings: `cargo run -p ride-ui-kit --example preview` writes four pages × two themes to
+Reference renderings: `cargo run -p ride-ui-kit --example kit_preview` writes four pages × two themes to
 `target/preview/ride-ui-kit-{foundations,controls,surfaces,headunit}-{dark,light}.html`. The
-`headunit` page (and `profile_svg`, `map_svg`, `power_history_svg` in `examples/preview.rs`) is the
+`headunit` page (and `profile_svg`, `map_svg`, `power_history_svg` in `examples/kit_preview.rs`) is the
 reference the other crates are measured against.
 
 ## Surfaces and rules

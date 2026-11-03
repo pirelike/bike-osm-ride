@@ -18,5 +18,14 @@ quick-xml = "0.42"
 # Public services (BRouter, Open-Meteo). rustls only, no native-tls / OpenSSL.
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 
+# Android: `reqwest`'s `rustls` feature verifies certificates with `rustls-platform-verifier`,
+# whose Android backend calls a Kotlin class that has to be compiled into the APK - and panics
+# with "Expect rustls-platform-verifier to be initialized" when it was not. `dx` only generates
+# `MainActivity.kt`, so the Android build verifies against the Mozilla roots compiled into the
+# binary instead (the same set the desktop builds already trust); see `http::client_builder`.
+[target.'cfg(target_os = "android")'.dependencies]
+rustls = "0.23"
+webpki-roots = "1"
+
 [dev-dependencies]
 tempfile = "3"

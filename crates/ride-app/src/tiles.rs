@@ -127,7 +127,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl TileService {
     pub fn new(root: PathBuf, upstream: UpstreamFn, ttl: Duration) -> Self {
-        let client = reqwest::Client::builder()
+        let client = ride_route::http::client_builder()
             .user_agent(USER_AGENT)
             .timeout(REQUEST_TIMEOUT)
             .connect_timeout(CONNECT_TIMEOUT)

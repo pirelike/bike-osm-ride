@@ -47,7 +47,7 @@ impl fmt::Debug for ImageFetcher {
 
 impl ImageFetcher {
     pub fn new(endpoints: Endpoints, key: ApiKey) -> Result<ImageFetcher, SvError> {
-        let http = reqwest::Client::builder()
+        let http = ride_route::http::client_builder()
             .user_agent(USER_AGENT)
             .timeout(Duration::from_secs(15))
             .connect_timeout(Duration::from_secs(5))

@@ -20,3 +20,11 @@ sha2 = "0.10"
 aes = "0.8"
 ccm = "0.5"
 rand_core = { version = "0.6", features = ["getrandom"] }
+
+# Android: btleplug 0.13's `droidplug` backend must be initialized from a thread attached to the
+# JVM, with a `jni` 0.22 environment (the version btleplug itself uses) and the context the
+# Android glue hands down.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22"
+ndk-context = "0.1"
+

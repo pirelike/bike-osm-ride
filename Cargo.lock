@@ -4332,7 +4332,7 @@ checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
 name = "ride-app"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "core-foundation",
  "dbus",
@@ -4362,7 +4362,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ble"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "aes",
  "btleplug",
@@ -4370,6 +4370,8 @@ dependencies = [
  "ftms",
  "futures",
  "hkdf",
+ "jni 0.22.4",
+ "ndk-context",
  "p256",
  "rand_core 0.6.4",
  "ride-model",
@@ -4381,7 +4383,7 @@ dependencies = [
 
 [[package]]
 name = "ride-model"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4389,22 +4391,24 @@ dependencies = [
 
 [[package]]
 name = "ride-route"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "quick-xml",
  "reqwest",
  "ride-model",
  "ride-sim",
+ "rustls",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "webpki-roots",
 ]
 
 [[package]]
 name = "ride-sim"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "quick-xml",
  "ride-model",
@@ -4415,7 +4419,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-dialogs"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4426,7 +4430,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-hud"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4436,7 +4440,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-kit"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4446,7 +4450,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-map"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4456,7 +4460,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-profile"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4466,7 +4470,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-streetview"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4536,6 +4540,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "rustls-pki-types",
  "rustls-webpki",
@@ -5934,6 +5939,15 @@ name = "webpki-root-certs"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
 ]

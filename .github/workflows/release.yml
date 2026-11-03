@@ -98,6 +98,10 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
         working-directory: crates/ride-app
         run: dx bundle --platform android --package-types apk --release --target aarch64-linux-android
+      # `dx` always writes its own template icons and its light theme; this overwrites those files
+      # with the app's launcher icon and launch screen and reassembles the APK (see the script).
+      - name: App icon and launch screen
+        run: bash packaging/android/resoverlay.sh
       - name: Sign and name the asset
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

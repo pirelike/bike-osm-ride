@@ -1,7 +1,7 @@
 //! SSR preview of the elevation profile and the live charts, rendered into static HTML so it
 //! can be screenshotted with headless Edge (the same engine as the app's WebView2):
 //!
-//!   cargo run -p ride-ui-profile --example preview
+//!   cargo run -p ride-ui-profile --example profile_preview
 //!
 //! Writes `target/preview/ride-ui-profile-<theme>.html` for both themes: the profile in
 //! look-ahead and full mode (at the 230 px / full-width size of the shell's bottom panel),

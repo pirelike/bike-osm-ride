@@ -109,12 +109,6 @@ pub fn AboutDialog(open: bool, on_close: EventHandler<()>) -> Element {
             wide: true,
             foot: rsx! {
                 span { class: "dlg-foot__note", "Köszönjük a nyílt forrású közösségnek." }
-                button {
-                    class: "btn btn--primary",
-                    r#type: "button",
-                    onclick: move |_| on_close.call(()),
-                    "Bezárás"
-                }
             },
             div { class: "dlg-about",
                 header { class: "dlg-about__hero",

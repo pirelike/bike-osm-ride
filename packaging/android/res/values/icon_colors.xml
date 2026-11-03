@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Colours for the launcher icon and the launch window. Kept in their own file: `dx` writes
+     `values/colors.xml` (its leftover colorPrimary and friends) on every bundle. -->
+<resources>
+    <!-- the icon tile's own colour, sampled from packaging/icons/1024.png -->
+    <color name="ic_launcher_background">#1B212E</color>
+    <!-- the app's own background token (ride-ui-kit/assets/kit.css, the `bg` custom property): the
+         launch window matches the webview's first paint, so a cold start does not flash white -->
+    <color name="splash_background">#12110F</color>
+</resources>

@@ -1,7 +1,7 @@
 //! Server-side rendered map preview for both themes, written to
 //! `target/preview/ride-ui-map-<theme>.html`:
 //!
-//!   cargo run -p ride-ui-map --example preview
+//!   cargo run -p ride-ui-map --example map_preview
 //!
 //! The map is rendered with a realistic fake ride: a ~24 km Budapest-area loop with rolling
 //! hills and a 4.3 km / ~6.6 % climb, a rider 11.4 km into the ride. The tiles point at the

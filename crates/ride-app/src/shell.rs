@@ -13,8 +13,6 @@
 //! screen, which is always there, empty until a route is loaded. Components only read the signals
 //! they display; the high-frequency ones (snapshot, history) are read inside the UI crates.
 
-use std::rc::Rc;
-
 use dioxus::desktop::use_window;
 use dioxus::document;
 use dioxus::html::HasFileData;
@@ -318,6 +316,23 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 }
 @keyframes shell-fade { from { opacity: 0; } }
 
+/* ── an error the app caught: it kept running, the report is in crash.log ──
+   One line under the top bar: it must not cover the panels, the tab bar or the toasts. */
+.shell-crash {
+  position: fixed; left: var(--space-2); right: var(--space-2);
+  top: calc(var(--top-h) + var(--safe-top) + var(--space-1));
+  z-index: var(--layer-toast);
+  display: flex; align-items: center; gap: var(--space-2);
+  height: 32px; padding: 0 var(--space-2);
+  background: var(--crit-soft); color: var(--text);
+  border: 1px solid var(--crit); border-radius: var(--radius-xs);
+  animation: shell-fade var(--dur) var(--ease);
+}
+.shell-crash__text {
+  flex: 1; min-width: 0; font-size: var(--t-11);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* ── compact layout (phone, portrait tablet): tabs instead of the tiling ── */
 .compact {
   grid-row: 2;
@@ -395,17 +410,25 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 @media (min-width: 700px) {
   .compact[data-tab="data"] .compact-stage { grid-template-columns: minmax(0, min(100%, 720px)); justify-content: center; }
 }
-/* compact layout: notifications (coach messages among them) drop in under the top bar, clear of
-   the transport buttons and the tabs at the bottom (same width limit as `COMPACT_BELOW_PX`) */
+/* touch layouts (the compact one, same width limit as `COMPACT_BELOW_PX`): a finger needs a
+   bigger target than a mouse, and these buttons are the only way to reach the dialogs. The
+   notifications drop in under the bar, clear of the transport buttons and the tabs. */
 @media (max-width: 999.98px) {
-  :root .toasts { top: calc(48px + env(safe-area-inset-top, 0px)); bottom: auto; left: 8px; right: 8px; max-width: none; }
+  /* on the same element the token is declared on: an inherited value from `:root` never wins
+     over `.shell`'s own declaration */
+  .shell { --top-h: 52px; }
+  :root .toasts {
+    top: calc(var(--top-h) + env(safe-area-inset-top, 0px) + 8px);
+    bottom: auto; left: 8px; right: 8px; max-width: none;
+  }
 }
-/* phones: the top bar keeps only the route length (no logo: with it the length did not fit) */
+/* phones: the top bar keeps only the route length (no logo: with it the length did not fit), and
+   six icons at 46 px still fit next to the length and the dots */
 @media (max-width: 699px) {
   .shell--compact .shell-logo { display: none; }
   .shell--compact .shell-route__name { display: none; }
-  .shell--compact .shell-route { flex: 0 0 auto; padding: 0 12px; }
-  .shell--compact .shell-tb { padding: 0 8px; min-width: 38px; justify-content: center; }
+  .shell--compact .shell-route { flex: 0 0 auto; padding: 0 8px; }
+  .shell--compact .shell-tb { padding: 0 6px; min-width: 46px; justify-content: center; }
   .shell--compact .shell-tb[aria-label^="Teljes képernyő"] { display: none; }
 }
 
@@ -505,12 +528,37 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   if (e.key === ' ' && !isField(e.target)) e.preventDefault();
 }, true);
+// Android: a tap on a plain element does not move the focus away from an <input>, so the soft
+// keyboard stays up and covers the dialog's buttons (it took the whole lower half of the screen).
+// Blurring the field when the tap lands anywhere else is what other mobile apps do — and with
+// `adjustResize` in the manifest the layout shrinks back as soon as the keyboard goes.
+window.addEventListener('pointerdown', (e) => {
+  const active = document.activeElement;
+  if (!isField(active)) return;
+  const target = e.target;
+  if (!target || !target.closest) return;
+  if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+  active.blur();
+}, true);
 await new Promise(() => {});
 "#;
 
+/// `document::eval`, but a panic inside it cannot take the UI down.
+///
+/// `dioxus-desktop` resolves the window out of a weak reference and `expect`s it
+/// (`DesktopDocument::eval`): once the window is gone — which Android does far more eagerly than
+/// a desktop window (backgrounding, a configuration change) — evaluating anything panics, and on
+/// Android that panic poisons the runtime mutex (see `crash.rs`). Skipping the script costs a
+/// redraw we would have got anyway.
+fn eval_js(script: &str) -> Option<dioxus::document::Eval> {
+    crate::guard::guarded("document::eval", || document::eval(script)).ok()
+}
+
 fn use_key_bridge(ctl: Controller) {
     use_future(move || async move {
-        let mut bridge = document::eval(KEY_BRIDGE_JS);
+        let Some(mut bridge) = eval_js(KEY_BRIDGE_JS) else {
+            return;
+        };
         while let Ok(key) = bridge.recv::<String>().await {
             ctl.on_key(&key);
         }
@@ -528,7 +576,9 @@ fn use_tile_probe() {
         let script = format!(
             "const img = new Image();             const done = new Promise((resolve) => {{               img.onload = () => resolve({{ ok: true, width: img.naturalWidth, height: img.naturalHeight }});               img.onerror = () => resolve({{ ok: false }});             }});             img.src = '{url}';             dioxus.send(await done);"
         );
-        let mut probe = document::eval(&script);
+        let Some(mut probe) = eval_js(&script) else {
+            return;
+        };
         match probe.recv::<serde_json::Value>().await {
             Ok(result) => eprintln!("[ride-app] tile probe {url}: {result}"),
             Err(err) => eprintln!("[ride-app] tile probe {url}: no answer ({err})"),
@@ -541,14 +591,14 @@ fn use_tile_probe() {
 fn use_theme_sync(st: AppState) {
     use_effect(move || {
         let theme = st.settings.read().ui.theme;
-        document::eval(&format!(
+        let _ = eval_js(&format!(
             "document.documentElement.setAttribute('data-theme', '{}');",
             theme_attr(theme)
         ));
     });
     use_effect(move || {
         let scale = st.settings.read().ui.text_scale();
-        document::eval(&format!(
+        let _ = eval_js(&format!(
             "document.documentElement.style.setProperty('--ui-scale', '{scale:.2}');\
              document.documentElement.setAttribute('data-text', '{}');",
             text_size_attr(scale)
@@ -556,8 +606,42 @@ fn use_theme_sync(st: AppState) {
     });
 }
 
-// ───────────────────────────── root ─────────────────────────────
+/// Android: the system file picker answers on its own schedule (see `android_picker`), so the
+/// shell takes the path when it appears and loads the route from it.
+fn use_android_picker(ctl: Controller) {
+    #[cfg(target_os = "android")]
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            if let Some(path) = crate::android_picker::take_picked() {
+                ctl.open_path(path);
+            }
+        }
+    });
+    #[cfg(not(target_os = "android"))]
+    let _ = ctl;
+}
 
+/// Picks up a panic that nothing in our own code caught (a render or an effect) from the crash
+/// log: on Android those would otherwise leave the window dead with no message at all.
+fn use_crash_watch(st: AppState) {
+    use_future(move || async move {
+        let mut seen = crate::crash::sequence();
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            let now = crate::crash::sequence();
+            if now == seen {
+                continue;
+            }
+            seen = now;
+            if let Some(text) = crate::crash::last() {
+                st.report_crash(text);
+            }
+        }
+    });
+}
+
+// ───────────────────────────── root ─────────────────────────────
 #[component]
 pub fn App() -> Element {
     let win = use_window();
@@ -572,6 +656,8 @@ pub fn App() -> Element {
     use_theme_sync(st);
     use_key_bridge(ctl);
     use_tile_probe();
+    use_crash_watch(st);
+    use_android_picker(ctl);
 
     let mut drag = st.drag_active;
     let active_drag = *st.drag.read();
@@ -580,10 +666,9 @@ pub fn App() -> Element {
     // The window width decides between the tiling (desktop, landscape tablet) and the tabbed
     // compact layout (phone, portrait tablet); the script reports every resize / rotation.
     let on_mount = move |_| {
-        let Some(document) = try_consume_context::<Rc<dyn document::Document>>() else {
+        let Some(mut eval) = eval_js(VIEWPORT_SCRIPT) else {
             return;
         };
-        let mut eval = document.eval(VIEWPORT_SCRIPT.to_string());
         spawn(async move {
             while let Ok(width) = eval.recv::<f64>().await {
                 if (*viewport_w.peek() - width).abs() > 0.5 {
@@ -627,6 +712,30 @@ pub fn App() -> Element {
             Dialogs {}
             StravaBar {}
             DropOverlay {}
+            CrashBanner {}
+        }
+    }
+}
+
+/// The banner of an error the app caught and survived: the ride keeps working, so this is one
+/// line under the top bar. The whole report (with the backtrace) is in `<data>/crash.log`.
+#[component]
+fn CrashBanner() -> Element {
+    let st = use_context::<AppState>();
+    let crash = st.crash.read();
+    let Some(text) = crash.as_ref() else {
+        return rsx! {};
+    };
+    let first = text.lines().next().unwrap_or_default().to_string();
+    rsx! {
+        div { class: "shell-crash", role: "alert", title: "{first}",
+            div { class: "shell-crash__text", "{first}" }
+            button {
+                class: "btn btn--sm",
+                r#type: "button",
+                onclick: move |_| st.dismiss_crash(),
+                "Rendben"
+            }
         }
     }
 }
@@ -1041,10 +1150,9 @@ fn WorkArea() -> Element {
     // Measure the workspace once it is in the page; the observer keeps it current while the
     // window or the browser zoom change it.
     let on_mount = move |_| {
-        let Some(document) = try_consume_context::<Rc<dyn document::Document>>() else {
+        let Some(mut eval) = eval_js(WORKSPACE_SCRIPT) else {
             return;
         };
-        let mut eval = document.eval(WORKSPACE_SCRIPT.to_string());
         spawn(async move {
             while let Ok(values) = eval.recv::<Vec<f64>>().await {
                 if let [left, top, width, height] = values[..] {
@@ -1812,7 +1920,9 @@ fn BrowserPanel() -> Element {
     use_hook(move || ctl.browser_start());
     use_drop(move || ctl.browser_stop());
     use_future(move || async move {
-        let mut watch = document::eval(BROWSER_WATCH_JS);
+        let Some(mut watch) = eval_js(BROWSER_WATCH_JS) else {
+            return;
+        };
         while let Ok(rect) = watch.recv::<Vec<f64>>().await {
             let slot = match rect[..] {
                 [x, y, w, h, dpr] => browser::Slot::from_css(x, y, w, h, dpr, 5.0),

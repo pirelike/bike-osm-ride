@@ -21,6 +21,8 @@ use std::path::PathBuf;
 use ride_model::{SensorCommand, SensorEvent};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+#[cfg(target_os = "android")]
+pub mod android_ble;
 pub mod btle;
 pub mod control;
 pub mod csc;
@@ -115,6 +117,16 @@ pub fn spawn_sensor_hub(opts: HubOptions) -> SensorLink {
                 .map(|d| d.as_nanos() as u64)
                 .unwrap_or(0x5EED);
             let panic_tx = evt_tx.clone();
+            // Android: btleplug's Java backend must be initialized before the adapter exists,
+            // otherwise the first scan panics with "Droidplug has not been initialized". A failure
+            // here is **not** fatal: the hub keeps running and the simulated rider stays, the
+            // adapter itself reports the reason (`btle::BtleAdapter::init`).
+            #[cfg(target_os = "android")]
+            if let Err(err) = android_ble::init_backend() {
+                let _ = evt_tx.send(SensorEvent::Notice(format!(
+                    "A Bluetooth ezen az eszközön nem indítható el: {err}"
+                )));
+            }
             let init: hub::InitFn<btle::BtleAdapter> =
                 Box::new(|| Box::pin(btle::BtleAdapter::init()));
             let outcome = catch_unwind(AssertUnwindSafe(|| {

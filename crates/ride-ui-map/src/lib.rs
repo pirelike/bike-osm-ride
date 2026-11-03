@@ -20,7 +20,6 @@
 //!   never scale with the map.
 
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -38,6 +37,14 @@ pub mod scale;
 
 pub use camera::{Camera, GeoPoint, ScreenTransform, Viewport};
 pub use mercator::{MAX_ZOOM, MIN_ZOOM, TILE_PX};
+
+/// `document::eval`, but a panic inside it cannot take the UI down: `dioxus-desktop` `expect`s a
+/// live window when it evaluates (`DesktopDocument::eval`), and Android takes the window away far
+/// sooner than a desktop does (backgrounding, a configuration change). Without a measurement the
+/// map simply keeps its last viewport.
+fn eval_script(script: &str) -> Option<dioxus::document::Eval> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| document::eval(script))).ok()
+}
 pub use route_path::{build_route_paths, RoutePaths};
 
 /// Component styles; the shell injects this after `ride_ui_kit::CSS`.
@@ -268,6 +275,10 @@ fn recenter_map(
         return;
     };
     if let Some(pos) = rider {
+        // Back to the rider: close enough to see the street, not a whole-route overview.
+        if *zoom.peek() < RIDER_ZOOM {
+            zoom.set(RIDER_ZOOM);
+        }
         let target = camera::follow_center(GeoPoint::from_position(pos), *zoom.peek(), view);
         center.set(target);
         free_pan.set(false);
@@ -289,6 +300,10 @@ fn recenter_map(
 /// 340 px), instead of fitting a whole route into the small pane.
 const COMPACT_ZOOM: f64 = 13.0;
 
+/// Zoom the big map opens with when it follows the rider: about 1.5–2 km across a phone screen,
+/// so the rider sees the street they are on. The whole route stays one pinch away.
+const RIDER_ZOOM: f64 = 15.0;
+
 /// Full-bleed 2D map: tiles, route polyline (coloured by grade), start/finish flags,
 /// rider marker (heading arrow), follow-rider mode, drag to pan / wheel to zoom,
 /// style switcher + recenter/follow buttons. `follow` true = camera tracks the rider.
@@ -309,19 +324,32 @@ pub fn MapView(
     let mut measured = use_signal(|| false);
 
     // First frame (and server-side rendering): fit with the fallback viewport. The effect
-    // below repeats the fit as soon as the webview reports the real size. The small pane is a
+    // below repeats it as soon as the webview reports the real size. The small pane is a
     // rider minimap: it keeps a readable street-level zoom instead of fitting a whole route
-    // into a few hundred pixels (which would upscale very coarse tiles).
+    // into a few hundred pixels (which would upscale very coarse tiles). Following the rider
+    // opens on the rider too, so the first paint is not a route overview that jumps.
     let initial = use_hook(|| {
         let fit = camera::fit_optional(route.peek().as_deref(), Viewport::default());
         if compact {
-            Camera {
+            return Camera {
                 center: fit.center,
                 zoom: COMPACT_ZOOM,
-            }
-        } else {
-            fit
+            };
         }
+        if *follow.peek() {
+            let snapshot_now = snapshot.peek().clone();
+            if let Some(pos) = route
+                .peek()
+                .as_deref()
+                .and_then(|route| rider_position(route, &snapshot_now))
+            {
+                return Camera {
+                    center: GeoPoint::from_position(pos),
+                    zoom: RIDER_ZOOM,
+                };
+            }
+        }
+        fit
     });
     let mut center = use_signal(|| initial.center);
     let mut zoom = use_signal(|| initial.zoom);
@@ -380,7 +408,9 @@ pub fn MapView(
     });
 
     // Fit-to-route: on load, when the route changes and whenever the measured viewport
-    // changes while no manual interaction has happened since.
+    // changes while no manual interaction has happened since. In follow mode the camera opens on
+    // the **rider** instead (the app is about where you are, not about the whole route): the
+    // centred rider at a street-level zoom, which is what "Vissza a kerékpároshoz" gives too.
     use_effect(move || {
         let view = *viewport.read();
         let current = route.read().clone();
@@ -388,9 +418,26 @@ pub fn MapView(
             return;
         }
         if let Some(route) = current.as_deref() {
-            let fit = camera::fit_route(route, view);
-            center.set(fit.center);
-            zoom.set(fit.zoom);
+            let rider = if *follow.peek() && !*free_pan.peek() {
+                rider_position(route, &snapshot.peek())
+            } else {
+                None
+            };
+            match rider {
+                Some(pos) => {
+                    zoom.set(RIDER_ZOOM);
+                    center.set(camera::follow_center(
+                        GeoPoint::from_position(pos),
+                        RIDER_ZOOM,
+                        view,
+                    ));
+                }
+                None => {
+                    let fit = camera::fit_route(route, view);
+                    center.set(fit.center);
+                    zoom.set(fit.zoom);
+                }
+            }
         }
         // Keep the flag until a real measurement arrived, so the fallback fit is corrected.
         if *measured.peek() {
@@ -590,10 +637,9 @@ pub fn MapView(
 
     let mount_element_id = root_id.clone();
     let on_mount = move |_| {
-        let Some(document) = try_consume_context::<Rc<dyn document::Document>>() else {
+        let Some(mut eval) = eval_script(&resize_script(&mount_element_id)) else {
             return;
         };
-        let mut eval = document.eval(resize_script(&mount_element_id));
         spawn(async move {
             while let Ok(values) = eval.recv::<Vec<f64>>().await {
                 let (Some(width), Some(height), Some(dpr)) =

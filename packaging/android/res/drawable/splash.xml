@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launch window: the app's own ground colour with the icon in the middle. Android shows it
+     while the activity starts and the webview loads (about a second on a phone); without it the
+     window would be the theme's white background. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <item
+        android:width="132dp"
+        android:height="132dp"
+        android:gravity="center"
+        android:drawable="@mipmap/ic_launcher" />
+</layer-list>

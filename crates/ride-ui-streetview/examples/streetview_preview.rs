@@ -1,6 +1,6 @@
 //! SSR preview of the Street View panel in every state, dark and light:
 //!
-//!   cargo run -p ride-ui-streetview --example preview
+//!   cargo run -p ride-ui-streetview --example streetview_preview
 //!
 //! Writes `target/preview/ride-ui-streetview-{dark,light}.html` and, when Microsoft Edge is
 //! installed (the engine of the app's WebView2), screenshots them to

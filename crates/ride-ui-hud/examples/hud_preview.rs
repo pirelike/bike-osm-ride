@@ -1,7 +1,7 @@
 //! SSR preview of the HUD, rendered to static HTML so it can be screenshotted with headless
 //! Edge (the engine of the app's WebView2):
 //!
-//!   cargo run -p ride-ui-hud --example preview
+//!   cargo run -p ride-ui-hud --example hud_preview
 //!
 //! Writes `target/preview/ride-ui-hud-dark.html` and `target/preview/ride-ui-hud-light.html`:
 //! the four components with realistic fake data (a mid-climb snapshot, a snapshot just before

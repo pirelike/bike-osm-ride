@@ -12,6 +12,16 @@
 
 [application]
 name = "bike-osm-ride"
+# The Android manifest is pinned instead of generated. The app is a NativeActivity, so any
+# configuration change its `android:configChanges` does not list (system dark mode = `uiMode`,
+# font size, language, density) recreates the activity, which re-runs `ANativeActivity_onCreate`
+# in the same process — tao cannot set its event loop up twice, so the app dies. The pinned copy
+# lists them all; the `packaging_tests` of `src/main.rs` keep it in step with this file.
+android_manifest = "android/AndroidManifest.xml"
+# `dx` generates `class MainActivity : WryActivity()`; this copy adds the Android file picker
+# (Storage Access Framework) and the runtime Bluetooth permissions, both driven from Rust
+# through JNI. `android_picker.rs` and `packaging_tests` keep the two sides in step.
+android_main_activity = "android/MainActivity.kt"
 
 [bundle]
 identifier = "hu.borbelyhuba.bikeosmride"

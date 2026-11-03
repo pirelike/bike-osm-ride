@@ -205,4 +205,24 @@ mod tests {
         // Clone + PartialEq are part of the shell's expectations.
         assert_eq!(slot.clone(), slot);
     }
+
+    /// Every dialog closes with the title bar's × (or Esc). A second, redundant close button at
+    /// the bottom was removed on request — the footer carries notes and real actions only — so
+    /// nothing here calls `on_close` from a click handler any more.
+    #[test]
+    fn no_dialog_has_a_second_close_button_in_the_footer() {
+        for (name, source) in [
+            ("welcome", include_str!("welcome.rs")),
+            ("devices", include_str!("devices.rs")),
+            ("settings", include_str!("settings.rs")),
+            ("about", include_str!("about.rs")),
+            ("workouts", include_str!("workouts.rs")),
+            ("summary", include_str!("summary.rs")),
+        ] {
+            assert!(
+                !source.contains("on_close.call(())"),
+                "{name}: the footer must not close the dialog, the × does that"
+            );
+        }
+    }
 }

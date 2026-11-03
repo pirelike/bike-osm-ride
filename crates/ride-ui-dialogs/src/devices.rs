@@ -64,12 +64,6 @@ pub fn DevicesDialog(
             wide: true,
             foot: rsx! {
                 span { class: "dlg-foot__note", "Hardver nélkül a szimulált kerékpárossal is kipróbálhatod." }
-                button {
-                    class: "btn btn--primary",
-                    r#type: "button",
-                    onclick: move |_| on_close.call(()),
-                    "Bezárás"
-                }
             },
             div { class: "dlg-devices",
                 div { class: "dlg-toolbar",

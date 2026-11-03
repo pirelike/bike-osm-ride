@@ -13,8 +13,9 @@ use crate::helpers::{
 
 /// The route dialog: file row / "GPX megnyitása" (`on_pick_file`), bikerouter-link field
 /// (`on_import_link` with the pasted text), recent routes (open / delete), the demo route
-/// button, busy spinner and an inline error line. Closes with Esc, the × or "Bezárás"; the shell
-/// also closes it by itself once a route has loaded.
+/// button, busy spinner and an inline error line. Closes with Esc or the title bar's × (every
+/// dialog has one, so there is no close button in the footer); the shell also closes it by itself
+/// once a route has loaded.
 #[component]
 pub fn RouteDialog(
     open: bool,
@@ -40,12 +41,6 @@ pub fn RouteDialog(
             foot: rsx! {
                 span { class: "dlg-foot__note",
                     "A GPX-fájlt az ablakra húzva is megnyithatod (Ctrl+O). A betöltés után az ablak bezárul."
-                }
-                button {
-                    class: "btn btn--primary",
-                    r#type: "button",
-                    onclick: move |_| on_close.call(()),
-                    "Bezárás"
                 }
             },
             RouteSheet {

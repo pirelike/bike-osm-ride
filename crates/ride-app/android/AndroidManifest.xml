@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A `dx` által generált AndroidManifest.xml (0.7.10) rögzített, szándékosan módosított másolata.
+
+  Miért: a `dx` `android:configChanges`-e csak `orientation|screenLayout|screenSize|keyboardHidden`,
+  viszont az alkalmazás egy `NativeActivity` (tao + wry) — ha a rendszer olyan beállítást vált,
+  amit ez a lista nem tartalmaz (sötét/világos rendszer-téma = `uiMode`, betűméret = `fontScale`,
+  nyelv = `locale`, sűrűség = `density`), az Activity újraépül. Egy új Activity viszont
+  `ANativeActivity_onCreate`-tel újraindítja a natív appot ugyanabban a folyamatban, a tao
+  eseményhurok pedig nem hozható létre kétszer: a folyamat elszáll. Ezért a lista itt teljes.
+
+  A fájlt a `Dioxus.toml` `[application] android_manifest` kulcsa választja ki (a `dx` ilyenkor a
+  sablon helyett ezt másolja be). Ha a `Dioxus.toml` engedélyei vagy az ikon/téma változnak, ezt a
+  fájlt is követni kell — a `main.rs` `packaging_tests` modulja őrzi, hogy ne csússzon el.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Default permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Permissions from Dioxus.toml [permissions] section -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <!-- The icon and the launch screen are `dx`'s resource names, replaced by the app's own files
+         afterwards: `packaging/android/resoverlay.sh` overwrites `mipmap-*/ic_launcher.*` and
+         `values/styles.xml` (the splash `AppTheme`) and reassembles the APK. Keeping the default
+         names here is what lets `dx` compile the project on its own. -->
+    <application android:hasCode="true" android:icon="@mipmap/ic_launcher"
+        android:extractNativeLibs="true"
+        android:allowNativeHeapPointerTagging="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <!-- Every configuration change the app can survive without rebuilding the activity;
+             anything missing here recreates the NativeActivity and takes the process with it. -->
+        <activity
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|keyboardHidden|keyboard|navigation|density|uiMode|fontScale|locale|layoutDirection|touchscreen"
+            android:exported="true"
+            android:label="@string/app_name" android:name="dev.dioxus.main.MainActivity"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data android:name="android.app.lib_name" android:value="main" />
+            <meta-data android:name="android.app.func_name" android:value="ANativeActivity_onCreate" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

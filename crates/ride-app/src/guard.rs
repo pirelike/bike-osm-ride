@@ -8,10 +8,14 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Runs `f` and converts a panic into `Err(message)`. `what` names the call site in the log.
+///
+/// Every panic caught here also goes to the crash log (`crash.rs`), so an Android report without
+/// a console still says what happened.
 pub fn guarded<T>(what: &str, f: impl FnOnce() -> T) -> Result<T, String> {
     catch_unwind(AssertUnwindSafe(f)).map_err(|payload| {
         let message = panic_message(payload.as_ref());
         eprintln!("[ride-app] {what}: panic: {message}");
+        crate::crash::record(what, &message);
         message
     })
 }

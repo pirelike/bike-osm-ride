@@ -83,12 +83,6 @@ pub fn WorkoutsDialog(
                         onclick: move |_| on_select.call(None),
                         "Edzés nélkül"
                     }
-                    button {
-                        class: "btn btn--primary",
-                        r#type: "button",
-                        onclick: move |_| on_close.call(()),
-                        "Kész"
-                    }
                 }
             },
             div {

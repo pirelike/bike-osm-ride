@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Replaces the `values/styles.xml` `dx` writes on every bundle (same file name, same style name,
+     so the pinned manifest's `@style/AppTheme` resolves to this one).
+
+     `dx`'s version is AppCompat Light with no window background: the launch window is white, which
+     flashes on a dark app before the webview paints. The parent has to stay AppCompat —
+     `AppCompatActivity` refuses anything else — but the window background is the splash drawable
+     (the app's own ground colour with the icon), so a cold start looks like the app. -->
+<resources>
+    <style name="AppTheme" parent="@style/Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

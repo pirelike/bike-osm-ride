@@ -26,6 +26,12 @@ pub struct BtleAdapter {
 impl BtleAdapter {
     /// Create the platform manager and take the first adapter.
     pub async fn init() -> Result<Self, BleError> {
+        // Android: when the Java backend could not be initialized, asking btleplug would panic
+        // ("Droidplug has not been initialized") instead of answering an error.
+        #[cfg(target_os = "android")]
+        if let Some(reason) = crate::android_ble::backend_error() {
+            return Err(BleError::Unavailable(reason));
+        }
         let manager = bounded("a Bluetooth-kezelő indítása", INIT_TIMEOUT, async {
             Manager::new().await.map_err(BleError::from)
         })

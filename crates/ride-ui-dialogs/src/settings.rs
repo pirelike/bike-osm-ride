@@ -101,12 +101,6 @@ pub fn SettingsDialog(
             wide: true,
             foot: rsx! {
                 span { class: "dlg-foot__note", "Minden módosítás azonnal érvénybe lép." }
-                button {
-                    class: "btn btn--primary",
-                    r#type: "button",
-                    onclick: move |_| on_close.call(()),
-                    "Kész"
-                }
             },
             div { class: "dlg-settings",
                 Group {

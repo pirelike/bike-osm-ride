@@ -1,7 +1,7 @@
 //! Design-system showcase, rendered with dioxus-ssr into static HTML so it can be screenshotted
 //! with headless Edge (same engine as the app's WebView2):
 //!
-//!   cargo run -p ride-ui-kit --example preview
+//!   cargo run -p ride-ui-kit --example kit_preview
 //!
 //! Writes `target/preview/ride-ui-kit-<page>-<theme>.html` for the pages `foundations`,
 //! `controls`, `surfaces` and `headunit` in both themes. Uses realistic fake data only.

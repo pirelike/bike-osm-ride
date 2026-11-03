@@ -221,7 +221,7 @@ pub fn evaluate(json: &str, current: &str, platform: Platform) -> Option<UpdateI
 }
 
 fn client() -> Option<reqwest::Client> {
-    reqwest::Client::builder()
+    ride_route::http::client_builder()
         .user_agent(concat!("bike-osm-ride/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(20))
         .build()

@@ -25,7 +25,7 @@ pub mod demo;
 pub mod elevation;
 pub mod geo;
 pub mod gpx;
-mod http;
+pub mod http;
 pub mod rides;
 pub mod store;
 

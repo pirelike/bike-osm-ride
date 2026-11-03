@@ -68,9 +68,15 @@ fn next_uid() -> u64 {
 }
 
 /// Runs a small script in the webview if the renderer has one (desktop); a no-op in SSR/tests.
+///
+/// A panic inside it is swallowed. `dioxus-desktop` `expect`s a live window when it evaluates
+/// (`DesktopDocument::eval`), and the window goes away far more often than on a desktop: Android
+/// drops it on backgrounding or a configuration change. Losing one focus call is not worth a
+/// crash — and on Android a panic there poisons the runtime mutex the whole UI runs under (see
+/// `ride-app`'s `crash` module).
 fn run_js(script: String) {
     if try_consume_context::<Rc<dyn document::Document>>().is_some() {
-        let _ = document::eval(&script);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| document::eval(&script)));
     }
 }
 

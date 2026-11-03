@@ -258,8 +258,29 @@ impl Controller {
         Self { st, inner }
     }
 
-    fn with<R>(self, f: impl FnOnce(&mut Inner) -> R) -> R {
-        f(&mut self.inner.borrow_mut())
+    /// Runs `f` on the controller state.
+    ///
+    /// A panic inside `f` never leaves this function. On Android the whole UI event, render and
+    /// asset path of `dioxus-desktop` runs under one global mutex (`android_sync_lock`), taken
+    /// with `.lock().unwrap()`: a panic would poison it, and from then on *every* event, render
+    /// and tile request panics too — the app dies on the next tap, whatever it is. That is what
+    /// turns one unknown bug into "nothing works any more". Catching it here keeps the rest of
+    /// the app alive and puts the message in the crash banner instead.
+    fn with<R: Default>(self, f: impl FnOnce(&mut Inner) -> R) -> R {
+        match guarded("ui", || f(&mut self.inner.borrow_mut())) {
+            Ok(value) => value,
+            Err(message) => {
+                self.st.report_crash(message);
+                R::default()
+            }
+        }
+    }
+
+    /// The window handle for the native dialogs and the WebView panels. Not routed through
+    /// [`Controller::with`]: `DesktopContext` has no `Default` to fall back to, and a handler that
+    /// cannot get the window has nothing left to do.
+    fn window(self) -> Option<DesktopContext> {
+        guarded("ui.window", || self.inner.borrow_mut().win.clone()).ok()
     }
 
     // ───── start-up ─────
@@ -306,10 +327,14 @@ impl Controller {
             // system installer takes over.
             let url = update.asset_url.clone();
             if let Some(document) = try_consume_context::<std::rc::Rc<dyn document::Document>>() {
-                let _ = document.eval(format!(
-                    "window.open({}, '_blank');",
-                    serde_json::to_string(&url).unwrap_or_default()
-                ));
+                // `dioxus-desktop` `expect`s a live window here; a panic would poison the whole
+                // Android UI (see `Controller::with`), and a failed download prompt is survivable.
+                let _ = guarded("document::eval", || {
+                    document.eval(format!(
+                        "window.open({}, '_blank');",
+                        serde_json::to_string(&url).unwrap_or_default()
+                    ))
+                });
             }
             self.st.toast(
                 ToastKind::Info,
@@ -439,14 +464,16 @@ impl Controller {
 
     // ───── routes ─────
 
-    /// Android has no native file dialog: GPX files come from a bikerouter link, the recent
-    /// list or the demo route there.
+    /// Android has no native file dialog: the system picker is started through the activity
+    /// (`android/MainActivity.kt`) and the answer arrives later, see `shell::use_android_picker`.
     #[cfg(target_os = "android")]
     pub fn pick_file(self) {
-        self.st.toast(
-            ToastKind::Info,
-            "Androidon illessz be egy bikerouter.de-linket, vagy válassz a legutóbbi útvonalak közül.",
-        );
+        if let Err(err) = crate::android_picker::pick_gpx() {
+            self.st.toast(
+                ToastKind::Error,
+                format!("A fájlválasztó nem nyílt meg: {err}"),
+            );
+        }
     }
 
     /// Native "open" dialog, then loads the chosen file.
@@ -455,7 +482,11 @@ impl Controller {
         if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
             return;
         }
-        let win = self.with(|i| i.win.clone());
+        let Some(win) = self.window() else {
+            // no window, no dialog: do not leave the flag set and lock the next attempt out
+            self.with(|i| i.file_dialog_open = false);
+            return;
+        };
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
                 .set_title("GPX-útvonal megnyitása")
@@ -487,7 +518,11 @@ impl Controller {
         if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
             return;
         }
-        let win = self.with(|i| i.win.clone());
+        let Some(win) = self.window() else {
+            // no window, no dialog: do not leave the flag set and lock the next attempt out
+            self.with(|i| i.file_dialog_open = false);
+            return;
+        };
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
                 .set_title("Edzés importálása")
@@ -902,6 +937,12 @@ impl Controller {
 
     /// A command from the devices dialog / virtual rider panel.
     pub fn command(self, cmd: SensorCommand) {
+        // Android: the permission dialog is easy to dismiss at startup; ask again when the rider
+        // actually wants to search (the activity is the only one who can show it).
+        #[cfg(target_os = "android")]
+        if matches!(cmd, SensorCommand::StartScan) {
+            crate::android_picker::request_ble_permissions();
+        }
         if let Some(scan) = self.with(|i| i.command(cmd)) {
             spawn(async move {
                 tokio::time::sleep(SCAN_TIMEOUT).await;
@@ -1023,7 +1064,11 @@ impl Controller {
         if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
             return;
         }
-        let win = self.with(|i| i.win.clone());
+        let Some(win) = self.window() else {
+            // no window, no dialog: do not leave the flag set and lock the next attempt out
+            self.with(|i| i.file_dialog_open = false);
+            return;
+        };
         spawn(async move {
             let rendered = guarded("tcx", || {
                 (
@@ -1118,7 +1163,10 @@ impl Controller {
             busy.set(false);
             return;
         }
-        let win = self.with(|i| i.win.clone());
+        let Some(win) = self.window() else {
+            busy.set(false);
+            return;
+        };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         let opened = crate::strava::StravaView::open(
             &win,

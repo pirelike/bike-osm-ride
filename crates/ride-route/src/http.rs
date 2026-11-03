@@ -12,12 +12,46 @@ pub(crate) const USER_AGENT: &str = "bike-osm-ride/0.1 (desktop app)";
 pub(crate) const MAX_BODY_BYTES: usize = 48 * 1024 * 1024;
 
 pub(crate) fn client(timeout: Duration) -> Result<reqwest::Client> {
-    reqwest::Client::builder()
+    client_builder()
         .user_agent(USER_AGENT)
         .timeout(timeout)
         .connect_timeout(Duration::from_secs(10))
         .build()
         .or_else(|e| err(format!("A hálózati kapcsolat nem hozható létre: {e}")))
+}
+
+/// A `reqwest` client builder that also works on Android; every HTTP client of the app starts
+/// from this one.
+///
+/// `reqwest`'s `rustls` feature checks certificates with `rustls-platform-verifier`. Its Android
+/// backend hands the check to a Kotlin class (`org.rustls.platformverifier.CertificateVerifier`)
+/// that has to be compiled into the APK, and it **panics** — "Expect rustls-platform-verifier to
+/// be initialized" — when that never happened. On a phone that panic lands inside the event
+/// handler of the UI thread, and because `dioxus-desktop` runs every Android event under one
+/// global mutex, it poisons the whole UI: after the first network call (the update check, five
+/// seconds after the start) every tap, dialog and tab panics too.
+///
+/// `dx` only generates `MainActivity.kt`, so the missing Kotlin class cannot be added through the
+/// build configuration. The Android build therefore validates against the Mozilla roots compiled
+/// into the binary — the same set the desktop builds trust — which needs no JVM at all.
+pub fn client_builder() -> reqwest::ClientBuilder {
+    #[cfg(target_os = "android")]
+    {
+        let roots =
+            rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let provider = std::sync::Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+        let tls = rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .expect("the TLS versions of this rustls build are usable")
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        // `reqwest` sets the ALPN list of a preconfigured config itself.
+        reqwest::Client::builder().use_preconfigured_tls(tls)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        reqwest::Client::builder()
+    }
 }
 
 fn describe(e: reqwest::Error) -> String {

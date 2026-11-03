@@ -118,7 +118,7 @@ impl fmt::Debug for MetadataClient {
 
 impl MetadataClient {
     pub fn new(endpoints: Endpoints, key: ApiKey) -> Result<MetadataClient, SvError> {
-        let http = reqwest::Client::builder()
+        let http = ride_route::http::client_builder()
             .user_agent(USER_AGENT)
             .timeout(Duration::from_secs(8))
             .connect_timeout(Duration::from_secs(5))

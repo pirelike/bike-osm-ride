@@ -197,20 +197,80 @@ kérnek). Linuxon a fejlesztéshez kell a
 ### Android
 
 Kell hozzá: Android SDK + NDK 27, JDK 17+, `rustup target add aarch64-linux-android` és a Dioxus
-CLI (`cargo install dioxus-cli@0.7.10 --locked`).
+CLI (`cargo install dioxus-cli@0.7.10 --locked`). Az SDK licenceit egyszer el kell fogadni
+(`sdkmanager --licenses`).
 
 ```powershell
 $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 $env:ANDROID_NDK_HOME = "$env:ANDROID_HOME\ndk\27.2.12479018"
 cd crates\ride-app
 dx bundle --platform android --package-types apk --release --target aarch64-linux-android
-# az APK: target\dx\bike-osm-ride\release\android\app\app\build\outputs\apk\
+# az APK: target\dx\bike-osm-ride\release\android\app\app\build\outputs\apk\release\app-release.apk
 ```
 
+Egy APK **egy ABI-t** tartalmaz: telefonra `aarch64-linux-android` kell, az x86_64-es emulátorhoz
+ugyanez `--target x86_64-linux-android`-dal (`rustup target add x86_64-linux-android`).
+
+Amit a `dx bundle` elvégez, hogy Rust kódból APK legyen:
+
+| lépés | mi történik |
+|---|---|
+| 1 | a `ride-app` binárisát keresztfordítja a választott ABI-ra (a linker az NDK clang-ja) |
+| 2 | `-Wl,--export-dynamic`-kal linkel, hogy a JNI szimbólumok (`Java_dev_dioxus_main_*`) látszódjanak — enélkül `UnsatisfiedLinkError` |
+| 3 | a binárist `app/src/main/jniLibs/<abi>/libmain.so` néven beemeli (ezt tölti be a generált `WryActivity`, `System.loadLibrary("main")`) |
+| 4 | legenerálja a Gradle projektet: manifest (`android/AndroidManifest.xml`), activity (`android/MainActivity.kt`), erőforrások |
+| 5 | `gradlew assembleRelease`: aapt2 + d8/R8 + apksigner |
+
+Ha a `dx` elakad, vagy gyorsan akarsz iterálni (a Rust-oldal újrafordítása ~10 s, a csomagolás
+~5 s), a lépések kézzel is megcsinálhatók:
+
+```powershell
+# 1. a natív library (a dx ugyanezt teszi, csak a saját target könyvtárába)
+$env:CARGO_TARGET_DIR = "$PWD\target\android-dev"
+cargo rustc -p ride-app --target x86_64-linux-android -- `
+  -C link-arg=-landroid -C link-arg=-llog -C link-arg=-lOpenSLES -C link-arg=-lc++abi `
+  -C link-arg=-Wl,--export-dynamic
+Copy-Item target\android-dev\x86_64-linux-android\debug\bike-osm-ride `
+  target\dx\bike-osm-ride\release\android\app\app\src\main\jniLibs\x86_64\libmain.so -Force
+# 2. újracsomagolás (a Kotlin- és erőforrás-változást is felveszi)
+cd target\dx\bike-osm-ride\release\android\app
+.\gradlew.bat assembleDebug
+```
+
+**Az ikon és a nyitóképernyő** nem a `dx`-ből jön: a `dx` 0.7.10 minden buildnél a saját
+sablon-ikonjait (kék Dioxus-jel) és a világos témáját írja a generált projektbe, az `[android] icon`
+kulcsot pedig nem használja. Ezért a `dx bundle` **után** a `packaging/android/resoverlay.sh`
+kicseréli ezeket a sajátunkra (sötét csempe + teal gerinc ikon, sötét nyitóképernyő a logóval) és
+újracsomagolja az APK-t; a CI is ezt futtatja. A képeket a `packaging/android/make-icons.py`
+generálja a `packaging/icons/1024.png`-ból (Pillow kell hozzá).
+
+**Aláírás.** Saját kulcs nélkül a Gradle a debug kulccsal írja alá (`CN=Android Debug`): ez
+telepíthető, de csak debug-aláírt példány fölé — egy kulccsal aláírt release APK előtt előbb
+`adb uninstall hu.borbelyhuba.bikeosmride` kell. A kiadást a `.github/workflows/release.yml` a
+`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` secretekből írja alá.
+
 Telepítés telefonra: másold át az APK-t, és nyisd meg (engedélyezni kell az ismeretlen forrásból
-származó alkalmazások telepítését), vagy USB-n: `adb install -r <apk>`. Androidon a Bluetooth
-egyelőre nem működik (a btleplug Android-háttere Java-kiegészítést igényel), ott a szimulált
-tekerővel lehet tekerni.
+származó alkalmazások telepítését), vagy USB-n: `adb install -r <apk>`.
+
+Androidon a **GPX-fájl a rendszer saját fájlválasztójával** nyílik meg (Storage Access Framework): a
+kiválasztott dokumentumot az alkalmazás a saját gyorsítótárába másolja, onnan tölti be az útvonalat.
+A Bluetooth-hoz az első indításkor megkérdezi a szükséges engedélyeket (`BLUETOOTH_SCAN`/`_CONNECT`,
+Android 11 és régebbi rendszeren a helymeghatározást); ha ezt elutasítottad, az Eszközök ablak
+„Keresés indítása” gombja újra kérdez. Hardver nélkül a szimulált tekerővel lehet tekerni.
+
+Ha az alkalmazás összeomlik, a hiba oka nem tűnik el: a szöveg (veremmel együtt) a
+`/data/data/hu.borbelyhuba.bikeosmride/files/crash.log` fájlba kerül, ugyanaz megy a logcatbe, és a
+képernyő tetején egy piros sáv mutatja az első sorát (a „Rendben” gombbal eltüntethető — az
+alkalmazás utána is használható marad, mert a kezelőréteg elkapja a hibát). Lekérdezés USB-n:
+
+```bash
+adb logcat -s bike-osm-ride          # élőben, összeomlás közben is
+adb shell run-as hu.borbelyhuba.bikeosmride cat files/crash.log   # csak debug buildnél
+```
+
+Ez azért kell, mert Androidon nincs konzol: egy Rust-pánik nyom nélkül viszi le a folyamatot, és a
+`dioxus-desktop` Android-háttere egyetlen globális mutex alatt futtat minden eseményt és
+újrarajzolást — ha a pánik elszökik, az *első* hiba után minden további koppintás is elszáll.
 
 ### Linux (AppImage és .deb)
 
@@ -219,11 +279,11 @@ disztribúciókon is elinduljon.
 
 ```bash
 # AppImage: egyetlen futtatható fájl, nem kell telepíteni
-chmod +x bike-osm-ride-0.2.0-linux-x86_64.AppImage
-./bike-osm-ride-0.2.0-linux-x86_64.AppImage
+chmod +x bike-osm-ride-0.3.0-linux-x86_64.AppImage
+./bike-osm-ride-0.3.0-linux-x86_64.AppImage
 
 # .deb: a rendszer csomagkezelőjével
-sudo apt install ./bike-osm-ride-0.2.0-linux-amd64.deb
+sudo apt install ./bike-osm-ride-0.3.0-linux-amd64.deb
 ```
 
 A .deb a `libwebkit2gtk-4.1-0`, `libgtk-3-0` és `bluez` csomagokat kéri; az AppImage ezeket
@@ -258,8 +318,8 @@ Helyi build (a szkript Apple Siliconon az Intel felét is keresztfordítja, majd
 
 ```bash
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
-packaging/macos/bundle.sh 0.2.0
-# dist/bike-osm-ride.app és dist/bike-osm-ride-0.2.0-macos-universal.dmg
+packaging/macos/bundle.sh 0.3.0
+# dist/bike-osm-ride.app és dist/bike-osm-ride-0.3.0-macos-universal.dmg
 ```
 
 ### Kiadás (GitHub)
