@@ -69,6 +69,13 @@ chmod +x "$tools/linuxdeploy-plugin-gtk.sh"
 appdir="$out/bike-osm-ride.AppDir"
 rm -rf "$appdir"
 install -Dm755 target/release/bike-osm-ride "$appdir/usr/bin/bike-osm-ride"
+# The icon must be called what the .desktop file's `Icon=` says and sit in the icon theme folder
+# (linuxdeploy looks the name up there: handed "256.png" it fails with "Could not find suitable
+# icon for Icon entry"), and the .desktop file belongs in the AppDir as well.
+icon="$appdir/usr/share/icons/hicolor/256x256/apps/bike-osm-ride.png"
+install -Dm644 "$root/packaging/icons/256.png" "$icon"
+install -Dm644 "$root/packaging/linux/bike-osm-ride.desktop" \
+    "$appdir/usr/share/applications/bike-osm-ride.desktop"
 
 # linuxdeploy wants the plugin on PATH and the GTK major version in the environment.
 export PATH="$tools:$PATH"
@@ -77,8 +84,8 @@ export ARCH=x86_64
 cd "$out"
 "$linuxdeploy" --appimage-extract-and-run \
     --appdir "$appdir" \
-    --desktop-file "$root/packaging/linux/bike-osm-ride.desktop" \
-    --icon-file "$root/packaging/icons/256.png" \
+    --desktop-file "$appdir/usr/share/applications/bike-osm-ride.desktop" \
+    --icon-file "$icon" \
     --plugin gtk \
     --output appimage
 
