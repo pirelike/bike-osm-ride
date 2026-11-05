@@ -21,6 +21,7 @@ Hungarian documents are for riders; English ones are for people working on the c
 | [`TESTING.md`](TESTING.md) | what the 954 tests cover, the sandbox `TEMP` caveat, and what has *not* been verified on hardware |
 | [`RELEASING.md`](RELEASING.md) | the checklist, the CI jobs, the asset names the updater depends on, the failures so far |
 | [`DECISIONS.md`](DECISIONS.md) | why things are the way they are, and what was deliberately not done |
+| [`ROADMAP.md`](ROADMAP.md) | features that were asked for and are not built yet (the data overlay over full-screen video), with the risks to check first |
 
 ### By topic
 
