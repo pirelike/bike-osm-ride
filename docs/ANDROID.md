@@ -76,7 +76,9 @@ temporary files there); builds were done in a normal shell and in CI.
   now copies the sources of the exact `btleplug` version (found with `cargo metadata`, so `Cargo.lock` decides) from
   the cargo registry into `app/src/main/java` and drops `packaging/android/btleplug.pro` next to the module: the
   release build runs R8, which would remove classes that only JNI reaches. The script therefore must run for every
-  APK, not only for the icon.
+  APK, not only for the icon. The classes alone did not fix it on a phone: droidplug resolves them through the thread's
+  context class loader, which on the natively attached hub thread is the system loader; `ride-ble`'s
+  `android_ble.rs` now sets the activity's class loader on that thread before `btleplug::platform::init`.
 
 ## 3. Surviving panics
 

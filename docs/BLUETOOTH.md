@@ -147,7 +147,11 @@ This is unofficial interoperability work (see `NOTICE.md`); **there is no record
 (`MainActivity.requestBlePermissions`); a scan without the permission fails visibly and the Devices dialog's
 "Keresés indítása" asks again. The crate uses `jni` 0.22 (btleplug's version) while `ride-app` uses 0.21: the
 two environments must not be mixed. The Java half of droidplug is not in the APK unless `packaging/android/resoverlay.sh`
-copies it into the Gradle project (otherwise: "failed to resolve java class ... class not found"); see
+copies it into the Gradle project (otherwise: "failed to resolve java class ... class not found"). Having the classes
+is not enough either: droidplug looks them up with the thread's context class loader, then `FindClass`, and on the
+natively attached hub thread both are the system class loader, which does not see the APK's dex (same error, seen on
+a real phone). `android_ble::use_app_class_loader` sets the activity's class loader on that thread before
+`platform::init`, which looks every class up once and caches it globally; see
 [`ANDROID.md`](ANDROID.md). Never exercised on a real phone.
 
 ## 8. The hex log
