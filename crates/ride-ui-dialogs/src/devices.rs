@@ -7,7 +7,7 @@ use ride_ui_kit::{Dialog, Icon, IconName};
 use crate::helpers::{
     conn_chip_class, conn_failure, conn_icon, conn_label, conn_tone, device_title, is_simulated,
     kind_hint, kind_icon, kind_label, rssi_label, rssi_text, rssi_tone, shared_slot_names,
-    slot_matches, slot_of, slot_state, sorted_discovered, suggested_kind, SLOT_ORDER,
+    slot_connecting, slot_matches, slot_of, sorted_discovered, suggested_kind, SLOT_ORDER,
 };
 use crate::DeviceSlot;
 
@@ -226,7 +226,7 @@ fn FoundRow(
     let connecting = device
         .kinds
         .iter()
-        .any(|kind| slot_state(&slots, *kind) == ConnState::Connecting);
+        .any(|kind| slot_connecting(&slots, *kind, &title));
     let connected = device
         .kinds
         .iter()

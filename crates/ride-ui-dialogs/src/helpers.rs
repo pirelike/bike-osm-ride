@@ -301,6 +301,16 @@ pub fn slot_matches(slots: &[DeviceSlot], kind: DeviceKind, name: &str) -> bool 
     slot_name(slots, kind).is_some_and(|connected| connected == name)
 }
 
+/// `true` when the slot of `kind` is connecting to the device with this display name. Other
+/// devices that can serve the same role (the simulated rider offers every role) are not
+/// "connecting" just because the role is.
+pub fn slot_connecting(slots: &[DeviceSlot], kind: DeviceKind, name: &str) -> bool {
+    slot_of(slots, kind).is_some_and(|slot| {
+        slot.state == ConnState::Connecting
+            && slot.name.as_deref().map(str::trim) == Some(name.trim())
+    })
+}
+
 /// Names held by more than one live slot: a physical device serving several roles at once.
 pub fn shared_slot_names(slots: &[DeviceSlot]) -> Vec<String> {
     let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
@@ -969,6 +979,37 @@ mod tests {
         assert!(slot_matches(&slots, DeviceKind::Trainer, "KICKR"));
         assert!(!slot_matches(&slots, DeviceKind::Trainer, "NEO"));
         assert!(!slot_matches(&slots, DeviceKind::HeartRate, "Polar"));
+    }
+
+    /// The simulated rider lists every role, so "the Trainer role is connecting" must not make its
+    /// row (or any other row that could serve the role) show "Kapcsolódás…".
+    #[test]
+    fn only_the_device_being_connected_is_connecting() {
+        let slots = vec![DeviceSlot {
+            kind: DeviceKind::Trainer,
+            state: ConnState::Connecting,
+            name: Some("VE200_53918".into()),
+        }];
+        assert!(slot_connecting(&slots, DeviceKind::Trainer, "VE200_53918"));
+        assert!(!slot_connecting(
+            &slots,
+            DeviceKind::Trainer,
+            "Szimulált tekerő"
+        ));
+        assert!(!slot_connecting(
+            &slots,
+            DeviceKind::HeartRate,
+            "VE200_53918"
+        ));
+        let connected = vec![DeviceSlot {
+            state: ConnState::Connected,
+            ..slots[0].clone()
+        }];
+        assert!(!slot_connecting(
+            &connected,
+            DeviceKind::Trainer,
+            "VE200_53918"
+        ));
     }
 
     // ── virtual rider ──

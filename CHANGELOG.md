@@ -11,6 +11,10 @@ következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címk�
 ## [Kiadatlan]
 
 ### Javítva
+- **Eszközök ablak: a szimulált tekerő is „Kapcsolódás…”-t mutatott, ha egy valódi eszközhöz csatlakoztál.** A szimulált
+  tekerő minden szerepet felkínál, a sor pedig szerep alapján nézte, hogy folyik-e csatlakozás. Most az eszköz neve is számít.
+- **Android: hosszabb csatlakozási időkorlát** (30 mp a korábbi 12 helyett, a szolgáltatás-felderítésé 12 a korábbi 6
+  helyett): az Android saját közvetlen csatlakozása is kb. 30 mp után ad fel, és a btleplug maga is újrapróbálja.
 - **Android: a keresés hiba nélkül sem talál semmit.** A `BLUETOOTH_SCAN` engedély `neverForLocation` jelzés nélkül volt
   a jegyzékben, ilyenkor az Android 12+ helyengedély híján némán üres keresési eredményt ad. A jelzés most ott van, és a régi
   (Android 11-ig) `BLUETOOTH` / `BLUETOOTH_ADMIN` engedély is. Ha egy sikeresen elindult keresés 30 másodpercig egyetlen

@@ -82,8 +82,11 @@ impl Default for HubConfig {
             tick: Duration::from_millis(100),
             stale_after: crate::merge::STALE_AFTER,
             emit_min_interval: Duration::from_millis(90),
-            connect_timeout: Duration::from_secs(12),
-            io_timeout: Duration::from_secs(6),
+            // Android's own direct connect gives up after about 30 s (and btleplug retries a failed
+            // attempt up to twice), and discovering the services of a trainer takes seconds there:
+            // the desktop limits cut a link that was about to come up.
+            connect_timeout: Duration::from_secs(if cfg!(target_os = "android") { 30 } else { 12 }),
+            io_timeout: Duration::from_secs(if cfg!(target_os = "android") { 12 } else { 6 }),
             read_timeout: Duration::from_secs(3),
             health_interval: Duration::from_secs(2),
             trainer_watchdog: Duration::from_secs(10),
