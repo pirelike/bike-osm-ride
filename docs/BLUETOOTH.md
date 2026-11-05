@@ -154,6 +154,11 @@ a real phone). `android_ble::use_app_class_loader` sets the activity's class loa
 `platform::init`, which looks every class up once and caches it globally; see
 [`ANDROID.md`](ANDROID.md). Never exercised on a real phone.
 
+A scan can start without any error and still deliver nothing: on Android 12+ that is what `BLUETOOTH_SCAN` without
+`usesPermissionFlags="neverForLocation"` does when no location permission is held (the pinned manifest now sets the
+flag; `packaging_tests` guards it), and on Android 11 and older it is the location switch being off. `run_scan` therefore
+tells the rider once, after `scan_silence_restart`, when it has not heard a single device.
+
 ## 8. The hex log
 
 `<data>/ble.log` is **always on** (`start_hub` hands the path to the hub; rotated to `ble.log.1` at start-up

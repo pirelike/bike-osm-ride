@@ -21,7 +21,13 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- The app never derives a position from scan results. Without this flag Android 12+ hands a
+         scan that has no location permission nothing at all, and no error either. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <!-- Android 11 and older: the pre-12 Bluetooth permissions (install time) a scan needs. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 
     <!-- The icon and the launch screen are `dx`'s resource names, replaced by the app's own files
          afterwards: `packaging/android/resoverlay.sh` overwrites `mipmap-*/ic_launcher.*` and

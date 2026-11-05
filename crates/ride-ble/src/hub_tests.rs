@@ -347,6 +347,17 @@ async fn a_scan_that_cannot_start_is_reported() {
 }
 
 #[tokio::test]
+async fn a_scan_that_hears_nothing_says_so() {
+    let adapter = FakeAdapter::new(Vec::new());
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+
+    hub.send(SensorCommand::StartScan);
+    let notice = hub.wait_notice("nem lát egyetlen Bluetooth-eszközt").await;
+    assert!(notice.contains("engedély"), "{notice}");
+}
+
+#[tokio::test]
 async fn connecting_stops_the_scan_first() {
     let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
     let adapter = FakeAdapter::new(vec![trainer]);

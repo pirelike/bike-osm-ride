@@ -259,6 +259,9 @@ impl DiscoveryTable {
 }
 
 /// The scan task: runs until `stop` fires, publishing `Internal::Discovered`.
+/// Shown once when a scan that started without error has not heard a single device.
+const SILENT_SCAN_HINT: &str = "A keresés nem lát egyetlen Bluetooth-eszközt sem. Ellenőrizd, hogy a Bluetooth be van-e kapcsolva, az alkalmazásnak megvan-e a „Közeli eszközök” (Androidon 11 és régebben a „Hely”) engedélye, és Androidon 11 és régebben a helymeghatározás is be van-e kapcsolva; a trainert ne tartsa más alkalmazás vagy eszköz.";
+
 pub(crate) async fn run_scan<A: BleAdapter>(
     adapter: Arc<A>,
     tx: mpsc::UnboundedSender<Internal>,
@@ -294,6 +297,10 @@ pub(crate) async fn run_scan<A: BleAdapter>(
     }
 
     let mut last_event = Instant::now();
+    // The system can start a scan without error and still hand over nothing (Android without the
+    // right permission or with the location switch off): say so once instead of staying silent.
+    let mut heard_anything = false;
+    let mut told_silence = false;
     let mut ticker = tokio::time::interval(cfg.scan_emit_interval);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
@@ -302,6 +309,7 @@ pub(crate) async fn run_scan<A: BleAdapter>(
             _ = stopped(&mut stop) => break,
             ev = events.next() => match ev {
                 Some(AdapterEvent::Seen(p)) => {
+                    heard_anything = true;
                     last_event = Instant::now();
                     if let Ok(Some(adv)) = adapter.advertisement(&p).await {
                         dirty |= table.update(p.id(), &adv, last_event);
@@ -326,6 +334,10 @@ pub(crate) async fn run_scan<A: BleAdapter>(
                     }
                 }
                 if now.saturating_duration_since(last_event) > cfg.scan_silence_restart {
+                    if !heard_anything && !told_silence {
+                        told_silence = true;
+                        notice(SILENT_SCAN_HINT.to_string());
+                    }
                     // a scan that heard nothing for a long time is probably stuck: restart it
                     let _ = adapter.stop_scan().await;
                     if let Err(e) = adapter.start_scan().await {

@@ -11,6 +11,11 @@ következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címk�
 ## [Kiadatlan]
 
 ### Javítva
+- **Android: a keresés hiba nélkül sem talál semmit.** A `BLUETOOTH_SCAN` engedély `neverForLocation` jelzés nélkül volt
+  a jegyzékben, ilyenkor az Android 12+ helyengedély híján némán üres keresési eredményt ad. A jelzés most ott van, és a régi
+  (Android 11-ig) `BLUETOOTH` / `BLUETOOTH_ADMIN` engedély is. Ha egy sikeresen elindult keresés 30 másodpercig egyetlen
+  eszközt sem lát, az app egyszer kiírja, mit érdemes ellenőrizni (Bluetooth, „Közeli eszközök” engedély, Androidon 11-ig a
+  helymeghatározás).
 - **Android: „A BLE-napló nem nyitható meg: Permission denied (os error 13)”.** Az app adatmappáját eddig csak a
   `/data/data/<csomag>/files` útvonalból találtuk ki, ami másodlagos felhasználónál, munkaprofilnál, Secure Foldernél vagy
   „kettős alkalmazásnál” nem a saját mappánk. Most az Activity `getFilesDir()` válasza az első, a kitalált útvonalak

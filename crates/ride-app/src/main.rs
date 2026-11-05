@@ -244,6 +244,12 @@ mod packaging_tests {
                 "{permission} is missing from the pinned manifest"
             );
         }
+        // Android 12+ only delivers scan results without a location permission when the scan
+        // permission says it is never used for location
+        assert!(
+            MANIFEST.contains("neverForLocation"),
+            "BLUETOOTH_SCAN needs usesPermissionFlags=neverForLocation"
+        );
         // the Bluetooth and location blocks of `Dioxus.toml` are what expands to the two pairs above
         for requested in ["bluetooth", "location"] {
             assert!(
