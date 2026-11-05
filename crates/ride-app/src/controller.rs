@@ -1092,28 +1092,55 @@ impl Controller {
                 .save_file()
                 .await
                 .map(|file| file.path().to_path_buf());
-            // No save dialog on Android: the shared Download folder, else the app's own folder.
+            // Android: a raw path into the shared Download folder is refused (scoped storage), so
+            // the file is written into the app's own cache and handed to the system's "save as"
+            // dialog; its answer is toasted by the shell (`Controller::backup_saved`).
             #[cfg(target_os = "android")]
-            let picked = {
+            {
                 let _ = &win;
-                Some(crate::paths::export_dir().join(suggested))
-            };
-            self.with(|i| i.file_dialog_open = false);
-            let Some(mut path) = picked else { return };
-            if path.extension().is_none() {
-                path.set_extension("tcx");
-            }
-            match tokio::fs::write(&path, xml.as_bytes()).await {
-                Ok(()) => {
-                    let name = path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    self.st.toast(ToastKind::Success, format!("Mentve: {name}"));
+                self.with(|i| i.file_dialog_open = false);
+                let temp = crate::paths::data_dir().join("export-tmp");
+                let path = temp.join(&suggested);
+                let written = match tokio::fs::create_dir_all(&temp).await {
+                    Ok(()) => tokio::fs::write(&path, xml.as_bytes()).await,
+                    Err(err) => Err(err),
+                };
+                if let Err(err) = written {
+                    self.st
+                        .toast(ToastKind::Error, format!("A mentés nem sikerült: {err}"));
+                    return;
                 }
-                Err(err) => self
-                    .st
-                    .toast(ToastKind::Error, format!("A mentés nem sikerült: {err}")),
+                if let Err(err) = crate::android_picker::save_file(
+                    &path.to_string_lossy(),
+                    &suggested,
+                    "application/octet-stream",
+                ) {
+                    let _ = tokio::fs::remove_file(&path).await;
+                    self.st.toast(
+                        ToastKind::Error,
+                        format!("A fájlválasztó nem nyílt meg: {err}"),
+                    );
+                }
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                self.with(|i| i.file_dialog_open = false);
+                let Some(mut path) = picked else { return };
+                if path.extension().is_none() {
+                    path.set_extension("tcx");
+                }
+                match tokio::fs::write(&path, xml.as_bytes()).await {
+                    Ok(()) => {
+                        let name = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default();
+                        self.st.toast(ToastKind::Success, format!("Mentve: {name}"));
+                    }
+                    Err(err) => self
+                        .st
+                        .toast(ToastKind::Error, format!("A mentés nem sikerült: {err}")),
+                }
             }
         });
     }

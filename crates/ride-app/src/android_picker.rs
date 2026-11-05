@@ -10,7 +10,7 @@
 //!
 //! A backup works the same way in both directions: the zip to restore is picked and copied into the
 //! cache (`onBackupPicked`), and a zip written by Rust is handed to the system's "save as" dialog
-//! (`saveBackup`), which answers with `onBackupSaved`.
+//! (`saveFile`), which answers with `onBackupSaved`. A ride's TCX leaves the app the same way.
 //!
 //! The answers arrive on Android's schedule, so they are parked here and the shell picks them up
 //! (`shell::use_android_picker`), the same way the crash reporter hands its message over.
@@ -63,14 +63,14 @@ pub fn take_picked_backup() -> Option<PathBuf> {
     PICKED_BACKUP.lock().ok().and_then(|mut slot| slot.take())
 }
 
-/// Hands the finished zip at `path` to the system's "save as" dialog, suggesting `name`. The
-/// activity copies it where the rider chose and deletes `path`; the answer arrives later, see
-/// [`take_saved_backup`].
-pub fn save_backup(path: &str, name: &str) -> Result<(), String> {
+/// Hands the finished file at `path` (a backup zip, a TCX) to the system's "save as" dialog,
+/// suggesting `name`, with `mime` as the dialog's type filter. The activity copies it where the
+/// rider chose and deletes `path`; the answer arrives later, see [`take_saved_backup`].
+pub fn save_file(path: &str, name: &str, mime: &str) -> Result<(), String> {
     call_activity_with(
-        "saveBackup",
-        "(Ljava/lang/String;Ljava/lang/String;)V",
-        &[Arg::Str(path), Arg::Str(name)],
+        "saveFile",
+        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+        &[Arg::Str(path), Arg::Str(name), Arg::Str(mime)],
     )
 }
 
@@ -307,7 +307,7 @@ mod tests {
             "\"requestBlePermissions\"",
             "\"setKeepScreenOn\"",
             "\"restoreBackup\"",
-            "\"saveBackup\"",
+            "\"saveFile\"",
         ] {
             assert!(RUST.contains(called), "android_picker calls {called}");
         }
@@ -316,7 +316,7 @@ mod tests {
             "fun requestBlePermissions()",
             "fun setKeepScreenOn(on: Boolean)",
             "fun restoreBackup()",
-            "fun saveBackup(path: String, name: String)",
+            "fun saveFile(path: String, name: String, mime: String)",
         ] {
             assert!(
                 KOTLIN.contains(declared),

@@ -45,10 +45,11 @@ temporary files there); builds were done in a normal shell and in CI.
     already calls `wake::set` on every ride-state transition, so the Android branch of `wake.rs` is the only Rust
     change. The JNI call is wrapped in `catch_unwind` because `ndk_context::android_context()` panics once the
     activity has let go of the context, and a panic out of an event handler poisons the global UI mutex.
-  - `restoreBackup()` / `saveBackup(path, name)`: the backup zip, both ways (`ACTION_OPEN_DOCUMENT` and
+  - `restoreBackup()` / `saveFile(path, name, mime)`: the backup zip, both ways (`ACTION_OPEN_DOCUMENT` and
     `ACTION_CREATE_DOCUMENT`, `application/zip`). A picked zip is copied into `cacheDir/backup/` on a worker thread
     and answered through `onBackupPicked` (empty = cancelled); for a save Rust writes the zip into
-    `<data>/backup-tmp/`, `saveBackup` remembers the path, the dialog result is copied to the chosen URI (`"wt"`, so
+    `<data>/backup-tmp/` (a ride's TCX into `<data>/export-tmp/`, type `application/octet-stream` so the dialog keeps
+    the `.tcx` name), `saveFile` remembers the path, the dialog result is copied to the chosen URI (`"wt"`, so
     an existing file is replaced) and the temp file deleted, then `onBackupSaved` says `ok`, `cancel` or `error`. Two
     separate Rust slots (`PICKED_BACKUP`, `SAVED_BACKUP`), because `PICKED` always goes to the GPX loader; the shell
     polls all three (`use_android_picker`). **Never run on a device.**
@@ -155,5 +156,7 @@ takes over.
 - `setup-android` in CI needs `packages: platform-tools` only (its default list still names the removed `tools`).
 - `jni` versions differ on purpose: `ride-ble` uses 0.22 (btleplug's), `ride-app` 0.21; never mix their environments.
 - Tests must not hard-code the Windows tile base `http://tiles.localhost`; Android's is `https://tiles.localhost`.
-- "Mentés TCX-ként" has no save dialog on Android: it writes into the shared Download folder, or into the app's own
-  `exports` folder when that is not writable (`paths::export_dir`). There is no upload or share intent any more.
+- "Mentés TCX-ként" goes through the system's "save as" dialog on Android (`MainActivity.saveFile`), like the backup
+  zip. Until 0.4.0 it tried a raw write into `/storage/emulated/0/Download` and fell back to the app's private
+  `exports` folder; scoped storage refuses the raw write, so the file ended up where no file manager can see it
+  and the toast still said "Mentve". There is no upload or share intent any more.

@@ -138,7 +138,7 @@ impl Controller {
     }
 
     /// Android: the zip is written into a private folder, then the system's "save as" dialog
-    /// takes over (`MainActivity.saveBackup` copies it and deletes it). The answer comes through
+    /// takes over (`MainActivity.saveFile` copies it and deletes it). The answer comes through
     /// [`Controller::backup_saved`].
     #[cfg(target_os = "android")]
     pub fn backup_save(self) {
@@ -172,7 +172,9 @@ impl Controller {
                     return;
                 }
             }
-            if let Err(err) = crate::android_picker::save_backup(&path.to_string_lossy(), &name) {
+            if let Err(err) =
+                crate::android_picker::save_file(&path.to_string_lossy(), &name, "application/zip")
+            {
                 let _ = std::fs::remove_file(&path);
                 self.st.toast(
                     ToastKind::Error,

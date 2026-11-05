@@ -11,6 +11,9 @@ következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címk�
 ## [Kiadatlan]
 
 ### Javítva
+- **Android: a „Mentés TCX-ként” nem hagyott használható fájlt.** A fájl a Letöltések mappába próbált közvetlenül írni,
+  amit az Android 11+ nem enged, ezért az app saját, kívülről nem látható mappájába került, a jelzés pedig „Mentve” volt.
+  Most megnyílik a rendszer „Mentés másként” ablaka (mint a biztonsági mentésnél), és te választod ki a helyet.
 - **Eszközök ablak: a szimulált tekerő is „Kapcsolódás…”-t mutatott, ha egy valódi eszközhöz csatlakoztál.** A szimulált
   tekerő minden szerepet felkínál, a sor pedig szerep alapján nézte, hogy folyik-e csatlakozás. Most az eszköz neve is számít.
 - **Android: hosszabb csatlakozási időkorlát** (30 mp a korábbi 12 helyett, a szolgáltatás-felderítésé 12 a korábbi 6

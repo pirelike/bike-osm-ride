@@ -25,9 +25,9 @@ typealias BuildConfig = hu.borbelyhuba.bikeosmride.BuildConfig
  *    which the route loader cannot read as a path, so the stream is copied into the app's own
  *    cache folder first and that path goes to Rust through `onPicked`;
  *  * the same for a backup zip, both ways: `restoreBackup` picks one (copied into the cache,
- *    answered through `onBackupPicked`), `saveBackup` hands a zip Rust wrote to the system's
- *    "save as" dialog (answered through `onBackupSaved`). The copies run on a worker thread, the
- *    files can be tens of megabytes;
+ *    answered through `onBackupPicked`), `saveFile` hands a file Rust wrote (the backup zip, a
+ *    ride's TCX) to the system's "save as" dialog (answered through `onBackupSaved`). The copies
+ *    run on a worker thread, the files can be tens of megabytes;
  *  * the runtime Bluetooth permissions (Android 12+ needs `BLUETOOTH_SCAN`/`_CONNECT`, older
  *    versions `ACCESS_FINE_LOCATION` for a scan). Declaring them in the manifest is not enough;
  *  * the keep-screen-on flag while a ride runs.
@@ -87,14 +87,16 @@ class MainActivity : WryActivity() {
     }
 
     /**
-     * Offers the zip Rust wrote at `path` to the system's "save as" dialog. Once the rider chose a
-     * place the file is copied there and `path` is deleted; `onBackupSaved` says how it went.
+     * Offers the file Rust wrote at `path` (a backup zip, a TCX) to the system's "save as" dialog.
+     * Once the rider chose a place the file is copied there and `path` is deleted; `onBackupSaved`
+     * says how it went. `mime` is the dialog's type filter; for a type Android has no extension for
+     * (`application/octet-stream`) the dialog keeps `name` exactly as given.
      */
-    fun saveBackup(path: String, name: String) {
+    fun saveFile(path: String, name: String, mime: String) {
         pendingBackup = path
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/zip"
+            type = mime
             putExtra(Intent.EXTRA_TITLE, name)
         }
         try {

@@ -30,21 +30,6 @@ pub fn ble_log_path() -> PathBuf {
     data_dir().join("ble.log")
 }
 
-/// Where an exported ride goes when there is no save dialog (Android): the shared Download
-/// folder if it is writable, otherwise the app's data folder.
-#[cfg(target_os = "android")]
-pub fn export_dir() -> PathBuf {
-    let shared = PathBuf::from("/storage/emulated/0/Download");
-    let probe = shared.join(".bike-osm-ride-probe");
-    if std::fs::write(&probe, b"").is_ok() {
-        let _ = std::fs::remove_file(&probe);
-        return shared;
-    }
-    let own = data_dir().join("exports");
-    let _ = std::fs::create_dir_all(&own);
-    own
-}
-
 /// Android gives every app a private files folder but no `LOCALAPPDATA`/`HOME`; pointing
 /// `RIDE_DATA_DIR` at it makes every crate use it. Called first thing in `main`, before any
 /// thread exists.
