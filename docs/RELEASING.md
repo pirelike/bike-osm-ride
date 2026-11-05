@@ -80,7 +80,11 @@ exist as tags without a release because their runs failed; removing a tag is the
 | 0.2.0 | a "line-ending clean-up" had stripped the CR of the PNG signature in `packaging/icons/*.png` (the bundlers could not read them); `fallback.sh` used a relative output folder; `setup-android` failed on the removed `tools` package; two tests hard-coded the Windows `tiles.localhost` base; a Street View test counted all requests although the prefetcher may resolve ids ahead | 0.2.1: icons regenerated, `.gitattributes` marks images and fonts binary, absolute folder, `packages: platform-tools`, tests use `ride_ui_kit::protocol::base` |
 | 0.2.2 | `linuxdeploy` (`continuous`) rejects an icon file whose name does not match `Icon=` | 0.2.3: install the icon into the hicolor tree under the right name |
 
-Lesson: run the whole workflow on a branch (it builds everything and publishes nothing) before tagging.
+| 0.4.0 (caught on a dry run, no tag lost) | deleting `mod strava;` left its `#[cfg(not(target_os = "android"))]` in front of `mod streetview_images;`, so only the APK build failed (E0433); the host build cannot see it | removed the stray `cfg`; `no_module_of_the_shell_is_hidden_from_android` in `main.rs` |
+
+Lesson: run the whole workflow on a branch (it builds everything and publishes nothing) before tagging. It was worth
+it for 0.4.0: Android code is never compiled by a local test run. One expected red on a branch: the Linux fallback
+packaging fails with `'Version' field value 'main'` because the version comes from the ref name; on a tag it is fine.
 
 ## 6. Known gaps
 
