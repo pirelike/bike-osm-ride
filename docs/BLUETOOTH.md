@@ -146,7 +146,9 @@ This is unofficial interoperability work (see `NOTICE.md`); **there is no record
 `BLUETOOTH_CONNECT` on Android 12+ and for fine location on older versions
 (`MainActivity.requestBlePermissions`); a scan without the permission fails visibly and the Devices dialog's
 "Keresés indítása" asks again. The crate uses `jni` 0.22 (btleplug's version) while `ride-app` uses 0.21: the
-two environments must not be mixed. See [`ANDROID.md`](ANDROID.md). Never exercised on a real phone.
+two environments must not be mixed. The Java half of droidplug is not in the APK unless `packaging/android/resoverlay.sh`
+copies it into the Gradle project (otherwise: "failed to resolve java class ... class not found"); see
+[`ANDROID.md`](ANDROID.md). Never exercised on a real phone.
 
 ## 8. The hex log
 

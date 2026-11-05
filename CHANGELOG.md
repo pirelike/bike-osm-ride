@@ -10,6 +10,12 @@ következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címk�
 
 ## [Kiadatlan]
 
+### Javítva
+- **Android: „Bluetooth nem érhető el: failed to resolve java class … Adapter class not found”.** A btleplug Java oldala
+  nem került bele az APK-ba. A csomagoló szkript (`packaging/android/resoverlay.sh`) most bemásolja a Gradle-projektbe a
+  használt btleplug-verzió Java forrását, és R8-szabályt is ad hozzá, hogy a kiadási build ki ne dobja az osztályokat.
+  Új APK kell hozzá; telefonon még nem próbáltuk ki.
+
 ## [0.4.0] – 2026-11-05
 
 ### Új

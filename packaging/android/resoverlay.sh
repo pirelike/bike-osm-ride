@@ -49,9 +49,35 @@ rm -f "$res"/values/themes.xml
 
 cp -R "$here/res/." "$res/"
 
+# btleplug's Android backend (droidplug) is half Rust, half Java: the Rust side looks the Java
+# classes up by name (`com.nonpolynomial.btleplug.android.impl.Adapter`, ...). `dx` knows nothing
+# about them, so without this step the APK has no such class and the first scan fails with
+# "failed to resolve java class ... class not found". The sources are copied from the exact
+# crate version the build used (found through `cargo metadata`, so Cargo.lock decides) into the
+# Gradle project, and R8 gets keep rules (a release build shrinks classes only JNI reaches).
+module="$main/../.."
+manifest="$(cd "$root" && cargo metadata --format-version 1 --filter-platform aarch64-linux-android 2>/dev/null \
+  | grep -o '"manifest_path":"[^"]*btleplug-[0-9][^"]*Cargo.toml"' | head -n 1 \
+  | sed -e 's/^"manifest_path":"//' -e 's/"$//' -e 's/\\\\/\//g')"
+if [ -z "$manifest" ]; then
+  echo "btleplug not found in cargo metadata" >&2
+  exit 1
+fi
+if command -v cygpath >/dev/null 2>&1; then
+  manifest="$(cygpath -u "$manifest")"
+fi
+javasrc="$(dirname "$manifest")/src/droidplug/java/src/main/java"
+if [ ! -d "$javasrc" ]; then
+  echo "btleplug Java sources missing: $javasrc" >&2
+  exit 1
+fi
+echo "btleplug java: $javasrc"
+mkdir -p "$main/java"
+cp -R "$javasrc/." "$main/java/"
+cp "$here/btleplug.pro" "$module/btleplug.pro"
+
 # same build type dx chose: `assembleRelease` only when `[bundle.android]` configures signing,
 # otherwise `assembleDebug` (the debug-signed APK the release assets have always been)
-module="$main/../.."
 project="$(cd "$main/../../.." && pwd)"
 if [ -f "$module/build/outputs/apk/release/app-release.apk" ]; then
   task=assembleRelease

@@ -70,6 +70,13 @@ temporary files there); builds were done in a normal shell and in CI.
   come from `packaging/android/make-icons.py` (Python + Pillow) out of `packaging/icons/1024.png`.
   *(The header comment of `resoverlay.sh` still mentions `@style/BikeSplash` and `ic_launcher_round`; the pinned
   manifest and the script's behaviour use `AppTheme` and `ic_launcher`.)*
+- **btleplug's Java half.** The droidplug backend looks Java classes up by name from Rust
+  (`com.nonpolynomial.btleplug.android.impl.Adapter`, plus `io.github.gedgygedgy.rust.*`). `dx` does not know them,
+  so the first APKs failed the first scan with *failed to resolve java class ... class not found*. `resoverlay.sh`
+  now copies the sources of the exact `btleplug` version (found with `cargo metadata`, so `Cargo.lock` decides) from
+  the cargo registry into `app/src/main/java` and drops `packaging/android/btleplug.pro` next to the module: the
+  release build runs R8, which would remove classes that only JNI reaches. The script therefore must run for every
+  APK, not only for the icon.
 
 ## 3. Surviving panics
 
