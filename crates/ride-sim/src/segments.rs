@@ -11,12 +11,14 @@
 //!   the foot to after the summit); entry and exit times are interpolated from the 1 Hz samples;
 //! * `simulated` rides are kept in the history but never become a PR and never count as a "new
 //!   PR" (their times are still shown in the summary);
+//! * `Imported` rides (a GPX / TCX of another app, projected onto the route) are the same: an
+//!   outdoor ride with coasting and traffic stops is not comparable with a trainer ride;
 //! * the "Best" ghost is the fastest *complete*, non-simulated ride that started at the route
 //!   start; the "Last" ghost is simply the most recent ride of the route.
 
 use std::collections::HashMap;
 
-use ride_model::{Climb, GhostMode, RecordPoint, RideMeta, Route, SegmentTime};
+use ride_model::{Climb, GhostMode, RecordPoint, RideMeta, RideSource, Route, SegmentTime};
 
 use crate::ghost::Track;
 
@@ -65,11 +67,17 @@ pub fn segment_times(route: &Route, points: &[RecordPoint]) -> Vec<SegmentTime> 
     out
 }
 
-/// Best time per segment key, with the ride (`stem`) that holds it. Simulated rides are skipped.
+/// Rides that may become a PR or a ghost: neither simulated nor imported.
+fn counts_for_records(meta: &RideMeta) -> bool {
+    !meta.simulated && meta.source != RideSource::Imported
+}
+
+/// Best time per segment key, with the ride (`stem`) that holds it. Simulated and imported rides
+/// are skipped.
 pub fn best_times(metas: &[RideMeta]) -> HashMap<String, (f64, String)> {
     let mut best: HashMap<String, (f64, String)> = HashMap::new();
     for meta in metas {
-        if meta.simulated {
+        if !counts_for_records(meta) {
             continue;
         }
         for segment in &meta.segments {
@@ -104,11 +112,11 @@ pub fn choose_ghost(metas: &[RideMeta], mode: GhostMode) -> Option<&RideMeta> {
         GhostMode::Off | GhostMode::Route => None,
         GhostMode::Last => metas
             .iter()
-            .filter(|meta| meta.started_unix_s.is_finite())
+            .filter(|meta| meta.started_unix_s.is_finite() && meta.source != RideSource::Imported)
             .max_by(|a, b| a.started_unix_s.total_cmp(&b.started_unix_s)),
         GhostMode::Best => {
             let usable = metas.iter().filter(|meta| {
-                !meta.simulated
+                counts_for_records(meta)
                     && meta.start_dist.is_finite()
                     && meta.start_dist < 50.0
                     && meta.elapsed_s.is_finite()
@@ -184,6 +192,7 @@ mod tests {
             complete,
             simulated,
             segments: vec![],
+            ..Default::default()
         }
     }
 
@@ -306,6 +315,26 @@ mod tests {
             ..meta("broken", 40.0, 800.0, true, false)
         };
         assert_eq!(best_times(&[broken]).get("200-500"), None);
+    }
+
+    #[test]
+    fn imported_rides_are_neither_a_pr_nor_a_ghost() {
+        let imported = RideMeta {
+            source: RideSource::Imported,
+            segments: vec![SegmentTime {
+                key: "200-500".into(),
+                climb: 0,
+                time_s: 100.0,
+            }],
+            ..meta("import", 10.0, 50.0, true, false)
+        };
+        assert_eq!(
+            best_times(std::slice::from_ref(&imported)).get("200-500"),
+            None
+        );
+        for mode in [GhostMode::Last, GhostMode::Best] {
+            assert!(choose_ghost(std::slice::from_ref(&imported), mode).is_none());
+        }
     }
 
     #[test]

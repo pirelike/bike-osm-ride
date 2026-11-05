@@ -8,7 +8,7 @@ tesztadatként szereplő útvonala (© OpenStreetMap-közreműködők, ODbL).
 **Tartalom:** [Első indítás](#első-indítás) · [Útvonal](#útvonal-betöltése) · [Eszközök](#eszközök-csatlakoztatása) ·
 [Tekerés](#tekerés) · [A képernyő](#a-képernyő-és-az-elrendezés) · [Edzések](#edzések) ·
 [Virtuális váltó](#virtuális-váltó) · [Szellem és PR](#szellem-és-szegmensek) ·
-[Összegzés, TCX, Strava](#összegzés-tcx-és-strava) · [Street View](#street-view-opcionális) ·
+[Összegzés és TCX](#összegzés-és-tcx) · [Street View](#street-view-opcionális) ·
 [Telefon](#telefon-és-tablet) · [Beállítások](#beállítások) · [Billentyűk](#billentyűparancsok) ·
 [Hibaelhárítás](#hibaelhárítás)
 
@@ -172,26 +172,101 @@ A választó alatti sor megmondja, miért nincs éppen szellem. A felismert emel
 legjobb idő (PR) látszik, benne tekerve a másodpercre mért különbség, az összegzésben a „korábbi PR” és az „Új PR!”
 jelvény. A **szimulált tekerővel** tekert menet elmentődik, de nem lesz PR és nem lesz „Legjobb” szellem.
 
-## Összegzés, TCX és Strava
+## Összegzés és TCX
 
 Az útvonal végén (vagy a `Befejezés` után) az **összegzés** nyílik: távolság, idő, szint, átlag- és normalizált
 teljesítmény, IF, TSS, energia, átlagsebesség, pulzus, a szegmenstábla és a teljesítmény- és pulzuszónák megoszlása.
 
 ![Az összegzés](screenshots/summary.png)
 
-Fölötte kitöltheted, amit a Strava is kér: cím (üresen a napszakból lesz, pl. „Délutáni edzés”), leírás, **virtuális
-túra** vagy sima kerékpározás, hogy esett, privát jegyzet, ki láthatja, hírfolyam-némítás.
+Alul a `Mentés TCX-ként` gomb (Garmin-séma; a javasolt fájlnév dátumból és útvonalnévből áll) és az `Új útvonal`.
 
-![A Strava adatai](screenshots/summary-form.png)
+**Feltöltés Stravára, Intervals.icu-ra, TrainingPeaks-re:** beépített feltöltés nincs. A Strava saját oldalán a *Fájl feltöltése*
+(Upload) menüben a mentett TCX-et kézzel is felviheted; az Intervals.icu és a TrainingPeaks is elfogadja. A 0.3.1-ig volt egy
+háttérben futó feltöltő, de nálunk a bejelentkezés minden tekerés után újra kellett, ezért kivettük (0.3.2).
 
-Alul két gomb: `Csak mentés TCX-ként` (Garmin-séma, Strava/Intervals.icu/TrainingPeaks-kompatibilis fájl, a javasolt
-fájlnév dátumból és útvonalnévből áll) és `Feltöltés Stravára`.
+## Edzések áttekintése és összehasonlítása
 
-- **Asztali gépen** a feltöltés a háttérben megy a Strava saját feltöltő oldalán át (API-kulcs és Strava-előfizetés
-  nem kell). Egyszer be kell jelentkezned (a program a jelszavadat nem látja, a belépés megmarad), utána egy rejtett ablak
-  tölti fel a túrát a megadott adatokkal. Ha a Strava oldala megváltozott és valami nem megy, az ablak megjelenik, a TCX-másolat
-  pedig a `strava` mappában marad. **Ezt még soha nem próbáltuk ki a valódi Stravával** ([`STRAVA.md`](STRAVA.md)).
-- **Androidon** a gomb a Strava appnak adja át a TCX-et (Android 10+); a címet és a többit ott kell megadni.
+Az **`Áttekintés`** gomb (felső sáv; telefonon az `Útvonal` ablak alján a *Mentett edzések áttekintése*) egy teljes
+képernyős oldalt nyit. Az `Esc` vagy a `Vissza` bezárja; alatta a tekerés képernyője változatlanul marad.
+
+![Az áttekintés oldal](screenshots/review.png)
+
+**Lista.** Balra az útvonal (a választóban minden útvonal, amelyen van mentett edzés, és a most betöltött) és az edzései,
+legújabb elöl. Jelölj ki legfeljebb négyet: mindegyik kap egy betűt (A–D) és egy színt, a grafikonon a vonal mintája is
+különbözik (az A folytonos). Az **A a viszonyítási edzés**: az *Időkülönbség* grafikon és a tábla *Különbség* oszlopa hozzá képest
+értendő (pozitív = lassabb). A kuka megerősítést kér, mielőtt töröl. Alapból az útvonal két legújabb edzése van kijelölve.
+
+**Grafikon.** *Teljesítmény*, *Pulzus*, *Kadencia*, *Sebesség* vagy *Időkülönbség* a távolság függvényében. Ha az egeret
+(vagy az ujjad) a profilon vagy a grafikonon mozgatod, a kurzornál az edzések értéke a jelmagyarázatban olvasható, és a
+térképen egy pont jelzi a helyet. Ha egy edzésben nincs ilyen érzékelő (például pulzusmérő nélkül), annak nincs vonala.
+
+**Ráközelítés egy szakaszra.** Húzd végig az egeret (érintőképernyőn az ujjad) a profilon vagy a grafikonon, vagy kattints az
+*emelkedő* gombokra; a `Teljes útvonal` visszaállít. A térkép a szakaszra közelít és kiemeli, a grafikon és a tábla ugyanarra
+a szakaszra szűkül. 100 m-nél rövidebb húzás nem számít szakasznak.
+
+**Szakasztábla.** Edzésenként: idő, átlagsebesség, átlag- és normalizált teljesítmény (NP, legalább 30 másodpercnyi adatból),
+átlag- és maximális pulzus, kadencia, emelkedés, VAM és a különbség a viszonyítási edzéshez. Csak olyan szakaszra van adat,
+amelyet az edzés **teljesen végigtekert**; egy részleges menet a többi szakaszon üres.
+
+### Teljesítmény: csúcsok, FTP, terhelés
+
+![A teljesítmény oldal](screenshots/review-power.png)
+
+Az áttekintés tetején az **Összehasonlítás | Teljesítmény** váltó a másik oldalra visz. Itt az **összes** edzésed számai
+vannak, útvonaltól függetlenül:
+
+- **Csúcsteljesítmény.** A legjobb átlagos watt 5 másodpercre, 1, 5, 20 és 60 percre, az edzés dátumával és útvonalával. Ha az
+  Összehasonlításban kijelöltél edzéseket, az ő értékeik oszloponként mellette állnak (A–D). Egy edzésnek nincs értéke olyan
+  időre, amelynél rövidebb volt.
+- **FTP.** A legjobb 20 percnyi teljesítményed 95 %-át javasolja FTP-nek, és mellette a jelenleg beállítottat. Az
+  **FTP beállítása N W-ra** gomb átírja a Beállításokban; magától az app soha nem módosítja. A mentett edzések TSS-e a saját
+  idejük FTP-jével számolt marad. Pontos javaslathoz egy igazi 20 perces, legjobb tudású erőfeszítés kell: az *FTP-teszt 20 perc*
+  edzés (*Edzések*, `W`) pont ezt adja.
+- **Terhelés.** Az utolsó 12 hét vagy hónap (*Heti* | *Havi*): oszlopai a TSS-t mutatják, fölötte az érték, a súgó
+  (az oszlopra állva) az edzések számát és idejét.
+
+**Csak mért watt számít.** A szimulált tekerő és a becsült (`~`) wattú edzések nem kerülnek a csúcsok és az FTP-javaslat
+közé (a trend idejében igen, a TSS-ében nem). Egy importált edzés, amelyben valódi teljesítmény volt, számít. A trainer saját
+wattja nem teljesítménymérő, ezért az FTP-javaslat is csak annyira pontos, mint az. A régebbi edzések számait az első
+megnyitáskor számoljuk ki és mentjük el, ez néhány másodpercig tarthat sok edzésnél.
+
+### Edzés importálása más alkalmazásból
+
+Az **`Edzés importálása`** gombbal (vagy a fájlt az oldalra húzva) egy GPX- vagy TCX-fájlt töltesz be, például egy Stravából,
+Garminról vagy Wahoóról exportáltat. A pulzus, a kadencia és (ha van) a watt átjön. Tudnivalók:
+
+- **Az útvonalat te adod meg**: az edzést arra az útvonalra illesztjük, amelyik az oldalon ki van választva (előbb töltsd be
+  vagy válaszd ki). A nyom pontjait az útvonalra vetítjük; ami 30 m-nél messzebb esik tőle (kitérő, GPS-hiba), kimarad, és a
+  kimaradtak számát az oldal kiírja. Ha az edzés az útvonalnak csak egy részét fedi le, figyelmeztet.
+- Az **automatikus szünet** (hosszú megállás) nem számít az időbe. Időbélyeg nélküli fájl (például egy tervezett útvonal)
+  nem importálható edzésként.
+- Ugyanaz az edzés (ugyanaz a kezdési időpont) kétszer nem importálható.
+- Az importált edzés **nem lesz PR és nem lesz szellem**: egy kinti menet megállásokkal és gurulással nem hasonlítható a
+  görgős idejeidhez. A listában `Importált` címke jelzi.
+- Telefonon az import még nem elérhető. A FIT-formátumot nem olvassuk; a Strava a GPX-et és a TCX-et is exportálja.
+
+### Becsült watt
+
+Ha a fájlban **nincs teljesítményadat**, a program a szimuláció fizikáját visszafelé futtatja: a sebességből és a lejtőből
+kiszámolja, mennyi watt kellett hozzá (a mozgási energia változása és a gravitáció, a gördülés, a csapágy és a levegő elleni
+munka egy 9 másodperces ablakban). Az ilyen edzésen a számok **`~`** jelet kapnak és `Becsült watt` címke látszik.
+
+A csúszka-ikonnal (*A becslés beállításai*) megadhatod, kinek az adataival számoljon:
+
+| Választás | Mit használ |
+|---|---|
+| **Saját adataim** | a Beállítások testsúlya, kerékpárja, Crr-je |
+| **Egyéni értékek** | az itt megadott *testsúly*, *kerékpár* és *gördülési ellenállás (Crr)*, ha más edzését nézed |
+
+A CdA-t, a hajtáslánc hatásfokát és a levegő sűrűségét mindig a Beállításokból vesszük. A Crr jó aszfalton kb. 0,004;
+**kavicsos útra nincs külön modell**, ott csak a megadott Crr módosít. Az `Újraszámolás` új értékekkel számol, és elmenti az
+edzést; a mért watt-ot a program soha nem írja felül becsléssel.
+
+**Mennyire pontos?** Közelítés. Szelet és szélárnyékot nem ismer (a szembeszél kevesebb wattnak látszik), a lejtőt az útvonal
+adja, nem a fájl zajos GPS-magassága, és éles kanyarokban a vetítés rövid ideig zajos sebességet adhat. A program saját
+fizikájával visszafelé számolva a kört nagyjából 3 %-on belül adja vissza; valódi teljesítménymérővel még nem hasonlítottuk
+össze, ezért 10–15 %-os eltéréssel érdemes számolni.
 
 ## Street View (opcionális)
 
@@ -220,7 +295,8 @@ párbeszédablakok telefonon teljes képernyősek.
 
 Az Android-alkalmazás ugyanez a program APK-ként. Útvonalat a rendszer fájlválasztójával, bikerouter-linkkel, a
 legutóbbiak közül vagy a bemutató útvonallal töltesz be; az első indításkor a Bluetooth-engedélyeket kéri; a tekerés
-alatt a képernyő időkorlátja érvényes lehet ([`ANDROID.md`](ANDROID.md)). Ha az alkalmazás hibát kap, egy piros sáv mutatja
+alatt a képernyő bekapcsolva marad (szünetben és a túra végén a rendszer saját időkorlátja él újra; telefonon még nem
+próbáltuk ki, [`ANDROID.md`](ANDROID.md)). Ha az alkalmazás hibát kap, egy piros sáv mutatja
 az első sorát, és a program használható marad.
 
 ## Beállítások
@@ -236,7 +312,21 @@ Minden módosítás azonnal érvénybe lép és mentődik.
 | **Megjelenés** | szövegméret (80–160 %), téma (sötét/világos), térképstílus (sötét/világos/OSM) |
 | **Térkép és profil** | a térkép kövesse a kerékpárost, profilnézet (előretekintés/teljes), előretekintés hossza, szellem |
 | **Elrendezés** | az alaphelyzet visszaállítása |
+| **Biztonsági mentés** | *Mentés fájlba* és *Visszaállítás fájlból* (lásd lent) |
 | **Street View** | megjelenítés, a Google-kulcs, panoráma-azonosítók mentése, képek letöltése, a tárolt adatok törlése |
+
+### Biztonsági mentés
+
+A *Mentés fájlba* egyetlen **zip-fájlt** készít az útvonalaidról, a mentett túráidról, az importált edzéseidről és a
+beállításaidról. A fájlt te választod ki (Androidon a rendszer „Mentés másként” ablakával), és semmi nem megy ki a
+hálózatra. **Nincs benne** a Street View-kulcs, a térképcsempék, a letöltött Street View-képek és a naplók: ezek
+vagy titkok, vagy bármikor újra letölthetők.
+
+A *Visszaállítás fájlból* **összefésül**: a mentés útvonalai, túrái és edzései hozzáadódnak a meglévőkhöz, **semmi nem
+törlődik, és meglévő túra nem íródik felül**. A mentés beállításai viszont érvénybe lépnek (a Street View-kulcsod a régi
+marad), ezért az app előbb rákérdez. Ugyanazt a fájlt kétszer visszaállítva nem történik semmi. Új gépre költözéskor
+egyszerűen állítsd vissza a fájlt. Tekerés közben nem lehet mentést készíteni vagy visszaállítani; ha a fájl hibás vagy
+újabb verzióból való, az app megmondja, és nem ír semmit. Androidon ez a rész telefonon még nem lett kipróbálva.
 
 ## Billentyűparancsok
 
@@ -278,9 +368,9 @@ ablak fölé a felület nem tud rajzolni); a panel bezárása a Firefoxot is bez
 | macOS: „nem nyitható meg” | Jobb klikk → Megnyitás → Megnyitás (az alkalmazás nincs hitelesítve); vagy `xattr -dr com.apple.quarantine /Applications/bike-osm-ride.app`. |
 | Windows: ha a SmartScreen figyelmeztet | A program nincs digitálisan aláírva, ezért a Windows megállíthatja; a *További információ → Futtatás mindenképp* útján indítható. |
 | Összeomlás / piros sáv | Az első sor a sávban van, a teljes napló a `crash.log`-ban (Androidon `adb logcat -s bike-osm-ride`). Kérlek, jelentsd a hibát a naplóval. |
-| A Strava-feltöltés elakadt | A megjelenő ablakban fejezd be kézzel, vagy töltsd fel a `strava` mappában maradt TCX-et; a hiba nyoma a `strava-debug.log`. |
 
-**Hol vannak az adataim?** Egyetlen mappában, a beállításokkal, a tekerés-naplóval, a csempékkel és a naplókkal együtt:
+**Hol vannak az adataim?** Egyetlen mappában, a beállításokkal, a tekerés-naplóval, a csempékkel és a naplókkal együtt
+(ha másolatot akarsz, használd a *Beállítások → Biztonsági mentés* gombját):
 Windows `%LOCALAPPDATA%\bike-osm-ride`, macOS `~/Library/Application Support/bike-osm-ride`, Linux
 `~/.local/share/bike-osm-ride`, Android az alkalmazás privát mappája. A pontos felépítést a
 [`ROUTES_AND_DATA.md`](ROUTES_AND_DATA.md) írja le; hogy mi megy ki a gépről, a [`PRIVACY.md`](PRIVACY.md).

@@ -15,6 +15,9 @@ serde_json = { workspace = true, features = ["float_roundtrip"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 quick-xml = "0.42"
+# Backup / restore (`backup.rs`): one .zip of the data folder. Deflate through flate2 (already in the
+# tree), none of the default features (encryption, bzip2, zstd, lzma ... pull C libraries).
+zip = { version = "4.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Public services (BRouter, Open-Meteo). rustls only, no native-tls / OpenSSL.
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 

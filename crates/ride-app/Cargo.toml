@@ -21,6 +21,7 @@ ride-ui-map = { workspace = true }
 ride-ui-profile = { workspace = true }
 ride-ui-hud = { workspace = true }
 ride-ui-dialogs = { workspace = true }
+ride-ui-review = { workspace = true }
 ride-ui-streetview = { workspace = true }
 dioxus = { workspace = true, features = ["desktop"] }
 tokio = { workspace = true }
@@ -60,6 +61,6 @@ rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 # On Android the same desktop renderer runs inside the mobile shell `dx` generates.
 [target.'cfg(target_os = "android")'.dependencies]
 dioxus = { workspace = true, features = ["mobile"] }
-# The share-to-Strava intent is built through JNI (jni 0.21 is the version the BLE stack uses).
+# The system file picker is called through JNI (jni 0.21 is the version the BLE stack uses).
 jni = "0.21"
 ndk-context = "0.1"

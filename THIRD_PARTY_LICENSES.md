@@ -6,7 +6,7 @@ declared in the crate metadata are marked; the map and route data sources are
 attributed in the README Licenc section and in the app about dialog, and vendored
 or ported source files are described in [`NOTICE.md`](NOTICE.md).
 
-Packages: **635**. Without a declared licence field: **0**.
+Packages: **638**. Without a declared licence field: **0**.
 
 | Crate | Version | Licence | Repository |
 |---|---|---|---|
@@ -105,6 +105,7 @@ Packages: **635**. Without a declared licence field: **0**.
 | dbus-tokio | 0.7.6 | Apache-2.0/MIT | <https://github.com/diwic/dbus-rs> |
 | der | 0.7.10 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/formats/tree/master/der> |
 | deranged | 0.5.9 | MIT OR Apache-2.0 | <https://github.com/jhpratt/deranged> |
+| derive_arbitrary | 1.5.0 | MIT OR Apache-2.0 | <https://github.com/rust-fuzz/arbitrary> |
 | derive_more | 0.99.20 | MIT | <https://github.com/JelteF/derive_more> |
 | digest | 0.10.7 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/traits> |
 | dioxus | 0.7.10 | MIT OR Apache-2.0 | <https://github.com/DioxusLabs/dioxus/> |
@@ -555,6 +556,7 @@ Packages: **635**. Without a declared licence field: **0**.
 | webkit2gtk | 2.0.1 | MIT | <https://github.com/tauri-apps/webkit2gtk-rs> |
 | webkit2gtk-sys | 2.0.1 | MIT | <https://github.com/tauri-apps/webkit2gtk-rs> |
 | webpki-root-certs | 1.0.11 | CDLA-Permissive-2.0 | <https://github.com/rustls/webpki-roots> |
+| webpki-roots | 1.0.11 | CDLA-Permissive-2.0 | <https://github.com/rustls/webpki-roots> |
 | web-sys | 0.3.107 | MIT OR Apache-2.0 | <https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys> |
 | web-time | 1.1.0 | MIT OR Apache-2.0 | <https://github.com/daxpedda/web-time> |
 | webview2-com | 0.38.2 | MIT | <https://github.com/wravery/webview2-rs> |
@@ -640,6 +642,7 @@ Packages: **635**. Without a declared licence field: **0**.
 | zerotrie | 0.2.5 | Unicode-3.0 | <https://github.com/unicode-org/icu4x> |
 | zerovec | 0.11.9 | Unicode-3.0 | <https://github.com/unicode-org/icu4x> |
 | zerovec-derive | 0.11.7 | Unicode-3.0 | <https://github.com/unicode-org/icu4x> |
+| zip | 4.6.1 | MIT | <https://github.com/zip-rs/zip2.git> |
 | zlib-rs | 0.6.8 | Zlib | <https://github.com/trifectatechfoundation/zlib-rs> |
 | zmij | 1.0.23 | MIT | <https://github.com/dtolnay/zmij> |
 | zune-core | 0.5.3 | MIT OR Apache-2.0 OR Zlib | <https://github.com/etemesi254/zune-image> |

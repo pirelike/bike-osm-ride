@@ -12,6 +12,9 @@
 //!   `UnInhibit`; closing the bus connection releases it too.
 //! * **macOS**: an IOKit power assertion (`IOPMAssertionCreateWithName` with
 //!   `PreventUserIdleDisplaySleep`), released with `IOPMAssertionRelease`.
+//! * **Android**: `FLAG_KEEP_SCREEN_ON` on the activity's window, set through JNI
+//!   (`android_picker::set_keep_screen_on`). The flag belongs to the window, so it goes away with
+//!   it. Not verified on a device (see `docs/ANDROID.md`).
 
 #[cfg(windows)]
 mod imp {
@@ -176,9 +179,22 @@ mod imp {
     }
 }
 
-#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+#[cfg(target_os = "android")]
 mod imp {
-    /// Android and the remaining unixes: nothing to do, the platform manages it.
+    /// `FLAG_KEEP_SCREEN_ON` on the activity's window (`MainActivity.setKeepScreenOn`).
+    pub fn set(on: bool) -> bool {
+        crate::android_picker::set_keep_screen_on(on).is_ok()
+    }
+}
+
+#[cfg(not(any(
+    windows,
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "android"
+)))]
+mod imp {
+    /// The remaining unixes: nothing to do, the platform manages it.
     pub fn set(_on: bool) -> bool {
         true
     }

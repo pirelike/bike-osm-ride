@@ -78,6 +78,41 @@ Category by `length [m] × average grade [%]`: ≥ 8 000 cat 4, ≥ 16 000 cat 3
 north-west of Budapest (Hűvösvölgy towards the Pilis), rolling hills, one 4 km climb of about 7 % from 10.5 km to
 14.5 km and a long descent. Its coordinates are *near*, not on, real roads.
 
+## 2a. Importing a recorded activity (`activity.rs`, `matching.rs`, `import.rs`)
+
+A GPX/TCX recorded by another app is **not** a route: it becomes a ride of a stored route.
+
+1. **Parse** (`activity::from_bytes`, the format is recognised from the content). The route reader (`gpx.rs`) skips
+   `<extensions>` on purpose; the activity reader keeps them. GPX: `trkpt` with `ele`, `time` and, anywhere below the point
+   and in any namespace, `hr`/`heartrate`, `cad`/`cadence`, `power`/`watts`/`powerinwatts` (Strava writes `<power>` straight
+   into `<extensions>`). TCX: `Trackpoint` with `Time`, `Position`, `AltitudeMeters`, `HeartRateBpm/Value`, `Cadence`,
+   `Extensions/TPX/Watts`; a `Sport` other than `Biking` is refused. A sample needs a position and a time stamp; sensor
+   values outside plausible ranges (HR 30-250, cadence 0-250, power 0-3000) become `None`; samples not later than the
+   previous one are dropped. Fewer than 10 usable samples is an error with a Hungarian message.
+2. **Match** (`matching::match_to_route`): every sample is projected onto the route polyline (nearest point, flat local
+   projection). The search is monotone: after the first sample it looks at most 50 m back and `30 m/s × time since the last
+   match + 300 m` ahead, which keeps out-and-back and loop routes straight. Samples farther than 30 m are *off-route* and get
+   no distance; fewer than half matched, or a matched span under 500 m, is an error. The first sample searches the whole
+   route and prefers the earliest of several equally near points (a loop starts where it ends).
+3. **Resample** (`import::import_activity`): a 1 Hz recording in timer time. A gap above 10 s in which the rider moved slower
+   than 1 m/s is a pause and adds 1 s, not the gap. Position, elevation and grade of every sample come from the *route* at the
+   matched distance (so all rides of a route share one profile); speed is the slope of the distance over ±2 s; heart rate,
+   cadence and power are the nearest measurement within 3 s.
+4. **Watts.** With no power in the file `ride_sim::estimate` fills them in ([`SIMULATION.md`](SIMULATION.md) §7a) and the
+   record gets `power_estimated = true` and the `EstimateParams` used. `import::reestimate` redoes a *stored* estimated ride
+   with other parameters and refuses a ride with measured watts.
+5. **Store** (`rides::Store::save_ride`): `source = Imported`. A ride with the same start time (stem) is refused by the
+   caller (`Store::has_ride`) instead of overwritten; `Store::delete_ride` removes a ride and its index line;
+   `Store::list_all_rides` lists every route that has rides (found by folder, so a route removed from the recents still
+   shows). `ride_sim::segments::{best_times, choose_ghost}` skip imported rides like simulated ones.
+
+Record additions (all `#[serde(default)]`, version stays 1): `RideRecord.{source, power_estimated, estimate}`,
+`RideMeta.{source, power_estimated, avg_power_w, avg_hr, route_name}`, and for the power page
+`RideMeta.{tss, mmp}`: the TSS and the best average power per window of `ride_sim::power_curve::DURATIONS` (watts as `f32`,
+`null` = no value). `mmp: None` means "not computed yet" (an index from an older version; filled in from the record the next
+time the review page refreshes, `Store::backfill_analysis`), `Some` with only `null`s means "computed, nothing to show"
+([`SIMULATION.md`](SIMULATION.md) §7b).
+
 ## 3. The data folder
 
 One folder holds everything: `%LOCALAPPDATA%\bike-osm-ride`, `~/Library/Application Support/bike-osm-ride`,
@@ -89,14 +124,14 @@ Android. `RIDE_DATA_DIR` overrides it everywhere (tests, portable installs, scre
 | `settings.json` | `Settings` (rider, ui) | pretty JSON; written 500 ms after a change and on exit; holds the Google key |
 | `recent.json` | the recent routes, newest first | at most 20; older route caches are deleted |
 | `routes/<id>.json` | the processed `Route` | cache so a reopened route is not rebuilt |
-| `rides/<route id>/<start>.json`, `index.json` | the ride log | never touched by the recents housekeeping; [`SIMULATION.md`](SIMULATION.md) §6 |
+| `rides/<route id>/<start>.json`, `index.json` | the ride log (recorded and imported rides) | never touched by the recents housekeeping; [`SIMULATION.md`](SIMULATION.md) §6, §2a above |
 | `workouts/<id>.json` | imported workouts | one file each |
 | `tiles/<dark\|light\|osm>/<z>/<x>/<y>.png` | map tile cache | 30 days; no bulk prefetching (OSM tile policy) |
 | `streetview/<route id>.json` | panorama ids per 25 m bucket | 30 days; "no panorama" 7 days; ids, our own coordinates, heading and a timestamp, never imagery |
 | `streetview/img/<route id>/` | downloaded images and `manifest.json` | only after an explicit download; shown for 30 days |
 | `ble.log`, `ble.log.1` | BLE hex log | always on; rotated at start-up beyond 8 MB |
 | `crash.log`, `crash.log.1` | caught panics | rotated at 256 KB |
-| `strava/`, `strava-webview/` | TCX copies and the debug log; the upload WebView profile (sign-in) | desktop |
+| `strava/`, `strava-webview/` | **no longer written** (0.3.1 and older: TCX copies, debug log, the upload WebView profile with the Strava sign-in); safe to delete | desktop |
 | `webview/` | the main WebView's profile | |
 | `firefox-profile/` | the browser panel's own Firefox profile | Windows |
 
@@ -116,6 +151,49 @@ loads and gains the new fields on the next save. `RideRecord` carries `version` 
 unknown version is ignored. A route cache written before `timeline` existed still loads, and an empty timeline is
 not written. New persisted fields need a test that the old shape still parses; look at the tests at the bottom of
 `ride-model/src/lib.rs` for the pattern.
+
+## 3a. Backup and restore (`ride-route/src/backup.rs`)
+
+*Settings → Biztonsági mentés*: one `.zip` of what cannot be fetched again. **A whitelist**, not "the folder minus
+exclusions":
+
+```text
+backup.json                      {format, app_version, created_unix_s}
+settings.json                    Settings, with ui.google_maps_key emptied
+recent.json                      the recent-routes index
+routes/<id>.json                 processed routes
+rides/<route id>/<start>.json    ride records;  rides/<route id>/index.json  the per-route index
+workouts/<id>.json               imported workouts
+```
+
+Not in it: `tiles/`, `streetview/` (ids and imagery), the logs, `webview/`, `firefox-profile/`, `strava*/`,
+`exports/`, `*.tmp`. The Google key is blanked on export and ignored on restore (`google_maps_key` is the only secret;
+a backup file is mailed around). The settings written into the zip are the **live** ones, not the file on disk, which
+can lag behind the 500 ms debounced save.
+
+**Restore only merges.** Nothing that exists is overwritten or deleted: a route id is a content hash (the same id is
+the same route), a ride is keyed by its start time (`<route id>/<stem>`), an imported workout by its id; the per-route
+`index.json` is merged by stem; the recent list gains the entries whose route file exists afterwards (it is not
+capped here, the normal housekeeping trims it the next time a route is opened). Restoring a file twice adds nothing.
+The settings are not written by `backup.rs`: they are returned sanitised (`store::sanitize`) and the controller
+applies them through `apply_settings`, because a file written behind its back would be overwritten by the pending
+debounced save. The controller keeps the local Google key and the selected workout (picking one would start it).
+
+**Two phases.** The first reads every entry through a byte counter and validates it (JSON parses, route id equals the
+file name, a ride is not of a newer `version` and has points, a workout is an import with steps); nothing is
+written. Only a fully checked archive reaches the second phase, which writes under the store lock in the order routes,
+rides, indexes, workouts, recent list. A record of an unknown version or an unreadable entry is **skipped and
+counted**, never an error; an archive without `backup.json`, of a newer `format`, or with an unsafe name is refused
+as a whole.
+
+**A crafted archive** cannot reach outside the data folder because an entry's name is never used as a path: it is
+mapped onto the whitelist (`classify`) and the path is rebuilt from ids that passed `valid_id` / `valid_stem`. Names
+with `..`, a leading `/`, a backslash, `:` or an empty segment refuse the archive. Limits (`Limits`): 50 000 entries,
+64 MB per entry (the store's own `MAX_FILE_BYTES`), 2 GiB in total, counted on the bytes actually read, never on the
+header sizes. The zip crate is `zip` 4.6 with `deflate-flate2-zlib-rs` only (no encryption, no bzip2/zstd/lzma).
+
+Both buttons are refused while a ride runs or is paused. On Android the system "save as" / "open" dialogs
+(Storage Access Framework) are used; the zip passes through the cache folder ([`ANDROID.md`](ANDROID.md)).
 
 ## 4. Settings reference (`ride-model`, `Default` impls)
 

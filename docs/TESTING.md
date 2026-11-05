@@ -7,7 +7,7 @@ hardware or against real services. Numbers measured on 2026-11-04 on the maintai
 ## 1. Running
 
 ```powershell
-cargo test --workspace            # 954 passed, 0 failed, 3 ignored
+cargo test --workspace            # 1054 passed, 0 failed, 3 ignored
 cargo clippy --workspace --all-targets   # clean, no warnings
 cargo fmt --all -- --check        # clean
 ```
@@ -21,14 +21,15 @@ and 50 tests across four crates go red although nothing is wrong (`ride-app` 10,
 |---|---|---|
 | `ride-app` | 132 | |
 | `ride-ble` | 286 (+1 ignored) | |
-| `ride-model` | 19 | |
-| `ride-route` | 101 + 10 (+2 ignored) | `fixtures_pipeline.rs` |
-| `ride-sim` | 61 | |
-| `ride-ui-dialogs` | 64 | |
+| `ride-model` | 20 | |
+| `ride-route` | 137 + 10 (+2 ignored) | `fixtures_pipeline.rs` |
+| `ride-sim` | 97 | |
+| `ride-ui-dialogs` | 63 | |
 | `ride-ui-hud` | 30 | |
-| `ride-ui-kit` | 52 | |
-| `ride-ui-map` | 39 + 6 | `render.rs` |
+| `ride-ui-kit` | 53 | |
+| `ride-ui-map` | 40 + 6 | `render.rs` |
 | `ride-ui-profile` | 68 | |
+| `ride-ui-review` | 26 | |
 | `ride-ui-streetview` | 83 + 3 | `key_safety.rs`, `offline_flow.rs`, `panel_flow.rs` |
 
 **Ignored tests** (they need something the CI runner does not have; run them by hand with `-- --ignored`):
@@ -47,7 +48,9 @@ started release workflow ([`RELEASING.md`](RELEASING.md)); there is no CI on pus
 | **Differential** | `ride-ble/src/diff_tests.rs` | the same bytes decoded by the `ftms` crate, by the vendored `cycling-ble` parser and by hand-built spec vectors must agree (every relevant Indoor Bike Data flag combination, Control Point vectors, CSC/CPS wrap-around) |
 | **Behaviour on a fake transport** | `ride-ble/src/fake.rs`, `hub_tests.rs`, `control.rs` | scan, connect, the FTMS handshake, keep-alive, status storms, reclaim limit, pause and neutral hand-back, reconnects and replay, merge priorities: the real code paths with failures injected, in milliseconds (`HubConfig::fast`) |
 | Protocol vectors | `ride-ble/src/zwift/` | NIST SP 800-38C AES-CCM vectors, the key exchange, the debouncer |
-| Persistence | `ride-route/store.rs`, `rides.rs`, `ride-model` | round trips in a temp folder, corrupt and foreign files, path traversal ids, an old settings file / route cache / ride summary still loading |
+| Persistence | `ride-route/store.rs`, `rides.rs`, `ride-model` | round trips in a temp folder, corrupt and foreign files, path traversal ids, an old settings file / route cache / ride summary / ride index still loading, the index backfill of the power numbers |
+| **Backup zip** | `ride-route/backup.rs` | round trip into an empty folder, the Google key and every cache absent from the archive, zip-slip names (`..`, absolute, backslash, drive letter) refused before anything is written, a bomb (per entry, in total, entry count) refused, a ride of a newer version skipped, merging never overwrites, restoring twice adds nothing, rides of a route that left the recent list survive, settings sanitised |
+| Power curve and trend | `ride-sim/power_curve.rs`, `ride-ui-review/tests.rs` | known bests of steps and spikes, a window longer than the ride, dropouts and late frames, NaN and absurd timestamps, 95 % rule and clamping, Monday weeks / month and leap-year dates, only measured rides count; the page renders the curve, the FTP button (disabled when already set) and twelve trend columns |
 | Pure UI helpers | every `ride-ui-*` crate | geometry, formatting, filtering, zone-bar percentages, the dock's tiling invariants after every operation |
 | **House rules as tests** | `ride-ui-kit`, `ride-ui-dialogs`, `ride-app/shell.rs` | CSS lints (no blur, no hard-coded colours, only defined tokens, spacing grid, class prefixes), palette contrast, WCAG and colour-difference gates, "no second close button in a dialog footer", the font CSS in sync with the `.woff2` files, palette constants in sync with the CSS tokens |
 | Packaging | `ride-app/main.rs` `packaging_tests` | the pinned Android manifest and activity match `Dioxus.toml` (permissions, `configChanges`, identifier) |
@@ -60,7 +63,7 @@ started release workflow ([`RELEASING.md`](RELEASING.md)); there is no CI on pus
 There are no end-to-end UI tests. The app is checked by running it: `RIDE_DEMO`, `RIDE_SIM`, `RIDE_TIMESCALE` and the
 other hooks reproduce a ride without clicking, and the DevTools tools take page screenshots
 ([`DEVELOPMENT.md`](DEVELOPMENT.md) §3, §4, §6). `node scripts/readme_shots.mjs` is, as a side effect, a smoke test
-of eleven screens in two layouts: it fails when the app dies or a screen does not appear.
+of ten screens in two layouts: it fails when the app dies or a screen does not appear.
 
 ## 4. Verification matrix
 
@@ -76,18 +79,18 @@ of eleven screens in two layouts: it fails when the app dies or a screen does no
 | Windows app | yes | daily use |
 | macOS app | CI build and bundle checks (Info.plist Bluetooth text, universal binary) | **no run on a real machine on record** |
 | Linux app (AppImage, `.deb`) | CI build, a 20 s smoke test under `xvfb` | **no run on a real machine on record** |
-| Android app | packaging tests; CI build | UI exercised during development (the 0.3.0 commit message records the crashes found and fixed); **Bluetooth, Strava share, long rides: never** |
+| Android app | packaging tests; CI build | UI exercised during development (the 0.3.0 commit message records the crashes found and fixed); **Bluetooth, long rides: never** |
 | In-app updater | pure logic | the check runs at every start; a full self-replace on a published release is not documented as exercised |
-| Strava upload | script generation, word parsing | **never against strava.com** ([`STRAVA.md`](STRAVA.md)) |
 | Street View | mock-based flows, key-safety test | **never against Google** ([`STREETVIEW.md`](STREETVIEW.md)) |
 | Browser panel (Firefox) | geometry helpers | used on Windows |
+| Review page, import, estimated watts | yes: pure maths, parsers, projection, server-side render, CSS house rules; a ride driven with known watts is imported as a watt-less GPX and recovered (within 3 % on average) | seen on Windows with synthetic rides (`seed_review`, `readme_shots.mjs --only review`). **Never with a real Strava/Garmin export; the estimate never compared with a real power meter; Android never** |
 
 ## 4a. Known gaps, ranked by how much they could hurt
 
 1. Terrain simulation on a real trainer is unproven. Do one ride on a hilly route with `ble.log` kept, then look
    for `WRITE 2ad9 11...` with non-zero grade bytes and `80 11 01` answers.
 2. No CI on push: a red test can reach `main`.
-3. Strava and Google paths depend on pages and endpoints nobody has run since they were written.
+3. The Street View path depends on Google endpoints nobody has run since it was written.
 4. Mac and Linux users are probably the first to exercise their builds on real machines.
 5. One unexplained observation: once in about fifteen captures the look-ahead elevation profile showed the last
    3 km of the route while the rider was at 3.2 km (it did not repeat). If it reappears, note what changed in the

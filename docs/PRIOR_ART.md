@@ -39,7 +39,7 @@ every notification / control-point exchange (`RIDE_BLE_LOG=1` → `%LOCALAPPDATA
 | bikerouter / brouter-web link formats | github.com/nrenner/brouter-web (`leaflet-fullHash.js`, `BRouter.js`) and BRouter's `RoutingParamCollector.java` | MIT | read to verify the accepted link formats (`ride-route/src/bikerouter.rs` documents the commit); no code copied |
 | Martin et al. (1998) power model | J. Appl. Biomech. 14:276-291; the open-source `rouleur` package for a worked example | paper / package | the model is implemented from the paper; one worked example's number is a test value |
 | Fonts | Barlow and Barlow Condensed (the Barlow Project) | SIL OFL 1.1 | embedded (subset, WOFF2): see `NOTICE.md` |
-| Web upload form of Strava | StravaUploaderPy | GPL-3.0 | **idea only** (names of the form fields); no code copied; the app does not use the Strava API ([`STRAVA.md`](STRAVA.md)) |
+| Web upload form of Strava | StravaUploaderPy | GPL-3.0 | **idea only** (names of the form fields); no code copied; the app has no Strava upload any more ([`DECISIONS.md`](DECISIONS.md) V2) |
 | Map data | OpenStreetMap, BRouter, Open-Meteo, Google Maps Platform | ODbL, public services, CC BY 4.0, the user's own key | external services, attributed in the README |
 
 Zwift Hub trainer messages are decoded by `zwift/proto.rs` but not wired into the trainer control.

@@ -145,8 +145,69 @@ ISO-8601 UTC): `Activity Sport="Biking"`, one `Lap` (`TotalTimeSeconds`, `Distan
 and maximum heart rate, cadence, `Intensity` Active, `TriggerMethod` Manual), one `Track` with a trackpoint per
 1 Hz record (time, position, altitude, distance, heart rate, cadence) and the `TPX` extension with watts and
 speed, a `Notes` text and a `Creator`. The suggested file name is built from the date and the route name
-(`suggested_filename`). Strava, Intervals.icu and TrainingPeaks accept it; the upload paths are in
-[`STRAVA.md`](STRAVA.md). A ride that was fast-forwarded with `RIDE_TIMESCALE` has a coarser recording.
+(`suggested_filename`). Strava, Intervals.icu and TrainingPeaks accept it as a manual upload (there is no built-in upload). A ride that was fast-forwarded with `RIDE_TIMESCALE` has a coarser recording.
+
+## 7a. Estimated watts, section statistics and the comparison (`estimate.rs`, `analysis.rs`, `compare.rs`)
+
+**The model run backwards.** `physics::power_for(v, a, grade, params)` is the force balance of the forward model solved for the
+pedal power: `P = (F_resist(v)·v + m_eff·v·a) / η`, with the same split of masses (gravity and rolling see the plain mass,
+the acceleration term the mass plus 1.5 kg of wheels). Coasting and braking give a negative balance and are reported as 0 W
+(the forward model never pedals backwards); the result is capped at 2000 W.
+
+**`estimate::estimate_power`** applies it to a recording as an *energy balance over a window*, not as an instantaneous
+derivative: for each second the pedal energy is `ΔE_kinetic + Σ F_resist·v·dt` over ±4 s, divided by `η·Δt`. Grade and inertia
+sit in the same window, so a sharp change of grade cannot make a spike (the first version smoothed the acceleration but not the
+grade and spiked at every crest). The speed is smoothed over 5 s first; a bike below 0.3 m/s gets 0 W. The grade is the
+*route's* smoothed grade carried by each `RecordPoint`, never the noisy GPS altitude of the file, because on a climb gravity is
+most of the power.
+
+**What it cannot know:** wind and drafting (a head wind reads as fewer watts), a rider who stops pedalling on the flat versus
+one who slows down, tyre and surface (only the Crr that is typed in; there is no gravel model), and the real mass and CdA.
+Sharp bends can make the projected distance, and with it the speed, briefly noisy. Treat 10-15 % as the honest error until it
+has been compared with a power meter; the tests only close the loop through the app's own physics (a ride driven with known
+watts is recovered to within 6 % away from steps and grade changes, the whole ride within 3 %).
+
+**Rider setup.** `EstimateParams { rider_kg, bike_kg, crr, cda, drivetrain_eff, air_density, from_profile }` is stored in the
+record. `estimate::profile_params` takes the rider's settings; `custom_params` takes someone else's weight, bike and Crr and
+keeps CdA, efficiency and air density from the settings. Values are clamped by `PhysicsParams::from_rider`.
+
+**`analysis::summarize`** builds a `RideSummary` for a recording the engine did not count (NP is the fourth-power mean of the
+30 s rolling mean, IF = NP/FTP, TSS = elapsed·IF²/3600·100, zones follow the 3 s average); a test keeps its NP equal to the
+engine's.
+
+**`compare`** puts a ride on a 10 m distance grid (`DistSeries`, time by `Track::time_at`), `delta_time(ride, reference)` is the
+time difference along the route (positive = behind; both rides are zeroed where they first share a distance, `None` where the
+reference does not reach), and `section_stats(points, d0, d1)` sums up a stretch (time, speed, average and normalised power,
+heart rate, cadence, ascent, VAM from 10 m of ascent) and is `None` unless the ride covered the whole stretch.
+
+## 7b. The power curve, the FTP suggestion and the trend (`power_curve.rs`)
+
+**Mean-maximal power.** For a window length (`DURATIONS`: 5 s, 1, 5, 20 and 60 minutes) the highest average power held over
+any stretch of that length, by a prefix-sum sliding window (O(n) per window). The recording is first put on a **one-second
+grid by timer time** (`dense_power`), not read by index: the live engine can skip a second under load, and an import is
+resampled to a 1 s grid. A missing second takes the previous sample's value when the gap is short (`MAX_SAMPLE_GAP_S`, 5 s, a
+late frame) and counts as **0 W** when it is longer (a dropout); a sample without power is 0 W as well. Both can only lower an
+average, never raise it. **A ride shorter than the window has no value (`None`), it is not padded with zeros**, and a
+recording with no power at all has no curve. Timestamps past 28 hours are not read (a corrupt `t` must not allocate gigabytes).
+
+**FTP suggestion.** `estimate_ftp` = 95 % of the best 20 minutes, rounded to whole watts and clamped to the setting's range
+(50-600 W). It is only a suggestion: the page offers "FTP beállítása N W-ra", the rider decides. The ramp tests of the workout
+library are not recognised (a ride record stores no workout id); the 20 minute best is what counts, test or not.
+
+**Only measured watts count** (`is_measured`: not simulated, not `power_estimated`). A simulated rider's power comes from the
+physics model, and an estimated ride's watts were computed backwards from speed and grade; an FTP derived from either would
+only confirm the model's own assumptions. An imported ride **with** real watts counts. The curve of an excluded ride is stored
+as "computed, nothing to show" so it is never retried.
+
+**Trend.** `bucket` adds up the last twelve weeks (Monday to Sunday, UTC) or calendar months, empty periods included. Time
+counts every ride that is not simulated, TSS only rides with measured watts. TSS is the value stored with the ride, computed
+against the FTP of its day; changing the FTP later does not rewrite history.
+
+**Where the numbers live.** `index_numbers(record)` gives the TSS and the curve of one ride; `Store::save_ride` keeps them in
+`RideMeta.{tss, mmp}`, so `analyze(&[RouteRides], now)` never opens a record. An index written before the power page has
+`mmp: None` ("not computed"); `Store::backfill_analysis` fills those in from the records once (records read one at a time,
+the index patched under the lock after re-reading it, so a ride saved meanwhile is not lost) and the review page runs it at
+every refresh. `ride-sim` has no clock: the caller passes `now`.
 
 ## 8. Tests worth knowing
 

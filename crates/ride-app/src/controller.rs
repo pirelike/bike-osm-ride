@@ -26,7 +26,6 @@ use ride_model::{
     Route, RouteSource, SensorCommand, SensorEvent, Settings, Theme, Workout, WorkoutLibrary,
     RIDE_RECORD_VERSION,
 };
-use ride_ui_dialogs::RideDetails;
 use ride_ui_kit::format::{fmt_km, fmt_m};
 use ride_ui_kit::ToastKind;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -186,9 +185,6 @@ pub struct Inner {
     scan_gen: u64,
     hub_lost_notified: bool,
     file_dialog_open: bool,
-    /// The open Strava upload view (desktop only).
-    #[cfg(not(target_os = "android"))]
-    strava: Option<crate::strava::StravaView>,
     /// Sticky per ride: the simulated rider took part (`RIDE_DEMO` / `RIDE_SIM` count as one).
     /// Such a ride is stored but never becomes a PR or the "Best" ghost.
     simulated: bool,
@@ -245,8 +241,6 @@ impl Controller {
             scan_gen: 0,
             hub_lost_notified: false,
             file_dialog_open: false,
-            #[cfg(not(target_os = "android"))]
-            strava: None,
             simulated: false,
             ghost_plan: None,
             ghost_gen: 0,
@@ -430,6 +424,9 @@ impl Controller {
         }
         if let Some(dialog) = hooks.dialog {
             self.open_dialog(dialog);
+        }
+        if hooks.review {
+            self.review_open();
         }
     }
 
@@ -1027,17 +1024,21 @@ impl Controller {
         let open_now = *self.st.dialog.peek();
         let dialog_open = open_now.is_some();
         let route_dialog = open_now == Some(DialogKind::Route);
+        // the review page covers the ride screen: its keys must not start or steer a ride
+        let review_open = *self.st.review.open.peek();
         match key {
             "esc" => {
                 if dialog_open {
                     self.close_dialog();
+                } else if review_open {
+                    self.review_close();
                 } else if *self.st.fullscreen.peek() {
                     self.toggle_fullscreen();
                 }
             }
             "f11" => self.toggle_fullscreen(),
-            "ctrl+o" if !dialog_open || route_dialog => self.pick_file(),
-            _ if dialog_open => {}
+            "ctrl+o" if !review_open && (!dialog_open || route_dialog) => self.pick_file(),
+            _ if dialog_open || review_open => {}
             "space" => self.toggle_ride(),
             "m" => self.toggle_follow(),
             "p" => self.toggle_profile_mode(),
@@ -1115,172 +1116,6 @@ impl Controller {
                     .toast(ToastKind::Error, format!("A mentés nem sikerült: {err}")),
             }
         });
-    }
-
-    /// "Feltöltés Stravára": the TCX is saved as a copy in the app's data folder, then it goes to
-    /// Strava in the background (desktop: a hidden WebView, see `strava.rs`) or is handed to the
-    /// Strava app (Android). The rider's details (title, sport, notes...) come from the summary.
-    pub fn upload_strava(self) {
-        let Some(finished) = self.with(|i| i.finished.clone()) else {
-            self.st.toast(ToastKind::Warning, "Nincs feltölthető túra.");
-            return;
-        };
-        if *self.st.strava_busy.peek() {
-            return;
-        }
-        let mut busy = self.st.strava_busy;
-        busy.set(true);
-        let details = self.st.ride_details.peek().clone();
-        spawn(async move {
-            let rendered = guarded("tcx", || {
-                (
-                    ride_sim::tcx::to_tcx(&finished.summary, &finished.points),
-                    ride_sim::tcx::suggested_filename(&finished.summary),
-                )
-            });
-            let Ok((xml, name)) = rendered else {
-                self.st
-                    .toast(ToastKind::Error, "A TCX-fájl előállítása nem sikerült.");
-                busy.set(false);
-                return;
-            };
-            self.deliver_to_strava(xml, name, details).await;
-        });
-    }
-
-    /// Desktop: signs in once (visible), then the hidden WebView uploads and reports back.
-    #[cfg(not(target_os = "android"))]
-    async fn deliver_to_strava(self, xml: String, name: String, details: RideDetails) {
-        let st = self.st;
-        let mut busy = st.strava_busy;
-        let copy = paths::strava_dir().join(&name);
-        let saved = match tokio::fs::create_dir_all(paths::strava_dir()).await {
-            Ok(()) => tokio::fs::write(&copy, xml.as_bytes()).await,
-            Err(err) => Err(err),
-        };
-        if let Err(err) = saved {
-            st.toast(ToastKind::Error, format!("A mentés nem sikerült: {err}"));
-            busy.set(false);
-            return;
-        }
-        let Some(win) = self.window() else {
-            busy.set(false);
-            return;
-        };
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-        let opened = crate::strava::StravaView::open(
-            &win,
-            &paths::strava_webview_dir(),
-            &name,
-            &xml,
-            &details,
-            move |word| {
-                let _ = tx.send(word);
-            },
-        );
-        match opened {
-            Ok(view) => self.with(|i| i.strava = Some(view)),
-            Err(err) => {
-                st.toast(
-                    ToastKind::Error,
-                    format!("A Strava-oldal megnyitása nem sikerült: {err}"),
-                );
-                busy.set(false);
-                return;
-            }
-        }
-        st.toast(
-            ToastKind::Info,
-            "Feltöltés a Stravára… (a háttérben megy, az összegző addig használható)",
-        );
-        // The page script reports; a quiet page is a stuck one.
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(150);
-        let mut status = st.strava_status;
-        loop {
-            let raw = tokio::select! {
-                raw = rx.recv() => raw,
-                _ = tokio::time::sleep_until(deadline) => Some("debug:{\"reason\":\"no-answer\"}".to_string()),
-            };
-            let Some(raw) = raw else { break };
-            match crate::strava::parse_word(&raw) {
-                crate::strava::Word::Selected => {}
-                crate::strava::Word::Fields(report) => {
-                    eprintln!("[ride-app] strava fields: {report}")
-                }
-                crate::strava::Word::Saved => {
-                    st.toast(ToastKind::Success, "A túra felkerült a Stravára.");
-                    self.finish_strava_view();
-                    break;
-                }
-                crate::strava::Word::Login => {
-                    self.with(|i| {
-                        if let Some(view) = &i.strava {
-                            view.show();
-                        }
-                    });
-                    status.set(Some(
-                        "Jelentkezz be a Stravába; utána a feltöltés magától folytatódik."
-                            .to_string(),
-                    ));
-                }
-                crate::strava::Word::Stuck(dump) => {
-                    let log = paths::strava_dir().join("strava-debug.log");
-                    let _ = tokio::fs::write(&log, dump.as_bytes()).await;
-                    self.with(|i| {
-                        if let Some(view) = &i.strava {
-                            view.show();
-                        }
-                    });
-                    status.set(Some(format!(
-                        "A feltöltés nem ment végig automatikusan. Fejezd be itt, vagy töltsd fel a fájlt: {}",
-                        copy.display()
-                    )));
-                    // The view stays until "Kész"; the busy flag is released now.
-                    busy.set(false);
-                    break;
-                }
-            }
-        }
-    }
-
-    /// Android: the Strava app takes the TCX through the system share sheet.
-    #[cfg(target_os = "android")]
-    async fn deliver_to_strava(self, xml: String, name: String, _details: RideDetails) {
-        let mut busy = self.st.strava_busy;
-        let result = crate::android_share::share_tcx(&name, xml.as_bytes());
-        busy.set(false);
-        match result {
-            Ok(()) => self.st.toast(
-                ToastKind::Info,
-                "A Strava app megnyílt a TCX-fájllal: ott add meg a címet és mentsd el.",
-            ),
-            Err(err) => self
-                .st
-                .toast(ToastKind::Error, format!("A megosztás nem sikerült: {err}")),
-        }
-    }
-
-    /// Drops the Strava view (and its bar) and releases the busy flag.
-    #[cfg(not(target_os = "android"))]
-    fn finish_strava_view(self) {
-        let view = self.with(|i| i.strava.take());
-        drop(view);
-        let mut status = self.st.strava_status;
-        status.set(None);
-        let mut busy = self.st.strava_busy;
-        busy.set(false);
-    }
-
-    /// "Kész" on the Strava bar.
-    #[cfg(not(target_os = "android"))]
-    pub fn close_strava(self) {
-        self.finish_strava_view();
-    }
-
-    /// The summary form was edited.
-    pub fn set_ride_details(self, details: RideDetails) {
-        let mut slot = self.st.ride_details;
-        slot.set(details);
     }
 }
 
@@ -1663,8 +1498,6 @@ impl Inner {
         // stale comparison of the previous ride must not be shown in between.
         let mut comparison = self.st.comparison;
         comparison.set(None);
-        let mut details = self.st.ride_details;
-        details.set(RideDetails::default());
         self.finished = Some(finished.clone());
         let mut dialog = self.st.dialog;
         dialog.set(Some(DialogKind::Summary));
@@ -1693,6 +1526,9 @@ impl Inner {
             simulated: self.simulated,
             summary: finished.summary,
             points: finished.points,
+            source: ride_model::RideSource::Recorded,
+            power_estimated: false,
+            estimate: None,
         };
         // The comparison must use the PRs *before* this ride is saved, so the read, the compare
         // and the write happen in this order on the same blocking thread.
@@ -2045,6 +1881,9 @@ impl AppState {
         error.set(message);
     }
 }
+
+mod backup;
+mod review;
 
 #[cfg(test)]
 mod tests {

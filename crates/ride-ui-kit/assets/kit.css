@@ -73,6 +73,8 @@
   --marker-ring: #faf7f0;
   /* the ghost of an earlier ride: cool aqua, apart from every grade colour and the accent */
   --ghost: #63d8cf;
+  /* the rides of the review page: blue, gold, orchid, green (see palette.rs) */
+  --series-1: #42d9fa; --series-2: #e9e64a; --series-3: #be73b8; --series-4: #69a621;
 
   /* shape: radius 4px at most. pill only for state badges. shadows are hard offsets, never soft */
   --radius-xs: 1px; --radius-sm: 2px; --radius-md: 3px; --radius-lg: 4px; --radius-xl: 4px; --radius-pill: 999px;
@@ -151,6 +153,7 @@
   --route-casing: #ffffff;
   --marker-ring: #ffffff;
   --ghost: #0f6f74;
+  --series-1: #1b46b4; --series-2: #525800; --series-3: #a459cc; --series-4: #1590a1;
 
   --shadow-ink: rgba(29, 26, 21, 0.2);
 }

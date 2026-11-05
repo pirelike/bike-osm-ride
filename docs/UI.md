@@ -91,6 +91,44 @@ focus moves in, Tab is trapped, focus returns on close. `DialogKind`: `Route`, `
 The pure helpers (link validation, sorting, date and label formatting, settings patches, zone-bar percentages)
 live in `helpers.rs` with the tests; the components only render what they return.
 
+The settings sheet has a *Biztonsági mentés* group (`BackupGroup`): *Mentés fájlba* and *Visszaállítás fájlból*. The
+restore asks first (an inline two-step, like the review page's delete, because the settings of the backup replace
+the current ones); both are `#[props(default)]` `EventHandler<()>`s the shell wires to `Controller::backup_save` /
+`backup_restore` (`controller/backup.rs`). They sit in the group, not in the footer: the footer carries no actions.
+
+## 5a. The review page (`ride-ui-review`, `ReviewLayer` in `shell.rs`)
+
+Not a dialog and not a dock panel: a layer (`.shell-review`, `position: fixed` below the top bar, `z-index: 20`, under the
+dialogs and toasts) that the shell mounts while `AppState.review.open` is set. The ride screen stays mounted underneath, so the
+map camera and the Street View are not reloaded when it closes. While it is open `Controller::on_key` ignores every ride key
+(Space must not start a ride behind it) and `Esc` closes it (a dialog on top closes first); the browser panel's native Firefox
+window steps aside as it does for a dialog; a dropped file is imported instead of loaded as a route.
+
+The state is `ReviewSignals` (open, routes, route id and `Route`, ticked stems, loaded records, busy, notes), written only by
+`controller/review.rs`. The page owns just view state: metric, section (`range`), cursor, open forms. `chart.rs` is the pure part
+(lines on the distance grid, y range, SVG markup, table rows, `hu()` decimal comma); `HitLayer` reports the distance under the
+pointer and the section a drag swept (pointer events, `touch-action: none`, so it works with a finger); `Overview` is the whole
+elevation profile with the section as a band; `DistanceChart` draws the lines in route space inside one `view_transform`.
+
+`MapView` got additive props: `overlay: ReadSignal<MapOverlay>` (a highlighted section in the accent colour, ride markers, and a
+camera command `fit` + `fit_seq`) with `route_path::range_path` and `range_bounds`; the ride screen passes none.
+
+**Layout.** Desktop: list column (340 px) and a main column (map, section bar, overview, chart, table). Phone and portrait
+tablet: the same panels behind a four-tab `Segmented` (`Edzések`, `Térkép`, `Grafikon`, `Szakasz`). The top bar has no room for a
+seventh icon on a phone, so `Áttekintés` is hidden there and the route dialog carries a link (`on_review`). Hooks are classes
+(`shell-tb--review`, `shell-tb--fullscreen`): an `[aria-label="…"]` selector with an accented value did not match in the webview.
+
+**The power view** (`power.rs`, `PowerView`) is a second page of the same layer, switched by a `Segmented` row under the header
+(`Összehasonlítás` | `Teljesítmény`, view state only; the phone's four-tab strip belongs to the comparison and is hidden on the
+power page). It is fed by `ReviewSignals.analysis` (an `Arc<ride_sim::power_curve::Analysis>`, computed in `review_refresh` after
+the index backfill) plus the loaded records of the comparison (their curves are computed on the spot by `mean_max`), the
+current FTP and `on_apply_ftp` (`Controller::review_apply_ftp`: rounds, clamps to 50-600 W, toasts). Three cards: the curve
+(a table with an accent bar, no chart geometry), the FTP card and the twelve-period trend (flat CSS columns, `rv-trend-*`).
+Everything is `rv-`-prefixed and token-only like the rest of the page; `PowerView` is tested on its own with SSR.
+
+Looking at it: `RIDE_REVIEW=1 RIDE_DATA_DIR=<folder>` after `cargo run -p ride-route --example seed_review -- <folder>`, or
+`node scripts/readme_shots.mjs --only review,review-phone`.
+
 ## 6. Map and profile specifics
 
 - **Map** (`ride-ui-map`): Web-Mercator and camera maths are pure and tested; tiles are absolutely positioned

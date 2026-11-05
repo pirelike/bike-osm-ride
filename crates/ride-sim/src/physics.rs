@@ -169,6 +169,37 @@ fn substep(v: f64, power_w: f64, grade_pct: f64, p: &PhysicsParams, h: f64) -> f
     (2.0 * energy / m).sqrt().clamp(0.0, MAX_SPEED_MS)
 }
 
+/// Highest power an estimate may report, W. Beyond it the speed series is noise (a GPS jump), not a
+/// sprint.
+pub const MAX_ESTIMATED_POWER_W: f64 = 2000.0;
+
+/// The inverse of [`step_speed`]: the pedal power that keeps the bike at speed `v_ms` while it
+/// accelerates with `accel_ms2` on `grade_pct`.
+///
+/// `P = (F_resist(v) · v + m_eff · v · a) / η`, the same balance the forward model integrates
+/// (gravity and rolling see the plain mass, the acceleration term the mass plus the wheels).
+/// Coasting and braking give a negative balance: they are reported as `0` W, like the forward
+/// model that never pedals backwards.
+pub fn power_for(v_ms: f64, accel_ms2: f64, grade_pct: f64, p: &PhysicsParams) -> f64 {
+    let v = sanitize_speed(v_ms);
+    if v <= 0.0 {
+        return 0.0;
+    }
+    let accel = if accel_ms2.is_finite() {
+        accel_ms2
+    } else {
+        0.0
+    };
+    let wheel_w = p.resistance_force(v, grade_pct) * v + p.effective_mass_kg() * v * accel;
+    let eta = finite_or(p.drivetrain_eff, 0.975).clamp(0.1, 1.0);
+    let pedal_w = wheel_w / eta;
+    if pedal_w.is_finite() {
+        pedal_w.clamp(0.0, MAX_ESTIMATED_POWER_W)
+    } else {
+        0.0
+    }
+}
+
 /// Steady-state speed (m/s) for constant power and grade (used by ETA and tests).
 pub fn steady_state_speed(power_w: f64, grade_pct: f64, p: &PhysicsParams) -> f64 {
     let p_in = if power_w.is_finite() {
@@ -275,6 +306,56 @@ mod tests {
                 "{grade} %: VAM {vam:.0} vs {rule:.0}"
             );
         }
+    }
+
+    /// `power_for` is the inverse of the steady state, and of one forward step.
+    #[test]
+    fn power_for_inverts_the_forward_model() {
+        let p = params();
+        for (watts, grade) in [(120.0, 0.0), (250.0, 0.0), (300.0, 7.0), (180.0, -2.0)] {
+            let v = steady_state_speed(watts, grade, &p);
+            let back = power_for(v, 0.0, grade, &p);
+            assert!(
+                (back - watts).abs() < 0.5,
+                "{watts} W at {grade} % → {v:.2} m/s → {back:.1} W"
+            );
+        }
+        // one forward second from a standing start: the same power explains the speed gain
+        let v1 = step_speed(5.0, 400.0, 3.0, &p, 1.0);
+        let accel = v1 - 5.0;
+        let mid = 0.5 * (5.0 + v1);
+        let back = power_for(mid, accel, 3.0, &p);
+        assert!((back - 400.0).abs() < 8.0, "{back:.1} W");
+    }
+
+    #[test]
+    fn power_for_never_goes_negative_or_wild() {
+        let p = params();
+        assert_eq!(power_for(0.0, 1.0, 0.0, &p), 0.0, "standing still");
+        assert_eq!(power_for(12.0, 0.0, -8.0, &p), 0.0, "coasting downhill");
+        assert_eq!(power_for(10.0, -3.0, 0.0, &p), 0.0, "braking");
+        assert_eq!(power_for(f64::NAN, 0.0, 0.0, &p), 0.0);
+        assert_eq!(
+            power_for(10.0, f64::NAN, 0.0, &p),
+            power_for(10.0, 0.0, 0.0, &p)
+        );
+        assert_eq!(power_for(25.0, 5.0, 25.0, &p), MAX_ESTIMATED_POWER_W);
+    }
+
+    #[test]
+    fn more_mass_or_rolling_resistance_needs_more_power() {
+        let light = params();
+        let heavy = PhysicsParams {
+            total_mass_kg: light.total_mass_kg + 15.0,
+            ..light
+        };
+        let rough = PhysicsParams {
+            crr: 0.009,
+            ..light
+        };
+        let base = power_for(6.0, 0.0, 5.0, &light);
+        assert!(power_for(6.0, 0.0, 5.0, &heavy) > base + 40.0);
+        assert!(power_for(6.0, 0.0, 5.0, &rough) > base + 20.0);
     }
 
     #[test]

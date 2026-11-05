@@ -10,9 +10,11 @@ use std::time::Duration;
 use dioxus::prelude::*;
 use ride_model::{
     ConnState, DeviceInfo, DeviceKind, GhostStatus, MapStyle, RecentRoute, RecordPoint,
-    RideComparison, RideSnapshot, RideSummary, Route, Settings, Theme, Workout,
+    RideComparison, RideRecord, RideSnapshot, RideSummary, Route, RouteRides, Settings, Theme,
+    Workout,
 };
-use ride_ui_dialogs::{DeviceSlot, RideDetails};
+use ride_sim::power_curve::Analysis;
+use ride_ui_dialogs::DeviceSlot;
 use ride_ui_kit::{Toast, ToastKind};
 
 use crate::dock::{Availability, Divider, Dock, DropTarget, PanelId, Workspace};
@@ -136,6 +138,43 @@ pub enum DragOp {
 
 // ───────────────────────────── signals ─────────────────────────────
 
+/// What the review page shows (`ride-ui-review`); written by `controller/review.rs` only.
+#[derive(Clone, Copy)]
+pub struct ReviewSignals {
+    pub open: Signal<bool>,
+    /// Every route that has stored rides (and the loaded route, even without any).
+    pub routes: Signal<Vec<RouteRides>>,
+    pub route_id: Signal<Option<String>>,
+    /// The geometry of `route_id`; `None` when its file is gone.
+    pub route: Signal<Option<Arc<Route>>>,
+    /// Ticked rides (stems), at most four, in colour order.
+    pub selected: Signal<Vec<String>>,
+    /// The records of `selected`, in the same order.
+    pub loaded: Signal<Arc<Vec<Arc<RideRecord>>>>,
+    pub busy: Signal<bool>,
+    /// Messages of the last import (partial coverage, estimated watts, ...).
+    pub notes: Signal<Vec<String>>,
+    /// The power curve, the FTP suggestion and the trend of every stored ride (the page's
+    /// "Teljesítmény" view); refreshed together with the list.
+    pub analysis: Signal<Arc<Analysis>>,
+}
+
+impl ReviewSignals {
+    fn new() -> Self {
+        Self {
+            open: Signal::new(false),
+            routes: Signal::new(Vec::new()),
+            route_id: Signal::new(None),
+            route: Signal::new(None),
+            selected: Signal::new(Vec::new()),
+            loaded: Signal::new(Arc::new(Vec::new())),
+            busy: Signal::new(false),
+            notes: Signal::new(Vec::new()),
+            analysis: Signal::new(Arc::new(Analysis::default())),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct AppState {
     pub route: Signal<Option<Arc<Route>>>,
@@ -185,16 +224,12 @@ pub struct AppState {
     pub workspace: Signal<Workspace>,
     /// What the browser panel says instead of Firefox (not installed, starting, failed).
     pub browser_note: Signal<Option<String>>,
-    /// What the rider says about the finished ride (title, sport, notes...), edited in the summary.
-    pub ride_details: Signal<RideDetails>,
-    /// A Strava upload is running (in the background, or in the visible view).
-    pub strava_busy: Signal<bool>,
-    /// The Strava view is shown (sign-in or a step that needs the rider) and its bar says this.
-    pub strava_status: Signal<Option<String>>,
     /// A newer release found on GitHub (the top bar offers it).
     pub update: Signal<Option<crate::updater::UpdateInfo>>,
     /// The update is being downloaded / installed.
     pub updating: Signal<bool>,
+    /// The review page (compare the stored rides of a route).
+    pub review: ReviewSignals,
 }
 
 impl AppState {
@@ -233,11 +268,12 @@ impl AppState {
         let dock = Dock::from_settings(settings.ui.active_tiles());
         // A fresh start asks for a route first; the hooks that load one themselves skip the dialog.
         let hooks = &boot().hooks;
-        let first_dialog = if hooks.gpx.is_none() && !hooks.demo && hooks.sim_watts.is_none() {
-            Some(DialogKind::Route)
-        } else {
-            None
-        };
+        let first_dialog =
+            if hooks.gpx.is_none() && !hooks.demo && hooks.sim_watts.is_none() && !hooks.review {
+                Some(DialogKind::Route)
+            } else {
+                None
+            };
         Self {
             route: Signal::new(None),
             snapshot: Signal::new(RideSnapshot::empty()),
@@ -266,11 +302,9 @@ impl AppState {
             drag: Signal::new(None),
             workspace: Signal::new(Workspace::default()),
             browser_note: Signal::new(None),
-            ride_details: Signal::new(RideDetails::default()),
-            strava_busy: Signal::new(false),
-            strava_status: Signal::new(None),
             update: Signal::new(None),
             updating: Signal::new(false),
+            review: ReviewSignals::new(),
         }
     }
 

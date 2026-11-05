@@ -144,7 +144,7 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 
 /// Replace values a hand-edited or corrupt settings file could use to break the physics
 /// (zero/negative masses, NaN, …) with the defaults.
-fn sanitize(mut s: Settings) -> Settings {
+pub(crate) fn sanitize(mut s: Settings) -> Settings {
     let d = Settings::default();
     let fix = |v: &mut f64, default: f64| {
         if !v.is_finite() || *v <= 0.0 {
@@ -196,7 +196,7 @@ impl Store {
         self.dir.join("recent.json")
     }
 
-    fn route_path(&self, id: &str) -> Option<PathBuf> {
+    pub(crate) fn route_path(&self, id: &str) -> Option<PathBuf> {
         valid_id(id).then(|| self.dir.join("routes").join(format!("{id}.json")))
     }
 
@@ -214,13 +214,13 @@ impl Store {
         write_atomic(&self.settings_path(), &json)
     }
 
-    fn read_index(&self) -> Vec<RecentRoute> {
+    pub(crate) fn read_index(&self) -> Vec<RecentRoute> {
         read_limited(&self.index_path())
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_default()
     }
 
-    fn write_index(&self, index: &[RecentRoute]) -> io::Result<()> {
+    pub(crate) fn write_index(&self, index: &[RecentRoute]) -> io::Result<()> {
         let json = serde_json::to_vec_pretty(index).map_err(io::Error::other)?;
         write_atomic(&self.index_path(), &json)
     }
@@ -302,7 +302,7 @@ impl Store {
 
     // ───── imported workouts ─────
 
-    fn workout_path(&self, id: &str) -> Option<PathBuf> {
+    pub(crate) fn workout_path(&self, id: &str) -> Option<PathBuf> {
         valid_id(id).then(|| self.dir.join(WORKOUTS_DIR).join(format!("{id}.json")))
     }
 

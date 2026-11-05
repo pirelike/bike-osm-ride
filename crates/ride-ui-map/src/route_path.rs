@@ -135,6 +135,42 @@ fn thin(points: &[Projected]) -> Vec<Projected> {
     kept
 }
 
+/// One path along the part of `route` between `from` and `to` metres, in the coordinate frame of
+/// a [`RoutePaths`] built at the same `zoom` (`shift_x` / `shift_y` are its shifts), so it can be
+/// drawn inside the same group. Empty when the range holds fewer than two points.
+pub fn range_path(route: &Route, zoom: u8, shift: (f64, f64), from: f64, to: f64) -> String {
+    let zoom_f = f64::from(zoom.clamp(
+        crate::mercator::MIN_ZOOM as u8,
+        crate::mercator::MAX_ZOOM as u8,
+    ));
+    if !(from.is_finite() && to.is_finite() && shift.0.is_finite() && shift.1.is_finite()) {
+        return String::new();
+    }
+    let (from, to) = (from.min(to), from.max(to));
+    // the range ends are interpolated, the points between are the route's own
+    let mut coords: Vec<(f64, f64)> = vec![(route.locate(from).lon, route.locate(from).lat)];
+    coords.extend(route.slice(from, to).iter().map(|p| (p.lon, p.lat)));
+    coords.push((route.locate(to).lon, route.locate(to).lat));
+    let mut path = String::new();
+    for (i, (lon, lat)) in coords.iter().enumerate() {
+        let (x, y) = (
+            lon_to_x(*lon, zoom_f) - shift.0,
+            lat_to_y(*lat, zoom_f) - shift.1,
+        );
+        if !(x.is_finite() && y.is_finite()) {
+            return String::new();
+        }
+        path.push(if i == 0 { 'M' } else { 'L' });
+        write_coord(&mut path, x);
+        path.push(' ');
+        write_coord(&mut path, y);
+    }
+    if coords.len() < 2 {
+        return String::new();
+    }
+    path
+}
+
 /// Builds the route overlay for `route` at integer tile zoom `zoom` (clamped into the
 /// supported range). Missing, empty and broken routes yield an empty [`RoutePaths`].
 pub fn build_route_paths(route: Option<&Route>, zoom: u8) -> RoutePaths {
@@ -275,6 +311,30 @@ mod tests {
 
     fn count(data: &str, command: char) -> usize {
         data.chars().filter(|c| *c == command).count()
+    }
+
+    #[test]
+    fn a_range_path_follows_the_route_between_its_ends() {
+        let route = route_from(&[
+            (47.500, 19.00, 0.0),
+            (47.501, 19.00, 0.0),
+            (47.502, 19.00, 0.0),
+            (47.503, 19.00, 0.0),
+            (47.504, 19.00, 0.0),
+        ]);
+        let full = build_route_paths(Some(&route), 15);
+        let shift = (full.shift_x, full.shift_y);
+        // from 5 m to 25 m: both ends are interpolated, the point at 10 m and 20 m lie between
+        let part = range_path(&route, 15, shift, 5.0, 25.0);
+        assert!(part.starts_with('M'));
+        assert_eq!(count(&part, 'M'), 1);
+        assert_eq!(count(&part, 'L'), 3, "{part}");
+        assert!(!part.contains("NaN") && !part.contains("inf"));
+        // the swapped ends give the same path
+        assert_eq!(part, range_path(&route, 15, shift, 25.0, 5.0));
+        // bad input never produces a broken attribute
+        assert_eq!(range_path(&route, 15, shift, f64::NAN, 25.0), "");
+        assert_eq!(range_path(&route, 15, (f64::NAN, 0.0), 0.0, 25.0), "");
     }
 
     #[test]

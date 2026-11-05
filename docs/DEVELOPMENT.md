@@ -56,6 +56,7 @@ scenario can be reproduced without clicking, and so screenshots can be scripted.
 | `RIDE_THEME=light\|dark` | theme override, not written to `settings.json` unless the rider changes it |
 | `RIDE_WINDOW=1600x900` | initial window size (never below 360 × 560) |
 | `RIDE_DIALOG=route\|devices\|settings\|workouts\|about` | open a dialog at start-up |
+| `RIDE_REVIEW=1` | open the review page at start-up (`RIDE_DATA_DIR` decides which rides it finds) |
 | `RIDE_DATA_DIR=<dir>` | use another data folder (settings, rides, tiles, ...): tests, portable installs, screenshots; Android sets it to the app's private folder |
 | `RIDE_TILE_BASE=<url>` | fetch tiles from `<url>/<style>/<z>/<x>/<y>.png` (`http://127.0.0.1:9` simulates "no network") |
 | `RIDE_TILE_PROBE=1` | load one map tile through the `tiles` protocol at start-up and print the result |
@@ -78,7 +79,6 @@ on some NVIDIA/Wayland setups); an explicit value wins.
   plus `#` comment lines for what the session decided. See [`BLUETOOTH.md`](BLUETOOTH.md).
 - **Crashes.** Every panic goes to `<data>/crash.log` (rotated at 256 KB), to stderr, to logcat on Android, and the
   shell shows the first line in a banner. The app survives a panic in an event handler by design.
-- **Strava upload.** `<data>/strava/strava-debug.log` when the page script got stuck ([`STRAVA.md`](STRAVA.md)).
 - Debug builds keep the console; release builds on Windows are GUI-subsystem executables (no console).
 
 ## 5. Scripts and packaging files
@@ -108,10 +108,16 @@ node scripts/readme_shots.mjs --only ride-dark   # one; --list shows them all
 For every scenario the script starts the app with its own hooks and a throw-away data folder
 (`target/readme-shots-data`, which keeps only its tile cache between runs), pins the page to 1440 × 900 at
 1× (phone: 412 × 860 at 2×) with the DevTools `Emulation` domain, takes a PNG and kills the process tree.
-No setting, route, ride, Google key or Strava login of the person running it can end up in a picture.
+No setting, route, ride, Google key of the person running it can end up in a picture.
 The route is the last 12.4 km of the real BRouter fixture (Hűvösvölgy–Dobogókő, ODbL): the synthetic demo
 route runs across fields and water on the map. The first run fetches a few dozen OSM tiles. Regenerate
 rarely: every PNG stays in git history.
+
+The `review` and `review-phone` scenarios seed the throw-away folder first with
+`cargo run -p ride-route --example seed_review -- <folder> [route.gpx]`: two rides made by the ride engine at different
+power, and a third that is the same kind of ride written as a Strava-style GPX *without watts* (2 s samples, 5 m off the line)
+and imported, so the estimate has a known answer to be compared with. Useful for trying the page by hand too
+(`RIDE_DATA_DIR=<folder> RIDE_REVIEW=1`).
 
 ## 7. Conventions
 
@@ -169,7 +175,7 @@ look at their `license` expressions. Result on 2026-11-04 (`--filter-platform`):
 crates, Linux 458, macOS (aarch64) 400, Android (aarch64) 449; no GPL/AGPL/LGPL anywhere. The only
 copyleft crates are MPL-2.0, used unmodified: `option-ext` (through `tray-icon` → `dirs`) on Linux and
 macOS, `selectors`, `cssparser`, `cssparser-macros`, `dtoa-short` (through `wry` → `kuchikiki`) on
-Android, none on Windows. `THIRD_PARTY_LICENSES.md` (all platforms together) lists 635 packages.
+Android, none on Windows. `THIRD_PARTY_LICENSES.md` (all platforms together) lists 638 packages.
 
 ## 10. Keeping the docs true
 

@@ -12,8 +12,6 @@
 
 #[cfg(target_os = "android")]
 mod android_picker;
-#[cfg(target_os = "android")]
-mod android_share;
 mod browser;
 mod controller;
 mod crash;
@@ -28,7 +26,6 @@ mod ride_core;
 mod shell;
 mod state;
 #[cfg(not(target_os = "android"))]
-mod strava;
 mod streetview_images;
 mod tiles;
 mod updater;
@@ -157,6 +154,22 @@ mod packaging_tests {
             "MainActivity.kt has to alias {identifier}.BuildConfig"
         );
         assert!(ACTIVITY.contains("package dev.dioxus.main"));
+    }
+
+    /// The screen flag may only change on the UI thread, and Rust calls from its own thread.
+    #[test]
+    fn the_activity_keeps_the_screen_on_from_the_ui_thread() {
+        const ACTIVITY: &str = include_str!("../android/MainActivity.kt");
+        let body = ACTIVITY
+            .split_once("fun setKeepScreenOn(on: Boolean)")
+            .map(|(_, rest)| rest)
+            .expect("MainActivity.kt declares setKeepScreenOn");
+        assert!(
+            body.contains("runOnUiThread"),
+            "the flag changes on the UI thread"
+        );
+        assert!(body.contains("FLAG_KEEP_SCREEN_ON"));
+        assert!(body.contains("addFlags") && body.contains("clearFlags"));
     }
 
     #[test]

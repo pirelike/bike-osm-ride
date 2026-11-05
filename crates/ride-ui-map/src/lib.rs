@@ -26,7 +26,7 @@ use std::sync::Arc;
 use dioxus::html::geometry::WheelDelta;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
-use ride_model::{MapStyle, RideSnapshot, RideState, Route, RoutePosition};
+use ride_model::{Bounds, MapStyle, RideSnapshot, RideState, Route, RoutePosition};
 use ride_ui_kit::palette;
 use ride_ui_kit::{Icon, IconName, Segmented};
 
@@ -49,6 +49,62 @@ pub use route_path::{build_route_paths, RoutePaths};
 
 /// Component styles; the shell injects this after `ride_ui_kit::CSS`.
 pub const CSS: &str = include_str!("../assets/map.css");
+
+/// A coloured dot on the map that is not the rider: where one of the compared rides was.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OverlayMarker {
+    pub lat: f64,
+    pub lon: f64,
+    /// Name of the CSS custom property holding the colour, e.g. `--series-1`.
+    pub color: String,
+    /// One or two characters printed beside the dot.
+    pub label: String,
+}
+
+/// What a page that compares rides adds to the map: a section of the route to emphasise, extra
+/// markers and a camera command. The ride screen passes none of it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MapOverlay {
+    /// Section of the route (metres from `.0` to `.1`) drawn in the accent colour.
+    pub highlight: Option<(f64, f64)>,
+    pub markers: Vec<OverlayMarker>,
+    /// Fit the camera to this section of the route whenever `fit_seq` changes.
+    pub fit: Option<(f64, f64)>,
+    pub fit_seq: u64,
+}
+
+/// Bounding box of the route between two distances (ends interpolated), padded a little so a
+/// short or straight stretch does not collapse the zoom.
+pub fn range_bounds(route: &Route, from: f64, to: f64) -> Option<Bounds> {
+    if route.points.len() < 2 || !(from.is_finite() && to.is_finite()) {
+        return None;
+    }
+    let (from, to) = (from.min(to), from.max(to));
+    let ends = [route.locate(from), route.locate(to)];
+    let mut coords: Vec<(f64, f64)> = ends.iter().map(|p| (p.lat, p.lon)).collect();
+    coords.extend(route.slice(from, to).iter().map(|p| (p.lat, p.lon)));
+    let (mut south, mut north) = (f64::MAX, f64::MIN);
+    let (mut west, mut east) = (f64::MAX, f64::MIN);
+    for (lat, lon) in coords {
+        if !(lat.is_finite() && lon.is_finite()) {
+            continue;
+        }
+        south = south.min(lat);
+        north = north.max(lat);
+        west = west.min(lon);
+        east = east.max(lon);
+    }
+    if south > north || west > east {
+        return None;
+    }
+    const PAD_DEG: f64 = 0.0004;
+    Some(Bounds {
+        south: south - PAD_DEG,
+        north: north + PAD_DEG,
+        west: west - PAD_DEG,
+        east: east + PAD_DEG,
+    })
+}
 
 /// URL of one tile inside the `tiles` protocol, e.g.
 /// `http://tiles.localhost/dark/14/8923/5701.png` on Windows. The app's protocol handler takes
@@ -319,6 +375,9 @@ pub fn MapView(
     /// scale bar/attribution so a few hundred pixels stay readable.
     #[props(default = false)]
     compact: bool,
+    /// Extras of the review page (highlighted section, ride markers, camera command).
+    #[props(default)]
+    overlay: ReadSignal<MapOverlay>,
 ) -> Element {
     let mut viewport = use_signal(Viewport::default);
     let mut measured = use_signal(|| false);
@@ -443,6 +502,35 @@ pub fn MapView(
         if *measured.peek() {
             fit_pending.set(false);
         }
+    });
+
+    // A camera command from the review page: fit the section it names, once per `fit_seq`.
+    let mut seen_fit = use_signal(|| 0u64);
+    use_effect(move || {
+        let wanted = overlay.read().clone();
+        let view = *viewport.read();
+        if wanted.fit_seq == *seen_fit.peek() {
+            return;
+        }
+        let Some((from, to)) = wanted.fit else {
+            seen_fit.set(wanted.fit_seq);
+            return;
+        };
+        if !view.is_usable() {
+            return;
+        }
+        let current = route.read().clone();
+        let Some(bounds) = current
+            .as_deref()
+            .and_then(|route| range_bounds(route, from, to))
+        else {
+            return;
+        };
+        let fit = camera::fit_bounds(bounds, view);
+        center.set(fit.center);
+        zoom.set(fit.zoom);
+        fit_pending.set(false);
+        seen_fit.set(wanted.fit_seq);
     });
 
     // While following, remember where the camera currently is. Leaving follow mode (our own
@@ -619,6 +707,32 @@ pub fn MapView(
         "translate({route_shift_x:.3},{route_shift_y:.3}) scale({:.6})",
         transform.scale
     );
+    let overlay_now = overlay.read().clone();
+    let highlight_d = match (route_now.as_deref(), overlay_now.highlight) {
+        (Some(route), Some((from, to))) => route_path::range_path(
+            route,
+            *tile_z.read(),
+            (paths_value.shift_x, paths_value.shift_y),
+            from,
+            to,
+        ),
+        _ => String::new(),
+    };
+    let ride_markers: Vec<(String, String, String, String)> = overlay_now
+        .markers
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.lat.is_finite() && m.lon.is_finite())
+        .map(|(index, m)| {
+            let (x, y) = transform.project(GeoPoint::new(m.lat, m.lon));
+            (
+                format!("ride-{index}"),
+                format!("transform: translate({x:.1}px, {y:.1}px)"),
+                format!("--c: var({})", m.color),
+                m.label.clone(),
+            )
+        })
+        .collect();
     let dragging_now = drag.read().is_some();
     let base_class = if dragging_now {
         "map is-dragging"
@@ -796,6 +910,10 @@ pub fn MapView(
                                 style: format!("stroke: {}", palette::grade_bucket_color(*bucket, theme)),
                             }
                         }
+                        if !highlight_d.is_empty() {
+                            path { class: "map-route__hl-casing", d: "{highlight_d}" }
+                            path { class: "map-route__hl", d: "{highlight_d}" }
+                        }
                     }
                 }
                 div { class: "map-markers",
@@ -834,6 +952,16 @@ pub fn MapView(
                                 dangerous_inner_html: GHOST_WEDGE,
                             }
                             div { class: "map-ghost__dot" }
+                        }
+                    }
+                    for (key, place, color, label) in ride_markers.iter() {
+                        div {
+                            key: "{key}",
+                            class: "map-marker map-marker--ride",
+                            style: "{place}",
+                            title: "{label}",
+                            span { class: "map-ride__dot", style: "{color}" }
+                            span { class: "map-ride__tag", "{label}" }
                         }
                     }
                     if let Some(((x, y), heading)) = rider_marker {

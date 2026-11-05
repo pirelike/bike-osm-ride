@@ -25,7 +25,6 @@ use ride_model::{ConnState, DeviceKind};
 mod about;
 mod devices;
 pub mod helpers;
-mod ride_details;
 mod settings;
 mod summary;
 mod virtual_rider;
@@ -38,7 +37,6 @@ pub use about::{
 };
 pub use devices::DevicesDialog;
 pub use helpers::*;
-pub use ride_details::{RideDetails, RideDetailsForm, Visibility};
 pub use settings::SettingsDialog;
 pub use summary::SummaryDialog;
 pub use virtual_rider::VirtualRiderPanel;

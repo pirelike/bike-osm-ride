@@ -236,6 +236,9 @@ mod tests {
                 hr_zone_secs: [0.0; 5],
             },
             points,
+            source: ride_model::RideSource::Recorded,
+            power_estimated: false,
+            estimate: None,
         }
     }
 
@@ -250,6 +253,7 @@ mod tests {
             complete: record.summary.dist + 5.0 >= route.total_dist,
             simulated,
             segments: segments::segment_times(&route, &record.points),
+            ..Default::default()
         }
     }
 
@@ -505,6 +509,9 @@ mod tests {
             simulated: false,
             summary: summary.clone(),
             points,
+            source: ride_model::RideSource::Recorded,
+            power_estimated: false,
+            estimate: None,
         };
         (record, arc, summary)
     }

@@ -28,6 +28,10 @@ pub fn RouteDialog(
     on_open_recent: EventHandler<String>,
     on_delete_recent: EventHandler<String>,
     on_demo: EventHandler<()>,
+    /// Opens the review page of the stored rides (the phone's top bar has no room for its own
+    /// button). `None` leaves the link out.
+    #[props(default)]
+    on_review: Option<EventHandler<()>>,
 ) -> Element {
     if !open {
         return rsx! {};
@@ -52,6 +56,17 @@ pub fn RouteDialog(
                 on_open_recent,
                 on_delete_recent,
                 on_demo,
+            }
+            if let Some(on_review) = on_review {
+                div { class: "dlg-review-link",
+                    button {
+                        class: "btn btn--sm",
+                        r#type: "button",
+                        onclick: move |_| on_review.call(()),
+                        Icon { name: IconName::Gauge, size: 16 }
+                        "Mentett edzések áttekintése"
+                    }
+                }
             }
         }
     }

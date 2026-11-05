@@ -6,7 +6,7 @@ Android apps. Everything below was checked against the code on 2026-11-04 (versi
 
 This document is the map. The details live next to it: [`BLUETOOTH.md`](BLUETOOTH.md),
 [`SIMULATION.md`](SIMULATION.md), [`ROUTES_AND_DATA.md`](ROUTES_AND_DATA.md), [`UI.md`](UI.md),
-[`ANDROID.md`](ANDROID.md), [`STRAVA.md`](STRAVA.md), [`STREETVIEW.md`](STREETVIEW.md), and the reasons behind
+[`ANDROID.md`](ANDROID.md), [`STREETVIEW.md`](STREETVIEW.md), and the reasons behind
 the big choices in [`DECISIONS.md`](DECISIONS.md).
 
 ## 1. Shape of the system
@@ -42,21 +42,23 @@ Dependencies between workspace crates (from the `Cargo.toml` files; the graph is
 | `ride-ui-map`, `ride-ui-profile`, `ride-ui-hud` | `ride-model`, `ride-ui-kit` |
 | `ride-ui-streetview` | `ride-model`, `ride-route` (data folder, HTTP client), `ride-ui-kit` |
 | `ride-ui-dialogs` | `ride-model`, `ride-ui-kit`, `ride-ui-streetview` (the storage overview in the settings) |
+| `ride-ui-review` | `ride-model`, `ride-sim` (distance grid, section statistics, estimate parameters: pure maths), `ride-ui-kit`, `ride-ui-map`, `ride-ui-profile` (geometry helpers) |
 | `ride-app` | all of them |
 
 | Crate | Responsibility | Where to look first |
 |---|---|---|
 | `ride-model` | The shared types: `Route`, `Settings`, `RideSnapshot`, `SensorSample`/`SensorCommand`/`SensorEvent`, workouts and their library, the ride log types. **A contract: change it additively.** | `src/lib.rs`, `workout.rs`, `history.rs` |
-| `ride-route` | GPX and bikerouter link → processed `Route`; climb detection; the file store (settings, recents, route cache, ride log, imported workouts). Async loaders, pure pipeline. | `lib.rs`, `build.rs`, `bikerouter.rs`, `store.rs`, `rides.rs` |
-| `ride-sim` | Physics, `RideEngine` (state machine, statistics, 1 Hz recorder, trainer grade), workout runner and importer, ghost, segments, zones, TCX. No I/O, no clock, no async. | `engine.rs`, `physics.rs`, `workout.rs`, `ghost.rs` |
+| `ride-route` | GPX and bikerouter link → processed `Route`; climb detection; the file store (settings, recents, route cache, ride log, imported workouts), the backup zip (`backup.rs`). Async loaders, pure pipeline. | `lib.rs`, `build.rs`, `bikerouter.rs`, `store.rs`, `rides.rs`, `backup.rs` |
+| `ride-sim` | Physics, `RideEngine` (state machine, statistics, 1 Hz recorder, trainer grade), workout runner and importer, ghost, segments, zones, TCX, the power curve / FTP suggestion / weekly load (`power_curve.rs`). No I/O, no clock, no async. | `engine.rs`, `physics.rs`, `workout.rs`, `ghost.rs`, `power_curve.rs` |
 | `ride-ble` | The sensor hub on its own thread: transport traits, scanning, one connection per device with any mix of roles, FTMS control session, CPS/CSC/HR decoders, Zwift Click/Play, simulated rider, hex log. | `lib.rs`, `hub.rs`, `multi.rs`, `control.rs` |
 | `ride-ui-kit` | Design system: CSS tokens and primitives, palette, icons, number formatting, base components, protocol URLs, the workout chart. | `assets/kit.css`, `palette.rs`, `format.rs` |
 | `ride-ui-map` | Slippy map: Web-Mercator maths, camera, route as per-grade SVG paths, markers, tile `<img>` layer. | `lib.rs`, `camera.rs`, `route_path.rs` |
 | `ride-ui-profile` | Elevation profile (full or look-ahead), live charts, workout view, phone swipe pages. | `lib.rs`, `geom.rs`, `series.rs`, `workout.rs` |
 | `ride-ui-hud` | Power hero and metric cells, statistics, next-climb card, workout card, transport controls, phone head unit. | `lib.rs`, `dash.rs` |
-| `ride-ui-dialogs` | Route chooser, devices, settings, workout picker, ride summary and Strava details, about, simulated-rider panel. | `lib.rs`, `helpers.rs` (pure) |
+| `ride-ui-dialogs` | Route chooser, devices, settings, workout picker, ride summary, about, simulated-rider panel. | `lib.rs`, `helpers.rs` (pure) |
+| `ride-ui-review` | The review page: ride list, map with the zoomed section, overview profile with drag-to-zoom, multi-ride distance chart, section table, estimate setup. View state only; the loaded records come from the app. | `lib.rs`, `chart.rs` (pure) |
 | `ride-ui-streetview` | Optional Street View panel with the rider's own Google key: metadata client, pano-id cache, offline image store, planner, mock. | `lib.rs`, [`STREETVIEW.md`](STREETVIEW.md) |
-| `ride-app` | State, controller and ride loop, tiling dock, shell layout, tile proxy, `svimg` protocol, updater, Strava, browser panel, wake lock, crash reporter, Android glue, test hooks. | `main.rs`, `controller.rs`, `ride_core.rs`, `dock.rs`, `shell.rs` |
+| `ride-app` | State, controller and ride loop, tiling dock, shell layout, tile proxy, `svimg` protocol, updater, browser panel, wake lock, crash reporter, Android glue, test hooks. | `main.rs`, `controller.rs`, `ride_core.rs`, `dock.rs`, `shell.rs` |
 
 Why `ride-route` depends on `ride-sim`: `rides::save_ride` stores the climb ("segment") times of a finished
 ride with the very computation the engine uses live (`ride_sim::segments::segment_times`), so a stored PR and
@@ -70,7 +72,6 @@ the PR on screen can never disagree. The dependency is acyclic.
 | **`ride-ble-hub` thread** | `spawn_sensor_hub` starts its own multi-thread tokio runtime (2 workers, `ride-ble-rt`) running the hub: command loop, merger, simulated rider, one task per connected device and one scan task. If it dies, `hub_lost` tells the rider once; the app keeps working without sensors. |
 | **tokio blocking pool** | Route building, the ghost/PR plan (`history.rs`), storing a finished ride and its comparison, tile and image cache work. |
 | **webview protocol handlers** | `tiles` (map tiles) and `svimg` (downloaded Street View images): served by `ride-app` custom protocols, path-validated. |
-| **Strava WebView** (desktop) | A second, hidden WebView with its own profile; see [`STRAVA.md`](STRAVA.md). |
 
 **The controller.** `Controller` is a `Copy` handle to a leaked `&'static RefCell<Inner>`, so closures in
 `rsx!` can use it freely. The rule that keeps the `RefCell` sound: a method borrows `Inner` exactly once for one
@@ -104,10 +105,10 @@ The same shell runs everywhere; the differences are `cfg`-gated, there is no for
 | webview | WebView2 | WKWebView | WebKitGTK 4.1 | Android WebView |
 | Bluetooth (btleplug) | WinRT | CoreBluetooth | BlueZ over D-Bus | the Android backend, initialised through JNI (`android_ble.rs`); the activity asks for the runtime permissions |
 | file open | native dialog (`rfd`) | native dialog | native dialog (xdg-portal) | system picker through `MainActivity.kt` (JNI), copied to the cache first |
-| keep awake while riding | `SetThreadExecutionState` | IOKit power assertion | `org.freedesktop.ScreenSaver.Inhibit` | none |
+| backup zip (save / restore) | `rfd` save / open | same | same | the system "save as" / "open" dialogs through `MainActivity.kt` (JNI); unverified on a device |
+| keep awake while riding | `SetThreadExecutionState` | IOKit power assertion | `org.freedesktop.ScreenSaver.Inhibit` | `FLAG_KEEP_SCREEN_ON` through JNI (unverified on a device) |
 | app protocol base | `http://<scheme>.localhost` | `<scheme>://localhost` | `<scheme>://localhost` | `https://<scheme>.localhost` |
 | browser panel (Firefox) | yes | no | no | no |
-| Strava upload | hidden WebView | hidden WebView | hidden WebView | share intent to the Strava app |
 | data folder | `%LOCALAPPDATA%\bike-osm-ride` | `~/Library/Application Support/bike-osm-ride` | `$XDG_DATA_HOME/bike-osm-ride` or `~/.local/share/...` | `/data/data/<package>/files` |
 | package | `.exe` | universal `.app` in a `.dmg` | AppImage and `.deb` | `.apk` |
 | self-update | replaces the exe | opens the release page | replaces the AppImage; `.deb` opens the page | opens the APK in the browser |
@@ -118,8 +119,6 @@ The same shell runs everywhere; the differences are `cfg`-gated, there is no for
   rider could not paste a Google key). Elsewhere `with_menu(None)`.
 - **Linux.** `main` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` when unset (empty window on some NVIDIA/Wayland setups).
 - **Windows GUI subsystem.** Release builds have no console window; debug builds keep it.
-- **Strava on the desktop** is compiled for every non-Android target but has only ever been exercised in
-  design and unit tests, never against strava.com; see [`STRAVA.md`](STRAVA.md).
 
 ## 5. Failure containment
 
@@ -131,7 +130,6 @@ The same shell runs everywhere; the differences are `cfg`-gated, there is no for
 | a corrupt or foreign file in the data folder | ignored, defaults used; files larger than 64 MB are refused; writes are atomic (temp file + rename) |
 | a record or setting from another version | unknown record versions are ignored, unknown fields default |
 | a failed update check | silent |
-| Strava page changed | the hidden WebView is shown for the rider to finish, the TCX copy stays on disk |
 
 ## 6. Security and privacy boundaries
 

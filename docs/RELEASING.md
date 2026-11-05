@@ -2,7 +2,7 @@
 
 How a version reaches users: the checklist, what the workflow builds, the contract with the in-app updater, and
 the failures that have already happened. Checked against `.github/workflows/release.yml`, `packaging/` and
-`crates/ride-app/src/updater.rs` on 2026-11-04. The current release is **v0.3.1** (2026-11-05); v0.3.0 (2026-11-03) had all five assets.
+`crates/ride-app/src/updater.rs` on 2026-11-04. The current release is **v0.4.0** (2026-11-05); v0.3.1 and v0.3.0 had all five assets.
 
 ## 1. The assets and who consumes them
 

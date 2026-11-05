@@ -25,6 +25,13 @@ pub fn SettingsDialog(
     ghost_status: ReadSignal<GhostStatus>,
     on_change: EventHandler<Settings>,
     on_close: EventHandler<()>,
+    /// "Mentés fájlba": the app asks where to put the zip and writes it.
+    #[props(default)]
+    on_backup: EventHandler<()>,
+    /// "Visszaállítás fájlból": the app asks for the zip and merges it in. Called only after the
+    /// rider confirmed in the dialog.
+    #[props(default)]
+    on_restore: EventHandler<()>,
 ) -> Element {
     if !open {
         return rsx! {};
@@ -313,7 +320,59 @@ pub fn SettingsDialog(
                     }
                 }
 
+                BackupGroup { on_backup, on_restore }
+
                 StreetViewGroup { settings: current.clone(), on_change }
+            }
+        }
+    }
+}
+
+/// Backup and restore of the rider's data as one zip. Restoring asks first, because it also
+/// brings the settings of the backup along; the data itself is only ever added, never replaced.
+#[component]
+fn BackupGroup(on_backup: EventHandler<()>, on_restore: EventHandler<()>) -> Element {
+    let mut confirming = use_signal(|| false);
+    rsx! {
+        Group {
+            title: "Biztonsági mentés".to_string(),
+            note: "Az útvonalak, a mentett túrák, az importált edzések és a beállítások egyetlen zip-fájlba kerülnek, ezen a gépen: semmi nem megy ki a hálózatra. A Street View kulcs, a térképcsempék és a letöltött képek nincsenek benne.".to_string(),
+            div { class: "dlg-backup",
+                button {
+                    class: "btn",
+                    r#type: "button",
+                    onclick: move |_| on_backup.call(()),
+                    "Mentés fájlba"
+                }
+                if confirming() {
+                    button {
+                        class: "btn btn--danger",
+                        r#type: "button",
+                        onclick: move |_| {
+                            confirming.set(false);
+                            on_restore.call(());
+                        },
+                        "Igen, visszaállítom"
+                    }
+                    button {
+                        class: "btn btn--ghost",
+                        r#type: "button",
+                        onclick: move |_| confirming.set(false),
+                        "Mégse"
+                    }
+                } else {
+                    button {
+                        class: "btn",
+                        r#type: "button",
+                        onclick: move |_| confirming.set(true),
+                        "Visszaállítás fájlból"
+                    }
+                }
+            }
+            if confirming() {
+                span { class: "dlg-note",
+                    "A mentésben lévő útvonalak, túrák és edzések hozzáadódnak a meglévőkhöz: semmi nem törlődik és semmi nem íródik felül. A beállításaid viszont a mentésből valók lesznek (a Street View kulcsod megmarad). Tekerés közben nem lehet visszaállítani."
+                }
             }
         }
     }
@@ -617,6 +676,22 @@ mod tests {
         for text in ["Elrendezés", "Elrendezés visszaállítása"] {
             assert!(html.contains(text), "missing {text:?}");
         }
+    }
+
+    #[test]
+    fn the_backup_section_offers_both_actions_and_asks_before_restoring() {
+        let html = render(Settings::default());
+        for text in [
+            "Biztonsági mentés",
+            "Mentés fájlba",
+            "Visszaállítás fájlból",
+            "semmi nem megy ki a hálózatra",
+        ] {
+            assert!(html.contains(text), "missing {text:?}");
+        }
+        // the confirmation only appears after the first click
+        assert!(!html.contains("Igen, visszaállítom"));
+        assert!(!html.contains("semmi nem íródik felül"));
     }
 
     #[test]

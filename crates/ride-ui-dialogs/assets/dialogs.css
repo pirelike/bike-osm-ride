@@ -549,20 +549,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3) var(--space-4);
 }
-.dlg-details {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-  border: 1px solid var(--rule);
-  background: var(--bg-1);
-}
-.dlg-details__row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-  align-items: start;
-}
 .dlg-row2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -667,6 +653,13 @@
   background: var(--fill-1);
 }
 .dlg-storage__text { min-width: 0; font: 400 var(--t-13)/1.4 var(--font-ui); color: var(--text-dim); }
+
+/* backup and restore: the two actions side by side, the restore confirmation takes its place */
+.dlg-backup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 
 /* ───────────────────────────── workout picker ─────────────────────────────
    Three ruled columns: categories | workouts | the selected workout's steps. */
@@ -1093,7 +1086,6 @@
   .dlg-group { grid-template-columns: minmax(0, 1fr); }
   .dlg-grid2,
   .dlg-row2,
-  .dlg-details__row,
   .dlg-zones { grid-template-columns: minmax(0, 1fr); }
   .dlg-slot { grid-template-columns: 24px minmax(0, 1fr); row-gap: var(--space-2); }
   .dlg-slot__body,
@@ -1182,3 +1174,6 @@
   .dlg-foot__note { flex: 1 1 100%; font-size: var(--t-11); }
   .dlg-foot__end { flex: 1 1 100%; justify-content: flex-end; margin-left: 0; }
 }
+
+/* the route dialog's link to the review page (on the phone it is the only way there) */
+.dlg-review-link { display: flex; padding-top: 16px; }

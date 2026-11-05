@@ -28,6 +28,29 @@ entry. See [`PRIOR_ART.md`](PRIOR_ART.md), `NOTICE.md`, the README `Licenc` sect
 **P5. The project is `MIT OR Apache-2.0`** (2026-10-31). The Rust ecosystem's convention, and compatible with all
 reused code. · The copyright line is "bike-osm-ride contributors" because no name was given.
 
+**P6. A review page that compares the rides of one route** (2026-11-05). The user wanted to review rides, compare
+them on the same route, zoom into sections and see cadence and heart rate within a ride. · A full-screen layer over the ride
+screen, not a dock panel or a dialog: it needs the whole window and must not reload the map. The comparison axis is the
+distance along the route, which every ride on that route already has.
+
+**P7. Another app's activity is *projected onto a stored route*, not matched by geometry hash** (2026-11-05). Two GPS
+recordings of the same road never share a hash. The user picks the route (the one shown on the page) and the track's points
+are projected onto it (30 m tolerance, monotone search), with a warning below 90 % coverage. · All rides of a route then share
+one distance axis, one elevation profile and one grade. Formats: GPX (with sensor extensions) and TCX; FIT is binary and needs
+a reader whose licence would have to be audited, so it was left out. This is a file the user hands over, not an API: it does
+not reopen the Strava question of V2.
+
+**P8. Imported and simulated rides are never a PR or a ghost** (2026-11-05). An outdoor ride has stops, coasting and
+traffic; a trainer ride does not, and the Strava file's time is not the trainer's time. `best_times` and `choose_ghost` skip
+both. · A person who wants an outdoor ride as the ghost can still pick the `Route` mode with a GPX that carries time stamps.
+
+**P9. Estimated watts are marked, and measured watts are never replaced** (2026-11-05). A file without power gets watts
+from the power model run backwards, because the comparison is useless without them; but the number is an estimate (no wind, no
+drafting, the weight and Crr assumed), so it carries `~`, a tag and the parameters it was made with, and can be redone with
+other values. A ride with measured watts refuses the estimate. · The user chooses whose data to use (own settings or custom
+weight, bike weight, Crr); the rest (CdA, efficiency, air density) stays the rider's. The surface is only the Crr: there is no
+gravel model, as the user said ("még a gravel nincsen supportálva úgyse").
+
 ## Platform and build
 
 **B1. Dioxus 0.7 desktop over egui** (2026-10-31). Both compiled with btleplug on the development machine; the
@@ -132,12 +155,31 @@ window of the installed Firefox with its own profile. · Cannot be drawn over; h
 or prefetching imagery but allows panorama ids. The requested "download images" switch became an explicit,
 per-route, 30-day download. · [`STREETVIEW.md`](STREETVIEW.md).
 
-**V2. Strava without the API** (2026-11-02). Creating an API app needs a paid subscription since June 2026 and a shared
-secret cannot ship in open source. Desktop: a hidden WebView on strava.com; Android: the share intent. · Fragile by
-nature, never run live ([`STRAVA.md`](STRAVA.md)).
+**V2. Strava upload: tried without the API, then removed** (added 2026-11-02, removed 2026-11-05). Creating an API app
+needs a paid subscription since June 2026 and a shared secret cannot ship in open source, so the upload went through a
+hidden WebView on strava.com (desktop) and the share intent (Android). In use the rider had to sign in again after every
+ride, which defeated the point (the suspected cause, Strava guarding against automation, was not verified). Code, the
+details form of the summary and `docs/STRAVA.md` were deleted; the TCX export stays and is uploaded by hand.
+
+**V5. The FTP suggestion and the power curve use only measured watts** (2026-11-05). The review page can show the rider's
+best 5 s to 60 min and suggest 95 % of the best 20 minutes as the FTP. A simulated rider's and an estimated ride's watts are the
+physics model run forwards or backwards, so an FTP from them would only confirm the model's own assumptions; they are left
+out (the trend still counts their time). The suggestion is a button, never an automatic change, and it says that the
+trainer's own wattage is not a power meter. Ramp tests are not recognised (no workout id in the record): the best 20 minutes
+counts, test or not. · [`SIMULATION.md`](SIMULATION.md) §7b.
+
+**V4. Backup is one local zip, a whitelist, and restore only merges** (2026-11-05). The data lives in one folder per
+machine and a broken disk or a new PC lost everything. A cloud sync would need an account, a server and conflict
+handling, which this app deliberately does not have, so the rider gets a file they keep themselves. The zip holds a
+**whitelist** (routes, rides, imported workouts, settings), not "the folder minus exclusions", so a cache or a profile
+added later never leaks in by accident. The Google key is blanked on export and ignored on import (the file is mailed
+around). Restoring **never overwrites or deletes**: that makes a second restore a no-op, needs no safety snapshot, and
+gives the same result on a fresh machine; the cost is that a backup cannot "roll back" newer rides. Names inside the
+archive are mapped onto the whitelist and never used as paths (zip-slip), sizes are counted on read (zip bombs). ·
+[`ROUTES_AND_DATA.md`](ROUTES_AND_DATA.md) §3a, [`PRIVACY.md`](PRIVACY.md).
 
 **V3. Network only for what the rider asks** (2026-10-31). OSM tiles, BRouter links, Open-Meteo for missing elevation,
-the update check, optional Google and Strava. No account, no telemetry. · [`PRIVACY.md`](PRIVACY.md).
+the update check, optional Google. No account, no telemetry. · [`PRIVACY.md`](PRIVACY.md).
 
 ## Resilience
 
@@ -158,6 +200,7 @@ platform must keep that property.
 | Tauri/TypeScript UI | the app must be Rust |
 | copying GPL/AGPL trainer code | it would make the whole app copyleft |
 | the Strava API | paid subscription, shared secret |
+| the Strava upload through a hidden WebView | the sign-in had to be repeated after every ride; removed again (V2) |
 | a bundled Street View image set | against Google's terms |
 | CARTO map styles | require a key now |
 | installing MSVC on the dev PC | the user does not want it |

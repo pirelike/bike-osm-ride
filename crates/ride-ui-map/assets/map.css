@@ -339,3 +339,40 @@
   .map-controls { top: var(--space-2); right: var(--space-2); }
   .map-scale { right: var(--space-2); bottom: var(--space-6); }
 }
+
+/* review page: the section of the route that is zoomed into, in the accent colour on a paper
+   casing, and one dot per compared ride at the cursor */
+.map-route__hl-casing,
+.map-route__hl {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.map-route__hl-casing { stroke: var(--marker-ring); stroke-width: 10; }
+.map-route__hl { stroke: var(--accent); stroke-width: 6; }
+.map-ride__dot {
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid var(--marker-ring);
+  border-radius: 50%;
+  background: var(--c);
+}
+.map-ride__tag {
+  position: absolute;
+  left: 10px;
+  top: -8px;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-1);
+  font: 500 var(--t-11) / 1 var(--font-ui);
+  color: var(--text);
+  white-space: nowrap;
+}

@@ -8,7 +8,7 @@ Hungarian documents are for riders; English ones are for people working on the c
 
 | Document | Content |
 |---|---|
-| [`USER_GUIDE.md`](USER_GUIDE.md) | the user manual: routes, devices, riding, layout, workouts, ghost, Strava, Street View, phone, settings, keys, troubleshooting |
+| [`USER_GUIDE.md`](USER_GUIDE.md) | the user manual: routes, devices, riding, layout, workouts, ghost, summary and TCX, Street View, phone, settings, keys, troubleshooting |
 | [`PRIVACY.md`](PRIVACY.md) | every network call, what is stored locally and where, how secrets are handled |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | what changed in every release |
 
@@ -32,7 +32,6 @@ Hungarian documents are for riders; English ones are for people working on the c
 | [`UI.md`](UI.md) | the shell: state and signals, the tiling dock, the phone layout, dialogs, map and profile specifics |
 | [`DESIGN.md`](DESIGN.md) | the visual language: tokens, colours and their validation, type, primitives |
 | [`ANDROID.md`](ANDROID.md) | the pinned manifest and activity, JNI, panic containment, building and signing |
-| [`STRAVA.md`](STRAVA.md) | the upload without the API, how it works, how to repair it |
 | [`STREETVIEW.md`](STREETVIEW.md) | the Street View panel, Google's rules, the offline download, the mock |
 | [`PRIOR_ART.md`](PRIOR_ART.md) | which open-source projects were used, ported or only read, and their licences |
 

@@ -36,7 +36,7 @@
 - **Minden adat, ami számít.** Teljesítmény (3 mp-es átlag, W/kg, zóna), kadencia, pulzus, sebesség, meredekség,
   NP/IF/TSS, szintemelkedés, ETA: nagy, olvasható számokkal, 3D nélkül.
 - **Edzés és elemzés.** 93 beépített, forrásokkal ellátott edzés ERG-módban, edzői üzenetekkel; szellem és helyi
-  szegmensek PR-rel; TCX-export és Strava-feltöltés.
+  szegmensek PR-rel; TCX-export.
 - **A tiéd marad.** Nincs fiók, nincs telemetria, az adataid a gépeden vannak ([adatvédelem](docs/PRIVACY.md)). Nyílt
   forrású, megengedő licenccel.
 - **Hardver nélkül is megy.** A szimulált tekerővel mindent kipróbálhatsz Bluetooth nélkül.
@@ -67,7 +67,7 @@ aláírva, ezért két kiadás között előfordulhat, hogy előbb el kell távo
    csatlakoztatható.
 3. *(Opcionális)* **Edzés**: a felső sáv *Edzés* gombja (`W`), 93 edzésből választhatsz, vagy importálhatod a sajátodat.
 4. **`Kezdés`** (`Szóköz`). A trainer követi az emelkedőket (vagy tartja az edzés célwattját), a számok élnek.
-5. A végén az **összegzésből** TCX-et mentesz, vagy feltöltöd a Stravára.
+5. A végén az **összegzésből** TCX-et mentesz (a Strava, az Intervals.icu és a TrainingPeaks is elfogadja).
 
 A teljes leírás: **[Felhasználói kézikönyv](docs/USER_GUIDE.md)**.
 
@@ -91,7 +91,15 @@ A teljes leírás: **[Felhasználói kézikönyv](docs/USER_GUIDE.md)**.
   és Zwift-edzések (`.zwo`, XML, JSON) importja.
 - Coggan-zónák, NP, IF, TSS, kcal; pulzuszónák; másodpercenkénti felvétel.
 - **Szellem** (legutóbbi, legjobb, vagy a GPX saját időbélyegei) és **helyi szegmensek PR-rel**.
-- **TCX-export** (Garmin-séma), **Strava-feltöltés** API-kulcs nélkül (asztalon rejtett ablakkal, Androidon megosztással).
+- **Edzések áttekintése és összehasonlítása**: az ugyanazon az útvonalon tett edzések (legfeljebb négy) egymás mellett
+  teljesítmény, pulzus, kadencia, sebesség és időkülönbség szerint; ráközelítés egy szakaszra (húzással vagy az emelkedőkre),
+  szakasztábla. Strava-, Garmin-exportból **GPX- vagy TCX-edzés importja** pulzussal, kadenciával; ha nincs benne watt, a
+  szimuláció fizikája visszabecsüli (saját vagy megadott testsúllyal, kerékpárral, gördülési ellenállással).
+- **Teljesítmény oldal**: csúcsteljesítmény 5 mp-től 60 percig, FTP-javaslat a legjobb 20 percből (egy gombbal beállítható), heti és
+  havi terhelés. Csak mért watt számít.
+- **Biztonsági mentés**: az útvonalak, a túrák, az importált edzések és a beállítások egyetlen zip-fájlban (a Google-kulcs nélkül),
+  összefésülő visszaállítással. Semmi nem megy ki a hálózatra.
+- **TCX-export** (Garmin-séma): a Strava, az Intervals.icu és a TrainingPeaks kézzel feltöltve elfogadja. Beépített feltöltés nincs: a Strava-bejelentkezés minden tekerés után újra kellett volna, ezért kivettük (0.3.2).
 
 **Felület**
 - **Tiling elrendezés**: a panelek úgy működnek, mint egy tiling ablakkezelőben (nincs átfedés, nincs lyuk); húzással
@@ -111,7 +119,7 @@ A teljes leírás: **[Felhasználói kézikönyv](docs/USER_GUIDE.md)**.
   </tr>
   <tr>
     <td><img src="docs/screenshots/workout-picker.png" alt="Edzésválasztó"><br><sub><b>93 edzés</b> szűrőkkel, zónaszínes blokkvázlattal</sub></td>
-    <td><img src="docs/screenshots/summary.png" alt="A tekerés összegzése"><br><sub><b>Összegzés</b>: NP, IF, TSS, szegmensek, zónák; TCX és Strava</sub></td>
+    <td><img src="docs/screenshots/summary.png" alt="A tekerés összegzése"><br><sub><b>Összegzés</b>: NP, IF, TSS, szegmensek, zónák; TCX-mentés</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/devices.png" alt="Eszközök ablak"><br><sub><b>Eszközök</b>: egy eszköz több szerepben is</sub></td>
@@ -119,6 +127,13 @@ A teljes leírás: **[Felhasználói kézikönyv](docs/USER_GUIDE.md)**.
       <img src="docs/screenshots/phone-ride.png" width="170" alt="Telefon, Tekerés fül">
       <img src="docs/screenshots/phone-map.png" width="170" alt="Telefon, Térkép fül"><br>
       <sub><b>Telefonon</b>: Tekerés és Térkép fül</sub>
+    </td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/review.png" alt="Edzések áttekintése"><br><sub><b>Áttekintés</b>: két edzés egy emelkedőn, a másodiknál becsült watt</sub></td>
+    <td align="center">
+      <img src="docs/screenshots/review-phone.png" width="170" alt="Telefon, áttekintés">
+      <br><sub><b>Telefonon</b>: Edzések, Térkép, Grafikon, Szakasz fül</sub>
     </td>
   </tr>
 </table>
@@ -140,8 +155,8 @@ utolsó 12 km-e), szimulált tekerővel. Útvonal és térkép: © OpenStreetMap
 | Szimulált tekerő | működik hardver nélkül, minden platformon |
 | Windows | napi használatban |
 | Linux, macOS | a CI építi és (Linuxon) 20 másodperces füsttesztet futtat; valódi gépen futtatott ellenőrzés még nincs (tapasztalatot szívesen fogadunk) |
-| Android | a felület futott (a 0.3.0 hibáit futtatás közben találtuk meg); a rendszer-fájlválasztó megvalósítva; **a Bluetooth és a Strava-megosztás eszközön még nem volt kipróbálva** |
-| Strava-feltöltés, Street View | megvalósítva és tesztelve helyi próbaszerverrel; a valódi szolgáltatással még nem próbáltuk |
+| Android | a felület futott (a 0.3.0 hibáit futtatás közben találtuk meg); a rendszer-fájlválasztó megvalósítva; **a Bluetooth eszközön még nem volt kipróbálva** |
+| Street View | megvalósítva és tesztelve helyi próbaszerverrel; a valódi szolgáltatással még nem próbáltuk |
 
 Részletek: [`docs/TESTING.md`](docs/TESTING.md) és [`docs/BLUETOOTH.md`](docs/BLUETOOTH.md). Hibát, tapasztalatot, kompatibilis
 vagy nem kompatibilis eszközt szívesen fogadunk az Issues-ban (érdemes csatolni a `ble.log`-ot).
@@ -152,7 +167,7 @@ vagy nem kompatibilis eszközt szívesen fogadunk az Issues-ban (érdemes csatol
 |---|---|
 | **Felhasználóknak** | [Felhasználói kézikönyv](docs/USER_GUIDE.md) · [Adatvédelem és hálózati forgalom](docs/PRIVACY.md) · [Változásnapló](CHANGELOG.md) |
 | **Fejlesztőknek** | [Architektúra](docs/ARCHITECTURE.md) · [Fejlesztői útmutató](docs/DEVELOPMENT.md) · [Tesztelés](docs/TESTING.md) · [Kiadás](docs/RELEASING.md) · [Döntésnapló](docs/DECISIONS.md) |
-| **Témák** | [Bluetooth](docs/BLUETOOTH.md) · [Szimuláció és fizika](docs/SIMULATION.md) · [Útvonalak és adatformátumok](docs/ROUTES_AND_DATA.md) · [Felület](docs/UI.md) · [Design rendszer](docs/DESIGN.md) · [Android](docs/ANDROID.md) · [Strava](docs/STRAVA.md) · [Street View](docs/STREETVIEW.md) · [Előzmények, felhasznált kód](docs/PRIOR_ART.md) |
+| **Témák** | [Bluetooth](docs/BLUETOOTH.md) · [Szimuláció és fizika](docs/SIMULATION.md) · [Útvonalak és adatformátumok](docs/ROUTES_AND_DATA.md) · [Felület](docs/UI.md) · [Design rendszer](docs/DESIGN.md) · [Android](docs/ANDROID.md) · [Street View](docs/STREETVIEW.md) · [Előzmények, felhasznált kód](docs/PRIOR_ART.md) |
 
 A teljes jegyzék: [`docs/README.md`](docs/README.md).
 
@@ -160,7 +175,7 @@ A teljes jegyzék: [`docs/README.md`](docs/README.md).
 
 ```powershell
 cargo run -p ride-app                      # debug build és indítás (Windows, Linux, macOS)
-cargo test --workspace                     # a teljes tesztkészlet (2026-11-04: 954 teszt)
+cargo test --workspace                     # a teljes tesztkészlet (2026-11-05: 948 teszt)
 node scripts/readme_shots.mjs              # a képernyőképek újragenerálása
 ```
 
@@ -176,7 +191,7 @@ crates/
   ride-ui-map        csempés térkép · ride-ui-profile  profil és grafikonok
   ride-ui-hud        műszerek, kártyák, vezérlők       · ride-ui-dialogs  ablakok
   ride-ui-streetview Street View panel
-  ride-app           a keret: állapot, vezérlő, tiling, csempe-proxy, frissítő, Strava, Android
+  ride-app           a keret: állapot, vezérlő, tiling, csempe-proxy, frissítő, Android
 packaging/  scripts/  tests/fixtures/  docs/
 ```
 
@@ -211,7 +226,7 @@ Szándékosan csak megengedő (permissive) licencű kódot használunk fel. Az e
 | [virtual-cog](https://github.com/pymmog/virtual-cog) | Unlicense (közkincs) | Zwift Click/Play és Zwift Hub BLE-protokoll (átírva Rustra): a `ride-ble` `zwift` modulja, részletek a [`NOTICE.md`](NOTICE.md)-ben |
 | [`p256`](https://github.com/RustCrypto/elliptic-curves), [`hkdf`](https://github.com/RustCrypto/KDFs), [`sha2`](https://github.com/RustCrypto/hashes), [`aes`](https://github.com/RustCrypto/block-ciphers), [`ccm`](https://github.com/RustCrypto/AEADs) (RustCrypto) | MIT / Apache-2.0 | a Zwift Click kulcscseréje (ECDH P-256, HKDF-SHA256) és az AES-CCM titkosítás |
 | [Mozilla Firefox](https://www.mozilla.org/firefox/) | MPL-2.0 (a program **nem tartalmazza**, a gépre telepített példányt indítja) | a Böngésző panel: a telepített Firefox ablakát építjük be, külön profillal |
-| [Dioxus](https://dioxuslabs.com), [btleplug](https://github.com/deviceplug/btleplug), [tokio](https://tokio.rs), [quick-xml](https://github.com/tafia/quick-xml) és a többi Rust-függőség | főleg MIT / Apache-2.0 | a teljes, automatikusan generált lista (635 csomag): [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) |
+| [Dioxus](https://dioxuslabs.com), [btleplug](https://github.com/deviceplug/btleplug), [tokio](https://tokio.rs), [quick-xml](https://github.com/tafia/quick-xml) és a többi Rust-függőség | főleg MIT / Apache-2.0 | a teljes, automatikusan generált lista (638 csomag): [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) |
 
 Csak **hivatkozásként** (kód átvétele nélkül) szolgált: a `rouleur` nevű, nyílt forrású Martin-féle implementáció egyik
 kidolgozott példájának számértéke a fizika tesztjében, az [`nrenner/brouter-web`](https://github.com/nrenner/brouter-web) (MIT) a
@@ -219,7 +234,7 @@ bikerouter-linkek formátumának ellenőrzéséhez, valamint Makinolo visszafejt
 dokumentációként: <https://www.makinolo.com/blog/2024/10/20/zwift-trainer-protocol/>. Ez nem hivatalos, interoperabilitási
 munka: a Zwifttel nincs kapcsolatunk, a program nem a Zwift terméke, és a Zwift nem támogatja.
 
-GPL/AGPL licencű projektek (pl. OpenCycling, suffice, GoldenCheetah, QDomyos-Zwift, StravaUploaderPy) kódját **nem**
+GPL/AGPL licencű projektek (pl. OpenCycling, suffice, GoldenCheetah, QDomyos-Zwift) kódját **nem**
 használtuk fel, mert az az egész programot copyleft hatálya alá vonná; a kutatás részletei:
 [`docs/PRIOR_ART.md`](docs/PRIOR_ART.md).
 
@@ -262,8 +277,6 @@ alkalmazás a térképen megjeleníti az előírt hivatkozásokat (a hívások t
   Google-fiókod kvótáját használja. A *panoráma-azonosítók* tárolását az irányelvek engedik (ezek idővel változhatnak, ezért
   mellettük a koordinátát és az időbélyeget is megőrizzük, és a beágyazott nézet az azonosító mellé a koordinátát is megkapja).
   Ez a program nem a Google terméke, és nincs a Google-lel kapcsolatban.
-- **Strava (opcionális):** a feltöltés a Strava saját feltöltő oldalán át megy, a te bejelentkezéseddel; a program nem a Strava
-  terméke, és nincs a Stravával kapcsolatban.
 - **Edzésleírások:** a beépített edzéskönyvtár nyilvános edzésprotokollok (British Cycling, TrainingPeaks, CTS, FasCat, TrainerRoad
   és mások) és edzéstudományi vizsgálatok (Rønnestad, Seiler, Helgerud, Billat, Gibala, Bossi, Karsten és mások) alapján szerkesztett
   saját szöveg; a felhasznált források edzésenként a `crates/ride-model/assets/workouts.json` `sources` mezőjében szerepelnek.

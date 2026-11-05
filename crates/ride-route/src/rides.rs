@@ -18,8 +18,8 @@
 use std::io;
 use std::path::PathBuf;
 
-use ride_model::{RideMeta, RideRecord, RideSummary, Route};
-use ride_sim::segments;
+use ride_model::{RideMeta, RideRecord, RideSummary, Route, RouteRides};
+use ride_sim::{power_curve, segments};
 
 use crate::store::{self, Store};
 
@@ -47,7 +47,7 @@ fn stem_of(started_unix_s: f64) -> Option<String> {
     Some(format!("{seconds:.0}"))
 }
 
-fn valid_stem(stem: &str) -> bool {
+pub(crate) fn valid_stem(stem: &str) -> bool {
     !stem.is_empty()
         && stem.len() <= 20
         && stem.chars().all(|c| c.is_ascii_digit())
@@ -73,6 +73,7 @@ impl Store {
         let stem = stem_of(summary.started_unix_s).ok_or_else(invalid_time)?;
 
         let started_unix_s = summary.started_unix_s.round();
+        let (tss, mmp) = power_curve::index_numbers(record);
         let start_dist = record.points.first().map_or(0.0, |p| p.dist).max(0.0);
         let end_dist = summary.dist.max(0.0);
         let total = route.total_dist.max(0.0);
@@ -85,6 +86,13 @@ impl Store {
             complete: total > 0.0 && end_dist + COMPLETE_MARGIN_M >= total,
             simulated: record.simulated,
             segments: segments::segment_times(route, &record.points),
+            source: record.source,
+            power_estimated: record.power_estimated,
+            avg_power_w: finite_opt(summary.avg_power_w),
+            avg_hr: finite_opt(summary.avg_hr),
+            route_name: record.route_name.clone(),
+            tss,
+            mmp,
         };
 
         let record = sanitized(record);
@@ -132,12 +140,160 @@ impl Store {
         Some(record)
     }
 
-    fn read_ride_index(&self, dir: &std::path::Path) -> Vec<RideMeta> {
+    /// Whether a ride with this start time is stored for the route (an import of the same file
+    /// twice lands on the same stem).
+    pub fn has_ride(&self, route_id: &str, started_unix_s: f64) -> bool {
+        let (Some(dir), Some(stem)) = (route_dir(self, route_id), stem_of(started_unix_s)) else {
+            return false;
+        };
+        let _guard = store::lock();
+        dir.join(format!("{stem}.json")).is_file()
+    }
+
+    /// Every route that has stored rides, newest ride first, with its rides (newest first).
+    ///
+    /// Routes are found by their folder, not by the recent list: a route removed from the recent
+    /// routes keeps its rides. The name comes from the index; an index written before the name
+    /// was kept there is completed from the newest record.
+    pub fn list_all_rides(&self) -> Vec<RouteRides> {
+        let root = self.dir().join(RIDES_DIR);
+        let Ok(entries) = std::fs::read_dir(&root) else {
+            return Vec::new();
+        };
+        let ids: Vec<String> = entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|id| store::valid_id(id))
+            .collect();
+        let mut out = Vec::new();
+        for route_id in ids {
+            let rides = self.list_rides(&route_id);
+            let Some(newest) = rides.first() else {
+                continue;
+            };
+            let route_name = rides
+                .iter()
+                .map(|m| m.route_name.as_str())
+                .find(|name| !name.is_empty())
+                .map(str::to_string)
+                .or_else(|| {
+                    self.load_ride(&route_id, &newest.stem)
+                        .map(|record| record.route_name)
+                })
+                .unwrap_or_default();
+            out.push(RouteRides {
+                route_id,
+                route_name,
+                rides,
+            });
+        }
+        out.sort_by(|a, b| {
+            let newest = |r: &RouteRides| r.rides.first().map_or(0.0, |m| m.started_unix_s);
+            newest(b)
+                .total_cmp(&newest(a))
+                .then_with(|| a.route_id.cmp(&b.route_id))
+        });
+        out
+    }
+
+    /// Deletes one stored ride and its index entry. `Ok(false)` when there was no such ride.
+    pub fn delete_ride(&self, route_id: &str, stem: &str) -> io::Result<bool> {
+        let dir = route_dir(self, route_id).ok_or_else(store::invalid_id)?;
+        if !valid_stem(stem) {
+            return Ok(false);
+        }
+        let _guard = store::lock();
+        let file = dir.join(format!("{stem}.json"));
+        let existed = file.is_file();
+        if existed {
+            std::fs::remove_file(&file)?;
+        }
+        let mut index = self.read_ride_index(&dir);
+        let before = index.len();
+        index.retain(|m| m.stem != stem);
+        if index.len() != before {
+            let json = serde_json::to_vec_pretty(&index).map_err(io::Error::other)?;
+            store::write_atomic(&dir.join(INDEX_FILE), &json)?;
+        }
+        Ok(existed)
+    }
+
+    /// Fills in the power numbers of the index entries that have none (rides saved before the
+    /// power page existed): their TSS and their power curve, computed from the record once and kept
+    /// in the index from then on. Returns how many entries were updated.
+    ///
+    /// The records are read one at a time without the lock held; only the final patch of each
+    /// index takes it, and it re-reads the index first, so a ride saved meanwhile is not lost.
+    /// A record that cannot be read is left alone (and tried again next time).
+    pub fn backfill_analysis(&self) -> usize {
+        let root = self.dir().join(RIDES_DIR);
+        let Ok(entries) = std::fs::read_dir(&root) else {
+            return 0;
+        };
+        let ids: Vec<String> = entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|id| store::valid_id(id))
+            .collect();
+        let mut updated = 0;
+        for route_id in ids {
+            let todo: Vec<String> = self
+                .list_rides(&route_id)
+                .into_iter()
+                .filter(|meta| meta.mmp.is_none())
+                .map(|meta| meta.stem)
+                .collect();
+            let mut computed: Vec<Computed> = Vec::new();
+            for stem in todo {
+                if let Some(record) = self.load_ride(&route_id, &stem) {
+                    let (tss, mmp) = power_curve::index_numbers(&record);
+                    computed.push((stem, tss, mmp));
+                }
+            }
+            if computed.is_empty() {
+                continue;
+            }
+            let Some(dir) = route_dir(self, &route_id) else {
+                continue;
+            };
+            let _guard = store::lock();
+            let mut index = self.read_ride_index(&dir);
+            let mut changed = 0;
+            for meta in &mut index {
+                if meta.mmp.is_some() {
+                    continue;
+                }
+                if let Some((_, tss, mmp)) = computed.iter().find(|(stem, _, _)| *stem == meta.stem)
+                {
+                    meta.tss = *tss;
+                    meta.mmp = mmp.clone();
+                    changed += 1;
+                }
+            }
+            if changed == 0 {
+                continue;
+            }
+            let Ok(json) = serde_json::to_vec_pretty(&index) else {
+                continue;
+            };
+            if store::write_atomic(&dir.join(INDEX_FILE), &json).is_ok() {
+                updated += changed;
+            }
+        }
+        updated
+    }
+
+    pub(crate) fn read_ride_index(&self, dir: &std::path::Path) -> Vec<RideMeta> {
         store::read_limited(&dir.join(INDEX_FILE))
             .and_then(|b| serde_json::from_slice::<Vec<RideMeta>>(&b).ok())
             .unwrap_or_default()
     }
 }
+
+/// A stem with the TSS and the power curve computed for it (see `Store::backfill_analysis`).
+type Computed = (String, Option<f64>, Option<Vec<Option<f32>>>);
 
 /// The summary if the ride is long enough to keep.
 fn usable_summary(summary: &RideSummary) -> Option<&RideSummary> {
@@ -225,6 +381,19 @@ pub fn load_ride(route_id: &str, stem: &str) -> Option<RideRecord> {
     Store::default_location().load_ride(route_id, stem)
 }
 
+/// Every route with stored rides (see [`Store::list_all_rides`]).
+pub fn list_all_rides() -> Vec<RouteRides> {
+    Store::default_location().list_all_rides()
+}
+
+pub fn delete_ride(route_id: &str, stem: &str) -> io::Result<bool> {
+    Store::default_location().delete_ride(route_id, stem)
+}
+
+pub fn has_ride(route_id: &str, started_unix_s: f64) -> bool {
+    Store::default_location().has_ride(route_id, started_unix_s)
+}
+
 /// One recorded point, for the tests of other crates.
 #[cfg(test)]
 fn point(t: f64, dist: f64) -> ride_model::RecordPoint {
@@ -305,6 +474,9 @@ mod tests {
             simulated,
             summary: summary(started, elapsed, dist),
             points,
+            source: ride_model::RideSource::Recorded,
+            power_estimated: false,
+            estimate: None,
         }
     }
 
@@ -335,6 +507,136 @@ mod tests {
         let list = store.list_rides("route-1");
         assert_eq!(list.len(), 1);
         assert_eq!(list[0], meta);
+    }
+
+    #[test]
+    fn the_index_keeps_the_tss_and_the_power_curve() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let meta = store
+            .save_ride(&record(1_700_000_000.0, 300.0, 2_000.0, false), &route())
+            .unwrap()
+            .expect("kept");
+        assert_eq!(meta.tss, Some(95.0));
+        let curve = meta.mmp.clone().expect("computed at save time");
+        assert_eq!(curve.len(), ride_sim::power_curve::DURATIONS.len());
+        assert!((curve[2].expect("5 min") - 200.0).abs() < 1e-3, "{curve:?}");
+        assert_eq!(curve[3], None, "a 5 minute ride has no 20 minute value");
+
+        // a simulated ride is computed too, and empty: nothing to back-fill later
+        let simulated = store
+            .save_ride(&record(1_700_001_000.0, 300.0, 2_000.0, true), &route())
+            .unwrap()
+            .expect("kept");
+        assert_eq!(simulated.mmp, Some(vec![None; curve.len()]));
+    }
+
+    #[test]
+    fn an_index_from_before_the_power_page_is_filled_in_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        for started in [1_700_000_000.0, 1_700_001_000.0] {
+            store
+                .save_ride(&record(started, 300.0, 2_000.0, false), &route)
+                .unwrap();
+        }
+        // make the index look like one written by the previous version: no tss, no curve
+        let index_path = tmp.path().join("rides/route-1/index.json");
+        let mut index: Vec<RideMeta> =
+            serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+        for meta in &mut index {
+            meta.tss = None;
+            meta.mmp = None;
+        }
+        std::fs::write(&index_path, serde_json::to_vec(&index).unwrap()).unwrap();
+        // one of the records is gone: it cannot be computed and must not break the others
+        std::fs::remove_file(tmp.path().join("rides/route-1/1700001000.json")).unwrap();
+        assert!(store.list_rides("route-1").iter().all(|m| m.mmp.is_none()));
+
+        assert_eq!(store.backfill_analysis(), 1);
+        let listed = store.list_rides("route-1");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].tss, Some(95.0));
+        assert!(listed[0].mmp.is_some());
+        // the entry whose record vanished is still unfilled in the file, and a second run is a no-op
+        let raw: Vec<RideMeta> =
+            serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+        assert_eq!(raw.iter().filter(|m| m.mmp.is_none()).count(), 1);
+        assert_eq!(store.backfill_analysis(), 0);
+        // nothing to do in an empty folder either
+        assert_eq!(Store::at(tmp.path().join("nowhere")).backfill_analysis(), 0);
+    }
+
+    #[test]
+    fn every_route_with_rides_is_listed_and_a_ride_can_be_deleted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        store
+            .save_ride(&record(1_700_000_100.0, 200.0, 1_500.0, false), &route)
+            .unwrap();
+        store
+            .save_ride(&record(1_700_000_200.0, 250.0, 1_800.0, false), &route)
+            .unwrap();
+        // a second route, ridden later
+        let mut other = record(1_700_000_900.0, 300.0, 2_000.0, false);
+        other.route_id = "route-2".into();
+        other.route_name = "Másik kör".into();
+        store.save_ride(&other, &route).unwrap();
+
+        let all = store.list_all_rides();
+        assert_eq!(
+            all.iter().map(|r| r.route_id.as_str()).collect::<Vec<_>>(),
+            ["route-2", "route-1"],
+            "the route ridden last comes first"
+        );
+        assert_eq!(all[0].route_name, "Másik kör");
+        assert_eq!(all[1].route_name, "Teszt kör");
+        assert_eq!(all[1].rides.len(), 2);
+        assert_eq!(all[1].rides[0].stem, "1700000200");
+
+        assert!(store.has_ride("route-1", 1_700_000_100.0));
+        assert!(!store.has_ride("route-1", 1_700_000_101.0));
+        assert!(!store.has_ride("../x", 1_700_000_100.0));
+
+        assert!(store.delete_ride("route-1", "1700000100").unwrap());
+        assert!(
+            !store.delete_ride("route-1", "1700000100").unwrap(),
+            "already gone"
+        );
+        assert!(!store.delete_ride("route-1", "../../x").unwrap());
+        assert!(store.delete_ride("../x", "1700000100").is_err());
+        assert_eq!(store.list_rides("route-1").len(), 1);
+        assert!(store.load_ride("route-1", "1700000100").is_none());
+        assert!(!store.has_ride("route-1", 1_700_000_100.0));
+
+        // the last ride of a route gone: the route drops out of the list
+        assert!(store.delete_ride("route-1", "1700000200").unwrap());
+        assert_eq!(store.list_all_rides().len(), 1);
+        assert!(Store::at(tmp.path().join("nincs"))
+            .list_all_rides()
+            .is_empty());
+    }
+
+    #[test]
+    fn an_index_without_route_names_is_completed_from_the_newest_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        store
+            .save_ride(&record(1_700_000_100.0, 200.0, 1_500.0, false), &route)
+            .unwrap();
+        // strip the names from the index, like an index of an older version
+        let index_path = tmp.path().join("rides/route-1/index.json");
+        let mut index: Vec<serde_json::Value> =
+            serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+        for entry in &mut index {
+            entry.as_object_mut().unwrap().remove("route_name");
+        }
+        std::fs::write(&index_path, serde_json::to_vec(&index).unwrap()).unwrap();
+        let all = store.list_all_rides();
+        assert_eq!(all[0].route_name, "Teszt kör");
     }
 
     #[test]

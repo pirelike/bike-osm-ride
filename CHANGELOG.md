@@ -8,6 +8,58 @@ a dátumok a commitok dátumai.
 A **v0.2.0** és a **v0.2.2** címke megvan a tárolóban, de nincs hozzá kiadás: a kiadási futásuk elbukott, a tartalmuk a
 következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címkét nem mozgatunk; a javítás új patch-verzió.
 
+## [Kiadatlan]
+
+## [0.4.0] – 2026-11-05
+
+### Új
+- **Edzések áttekintése** (`Áttekintés` gomb; telefonon az `Útvonal` ablak alján): teljes képernyős oldal, ahol egy útvonal
+  mentett edzései (legfeljebb négy) összehasonlíthatók. Grafikon a távolság függvényében: teljesítmény, pulzus, kadencia,
+  sebesség és az első edzéshez mért időkülönbség, közös kurzorral. Ráközelítés egy szakaszra a profilon vagy a grafikonon
+  húzással, illetve az emelkedő-gombokkal: a térkép kiemeli és megmutatja a szakaszt, a grafikon és a szakasztábla (idő,
+  sebesség, átlag- és NP-watt, pulzus, kadencia, emelkedés, VAM, időkülönbség) ugyanarra szűkül. Edzés törölhető.
+- **Edzésimport**: más alkalmazás (Strava, Garmin, Wahoo) **GPX-** vagy **TCX-**fájlja, pulzussal, kadenciával és wattal.
+  A nyomot az útvonalra vetítjük (30 m-en belüli pontok, a kitérők kimaradnak, az automatikus szünet nem számít az időbe), így
+  az edzés ugyanazon a távolságtengelyen él, mint a többi. A fájl kézzel adott (tallózás vagy ráhúzás), semmi nem megy ki a
+  gépről. Az importált edzés nem lesz PR és nem lesz szellem.
+- **Becsült watt**: ha a fájlban nincs teljesítmény, a szimuláció fizikáját visszafelé futtatjuk (energiamérleg egy 9 s-os
+  ablakra; a lejtőt az útvonal adja). A számolás a saját adataiddal vagy egyéni értékekkel történik (testsúly, kerékpár,
+  gördülési ellenállás; a CdA, a hatásfok és a levegősűrűség a Beállításokból), az eredmény `~` jelű, és újraszámolható.
+  Mért wattot soha nem írunk felül.
+- Új, négyszínű adatpaletta a sorozatokhoz (`--series-1…4`, mindkét témában ellenőrizve).
+- **Teljesítmény oldal** (az áttekintésben az *Összehasonlítás | Teljesítmény* váltó): a legjobb átlagos watt 5 mp-re, 1, 5, 20 és
+  60 percre az összes edzésedből; az FTP-javaslat (a legjobb 20 perc 95 %-a) egy gombbal beállítható; a terhelés (TSS és idő) az
+  utolsó 12 hétre vagy hónapra. Csak mért watt számít: a szimulált és a becsült wattú edzések kimaradnak. A régebbi
+  edzések számait az első megnyitáskor számoljuk ki (`RideMeta.tss`, `RideMeta.mmp`), az *FTP-teszt 20 perc* leírása
+  hivatkozik rá.
+- **Biztonsági mentés** (*Beállítások → Biztonsági mentés*): egyetlen zip az útvonalakról, a mentett túrákról, az importált
+  edzésekről és a beállításokról. A visszaállítás csak összefésül, semmit nem töröl és meglévő túrát nem ír felül. A
+  Street View-kulcs, a csempék, a képek és a naplók nincsenek benne; a kulcs a visszaállításnál sem jön a fájlból. Hibás,
+  túl nagy vagy gyanús nevű fájlt az app előre elutasít, és semmit nem ír. Androidon a rendszer fájlválasztója
+  (Storage Access Framework) kezeli; telefonon még nem próbáltuk ki.
+- **Androidon a kijelző bekapcsolva marad tekerés közben** (`FLAG_KEEP_SCREEN_ON`). Szünetben és a túra végén a rendszer
+  saját időkorlátja él újra. Telefonon még nem próbáltuk ki.
+
+### Javítva
+- A telefonos felső sáv „Teljes képernyő” gombja nem tűnt el, ahogy kellett volna: az ékezetes `aria-label`-re illesztő CSS
+  nem talált. Ékezetmentes osztályra váltottunk.
+
+### Fejlesztőknek
+- Új crate: `ride-ui-review`. Új modulok: `ride-sim::{analysis, estimate, compare, power_curve}`, `ride-route::{activity, matching, import, backup}`.
+- Új függőség: `zip` 4.6 (MIT), csak a `deflate-flate2-zlib-rs` funkcióval, a `flate2` már a fában volt.
+- `RideRecord` és `RideMeta` additívan bővült (`source`, `power_estimated`, `estimate`, átlagok, útvonalnév); a régi fájlok
+  változatlanul betöltődnek.
+- `RIDE_REVIEW=1` hook; `cargo run -p ride-route --example seed_review -- <mappa> [útvonal.gpx]` mintaedzéseket tölt egy
+  adatmappába; a `readme_shots.mjs` új `review` és `review-phone` forgatókönyve.
+
+### Eltávolítva
+- **Strava-feltöltés**: az asztali rejtett WebView-s feltöltés, az Android-megosztás, a „Feltöltés Stravára” gomb, a Strava-sáv
+  és az összegzőben a Strava adatait kérő űrlap (cím, leírás, sport, jegyzet, láthatóság). Ok: a bejelentkezést minden tekerés
+  után újra el kellett végezni, így a funkció nem volt használható. A TCX-mentés marad (`Mentés TCX-ként`, korábban „Csak mentés
+  TCX-ként”): a fájl kézzel feltölthető a Stravára, az Intervals.icu-ra vagy a TrainingPeaks-re.
+- A már létrejött `strava` és `strava-webview` mappa az adatmappában ilyenkor feleslegessé válik; a program nem törli, kézzel
+  törölhető (a `strava-webview` a Strava-bejelentkezési profilt tartalmazza).
+
 ## [0.3.1] – 2026-11-05
 
 ### Felület
@@ -16,7 +68,7 @@ következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címk�
 
 ### Dokumentáció
 - Újraírt, képernyőképes README; új `CLAUDE.md`, `CHANGELOG.md`, `docs/README.md` (index), `USER_GUIDE`, `PRIVACY`,
-  `DEVELOPMENT`, `TESTING`, `BLUETOOTH`, `SIMULATION`, `ROUTES_AND_DATA`, `UI`, `ANDROID`, `RELEASING`, `STRAVA`,
+  `DEVELOPMENT`, `TESTING`, `BLUETOOTH`, `SIMULATION`, `ROUTES_AND_DATA`, `UI`, `ANDROID`, `RELEASING`,
   `STREETVIEW`, `DECISIONS`; az `ARCHITECTURE` és a `DESIGN` frissítve.
 - `scripts/readme_shots.mjs`: a képernyőképek újragenerálása tiszta adatmappából.
 

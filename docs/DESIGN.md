@@ -180,6 +180,21 @@ profile a climb is a **flag** on a pole with the category numeral (4 3 2 1 HC) i
 
 Every colour that carries meaning is paired with a number or a word.
 
+## Series colours (the review page)
+
+Up to four rides are drawn at once: `--series-1…4` (palette.rs `SERIES_DARK` / `SERIES_LIGHT`, kept in step with `kit.css` by a
+test).
+
+| | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| dark | `#42d9fa` | `#e9e64a` | `#be73b8` | `#69a621` |
+| light | `#1b46b4` | `#525800` | `#a459cc` | `#1590a1` |
+
+Gates (`palette.rs`): every colour has ≥ 3:1 contrast with `--bg-1`, ΔE (OKLab ×100) ≥ 18 from the accent (the selected
+section is drawn in it) and ≥ 20 from each other, in both themes. They were found by a search under those constraints (and a
+ΔE ≥ 16 from the chart ink so a series never reads as the default line), not by eye. Colour is never the only signal: the
+lines differ in dash pattern too (solid, `7 4`, `2 4`, `10 4 2 4`) and every ride has a letter A-D on a swatch.
+
 ## Validation (the palette gates)
 
 Run with `validate_palette.js` (dataviz skill) on the **new surfaces** — dark `--bg-1` `#1a1916`, light

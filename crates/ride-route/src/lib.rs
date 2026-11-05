@@ -6,7 +6,8 @@
 //! API; the exact supported link formats are documented there), [`elevation`]
 //! (Open-Meteo fallback for tracks without elevation), [`demo`] (built-in route),
 //! [`store`] (settings / recent routes under `%LOCALAPPDATA%\bike-osm-ride`, or
-//! `$RIDE_DATA_DIR`) and [`rides`] (the ride log: one record per finished ride, with the
+//! `$RIDE_DATA_DIR`), [`activity`] / [`matching`] / [`import`] (a recorded GPX or TCX activity
+//! projected onto a route and stored as a ride) and [`rides`] (the ride log: one record per finished ride, with the
 //! segment times the ghost and the PRs are built from).
 //!
 //! The async entry points below are what `ride-app` calls. Network access happens only
@@ -18,6 +19,8 @@ use std::path::{Path, PathBuf};
 
 use ride_model::{Route, RouteSource};
 
+pub mod activity;
+pub mod backup;
 pub mod bikerouter;
 pub mod build;
 pub mod climbs;
@@ -26,6 +29,8 @@ pub mod elevation;
 pub mod geo;
 pub mod gpx;
 pub mod http;
+pub mod import;
+pub mod matching;
 pub mod rides;
 pub mod store;
 

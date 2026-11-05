@@ -81,6 +81,12 @@ pub const ACCENT_LIGHT: &str = "#b93405";
 pub const GHOST_DARK: &str = "#63d8cf";
 /// The ghost of an earlier ride. Light theme.
 pub const GHOST_LIGHT: &str = "#0f6f74";
+/// The rides of the review page, up to four side by side: blue, gold, orchid, green. They avoid the
+/// vermilion accent (the selected section), and differ in lightness as well as hue, so the lines
+/// stay apart for readers with a colour vision deficiency (the chart also varies the dash).
+pub const SERIES_DARK: [&str; 4] = ["#42d9fa", "#e9e64a", "#be73b8", "#69a621"];
+/// The same four on the light theme.
+pub const SERIES_LIGHT: [&str; 4] = ["#1b46b4", "#525800", "#a459cc", "#1590a1"];
 /// Status colours (usable as text on the panel surfaces): `[ok, warn, crit]`.
 pub const STATUS_DARK: [&str; 3] = ["#7fd18b", "#f2c14e", "#ff6f94"];
 pub const STATUS_LIGHT: [&str; 3] = ["#1b6e38", "#845000", "#a8195a"];
@@ -293,6 +299,13 @@ pub fn ghost_color(theme: Theme) -> &'static str {
     pick(theme, GHOST_DARK, GHOST_LIGHT)
 }
 
+/// Colour of the `index`-th compared ride (`0..4`, wrapping) for drawing that cannot use CSS
+/// variables.
+pub fn series_color(index: usize, theme: Theme) -> &'static str {
+    let colors = pick(theme, &SERIES_DARK, &SERIES_LIGHT);
+    colors[index % colors.len()]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +387,14 @@ mod tests {
             }
             assert_eq!(get("--accent"), accent_color(theme));
             assert_eq!(get("--ghost"), ghost_color(theme));
+            for i in 0..4 {
+                assert_eq!(
+                    get(&format!("--series-{}", i + 1)),
+                    series_color(i, theme),
+                    "series-{} {theme:?}",
+                    i + 1
+                );
+            }
             let s = pick(theme, &STATUS_DARK, &STATUS_LIGHT);
             assert_eq!(
                 [get("--ok"), get("--warn"), get("--crit")],
@@ -388,7 +409,7 @@ mod tests {
             z1 z2 z3 z4 z5 z6 z7 h1 h2 h3 h4 h5 grade-down grade-flat grade-up-1 grade-up-2 grade-up-3 grade-up-4 \
             radius-sm radius-md radius-lg radius-xl shadow-1 shadow-2 space-1 space-2 space-3 space-4 space-5 space-6 space-7 \
             ease dur-fast dur dur-slow font-ui font-display font-num \
-            rule rule-strong rule-ink accent-strong chart-grid chart-axis chart-ink route-casing marker-ring shadow-ink ghost \
+            rule rule-strong rule-ink accent-strong chart-grid chart-axis chart-ink route-casing marker-ring shadow-ink ghost series-1 series-2 series-3 series-4 \
             fs-2xs fs-xs fs-sm fs-md fs-base fs-lg fs-xl fs-2xl fs-3xl fs-4xl fs-hero t-11 t-13 t-15 t-20 t-28 t-56 t-96 \
             fill-1 fill-2 fill-3 hover scrim accent-line accent-glow ok-soft warn-soft crit-soft cat-none cat-4 cat-3 cat-2 cat-1 cat-hc \
             h1 h2 h3 h4 h5 radius-xs radius-pill";
@@ -671,6 +692,39 @@ mod tests {
                 color::contrast_ratio(c("--accent"), ring) >= 2.0,
                 "accent vs marker ring ({theme:?})"
             );
+        }
+    }
+
+    #[test]
+    fn the_ride_series_are_legible_and_apart_from_each_other_and_the_accent() {
+        for theme in themes() {
+            let vars = css_vars(theme);
+            let c = |k: &str| hex_of(vars.get(k).unwrap_or_else(|| panic!("missing {k}")));
+            let surface = c("--bg-1");
+            let series: Vec<Rgb> = (1..=4).map(|i| c(&format!("--series-{i}"))).collect();
+            for (i, s) in series.iter().enumerate() {
+                let r = color::contrast_ratio(*s, surface);
+                assert!(
+                    r >= 3.0,
+                    "series-{} on the surface only {r:.2}:1 ({theme:?})",
+                    i + 1
+                );
+                let d = color::delta_e(*s, c("--accent"));
+                assert!(
+                    d >= 18.0,
+                    "series-{} vs accent ΔE {d:.1} ({theme:?})",
+                    i + 1
+                );
+                for (j, other) in series.iter().enumerate().skip(i + 1) {
+                    let d = color::delta_e(*s, *other);
+                    assert!(
+                        d >= 20.0,
+                        "series-{} vs series-{} ΔE {d:.1} ({theme:?})",
+                        i + 1,
+                        j + 1
+                    );
+                }
+            }
         }
     }
 

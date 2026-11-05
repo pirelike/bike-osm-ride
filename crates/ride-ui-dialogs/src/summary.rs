@@ -10,11 +10,10 @@ use ride_ui_kit::palette::{hr_zone_name, hr_zone_var, power_zone_name, power_zon
 use ride_ui_kit::{Dialog, Icon, IconName};
 
 use crate::helpers::{fmt_date, fmt_if, hr_zone_bars, power_zone_bars, segment_rows, SegmentRow};
-use crate::ride_details::{RideDetails, RideDetailsForm};
 
 /// End-of-ride summary: headline numbers, the ghost difference and the segment table, zone
-/// distribution bars, "Csak mentés TCX-ként", "Feltöltés Stravára", "Új útvonal". Closing is the
-/// title bar's × (the footer carries actions only).
+/// distribution bars, "Mentés TCX-ként", "Új útvonal". Closing is the title bar's × (the footer
+/// carries actions only).
 #[component]
 pub fn SummaryDialog(
     open: bool,
@@ -23,13 +22,7 @@ pub fn SummaryDialog(
     route: ReadSignal<Option<Arc<Route>>>,
     /// What the ride did against the history (ghost, segment PRs).
     comparison: ReadSignal<Option<RideComparison>>,
-    /// Title, description, sport and the rest of what Strava asks for.
-    details: ReadSignal<RideDetails>,
-    on_details: EventHandler<RideDetails>,
     on_save_tcx: EventHandler<()>,
-    /// An upload is running in the background (the button waits).
-    uploading: bool,
-    on_upload_strava: EventHandler<()>,
     on_close: EventHandler<()>,
     on_new_ride: EventHandler<()>,
 ) -> Element {
@@ -58,30 +51,15 @@ pub fn SummaryDialog(
                 }
                 div { class: "dlg-foot__end",
                     button {
-                        class: "btn",
+                        class: "btn btn--primary",
                         r#type: "button",
                         disabled: !has_summary,
                         onclick: move |_| on_save_tcx.call(()),
                         Icon { name: IconName::Download, size: 14 }
-                        "Csak mentés TCX-ként"
-                    }
-                    button {
-                        class: "btn btn--primary",
-                        r#type: "button",
-                        disabled: !has_summary || uploading,
-                        onclick: move |_| on_upload_strava.call(()),
-                        Icon { name: IconName::Upload, size: 14 }
-                        if uploading {
-                            "Feltöltés folyamatban…"
-                        } else {
-                            "Feltöltés Stravára"
-                        }
+                        "Mentés TCX-ként"
                     }
                 }
             },
-            if has_summary {
-                RideDetailsForm { details, on_change: on_details }
-            }
             if let Some(ride) = value {
                 SummaryBody {
                     summary: ride,
@@ -316,11 +294,7 @@ mod tests {
                 summary,
                 route,
                 comparison,
-                details: use_signal(RideDetails::default),
-                on_details: move |_| {},
                 on_save_tcx: move |_| {},
-                uploading: false,
-                on_upload_strava: move |_| {},
                 on_close: move |_| {},
                 on_new_ride: move |_| {},
             }
@@ -471,7 +445,8 @@ mod tests {
         assert!(!html.contains("dlg-compare"));
         assert!(!html.contains("Szegmensek"));
         assert!(html.contains("Teljesítményzónák"), "zone bars still there");
-        assert!(html.contains("Csak mentés TCX-ként"));
+        assert!(html.contains("Mentés TCX-ként"));
+        assert!(!html.contains("Strava"), "no upload any more");
     }
 
     #[test]

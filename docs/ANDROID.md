@@ -9,10 +9,9 @@ what is and is not known to work. Checked against the repository on 2026-11-04 (
 | | State |
 |---|---|
 | Builds in CI, installs, starts, phone layout | yes (the release workflow builds a signed-with-debug-key APK; layout checked at 412 × 860) |
-| System file picker for GPX, share of the TCX to the Strava app | implemented through JNI; found and fixed by running the APK, see the 0.3.0 commit message |
+| System file picker for GPX | implemented through JNI; found and fixed by running the APK, see the 0.3.0 commit message |
 | Bluetooth (`btleplug` droidplug backend, runtime permissions) | implemented, **never confirmed with a real sensor or trainer** |
-| Keep the screen on while riding | **not implemented**: `wake.rs` does nothing on Android, and nothing in our activity sets `FLAG_KEEP_SCREEN_ON`. Unless the generated base activity does, the system's screen timeout applies. Unverified |
-| Hidden Strava upload | impossible: wry on Android allows one WebView only; the share intent is used instead |
+| Keep the screen on while riding | implemented (`wake.rs` → `MainActivity.setKeepScreenOn` → `FLAG_KEEP_SCREEN_ON`, on while `Riding`, off when paused or finished), **not yet confirmed on a device** |
 | Browser panel (Firefox) | not available |
 
 The app **cannot be built in the sandboxed shell used for this repository** (the NDK's clang fails to create
@@ -33,7 +32,7 @@ temporary files there); builds were done in a normal shell and in CI.
   in step with `Dioxus.toml`: permissions, the identifier, the library name, the config-change list.
 - **A pinned activity** (`android/MainActivity.kt`, `android_main_activity` in `Dioxus.toml`; package
   `dev.dioxus.main`, a `typealias BuildConfig` to the application id because the generated `Logger.kt` needs it).
-  It extends `WryActivity` with exactly two things driven from Rust through JNI:
+  It extends `WryActivity` with a few things driven from Rust through JNI:
   - `pickGpx()`: `ACTION_OPEN_DOCUMENT` (Storage Access Framework). The picker returns a `content://` URI, which
     the route loader cannot open as a path, so the stream is copied into `cacheDir/gpx/` (sanitised name,
     `.gpx` appended) and the path goes back to Rust through the native method `onPicked` (an empty string means
@@ -41,6 +40,18 @@ temporary files there); builds were done in a normal shell and in CI.
     answer (`shell::use_android_picker`).
   - `requestBlePermissions()`: `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT` on Android 12+, fine location before that.
     Asked once in `onCreate`; the Devices dialog's "Keresés indítása" asks again after a refusal.
+  - `setKeepScreenOn(on)`: adds or clears `FLAG_KEEP_SCREEN_ON` on the window inside `runOnUiThread` (Rust calls
+    from its own thread, a window flag may only change on the UI thread). No permission needed. The controller
+    already calls `wake::set` on every ride-state transition, so the Android branch of `wake.rs` is the only Rust
+    change. The JNI call is wrapped in `catch_unwind` because `ndk_context::android_context()` panics once the
+    activity has let go of the context, and a panic out of an event handler poisons the global UI mutex.
+  - `restoreBackup()` / `saveBackup(path, name)`: the backup zip, both ways (`ACTION_OPEN_DOCUMENT` and
+    `ACTION_CREATE_DOCUMENT`, `application/zip`). A picked zip is copied into `cacheDir/backup/` on a worker thread
+    and answered through `onBackupPicked` (empty = cancelled); for a save Rust writes the zip into
+    `<data>/backup-tmp/`, `saveBackup` remembers the path, the dialog result is copied to the chosen URI (`"wt"`, so
+    an existing file is replaced) and the temp file deleted, then `onBackupSaved` says `ok`, `cancel` or `error`. Two
+    separate Rust slots (`PICKED_BACKUP`, `SAVED_BACKUP`), because `PICKED` always goes to the GPX loader; the shell
+    polls all three (`use_android_picker`). **Never run on a device.**
   The two sides are tied by name, so a rename on either side needs the other (and a test checks the contract).
 - **Permissions** (`[permissions]` in `Dioxus.toml`): `INTERNET` (default), Bluetooth, and location because
   Android 11 and older need it to scan.
@@ -131,6 +142,5 @@ takes over.
 - `setup-android` in CI needs `packages: platform-tools` only (its default list still names the removed `tools`).
 - `jni` versions differ on purpose: `ride-ble` uses 0.22 (btleplug's), `ride-app` 0.21; never mix their environments.
 - Tests must not hard-code the Windows tile base `http://tiles.localhost`; Android's is `https://tiles.localhost`.
-- The Strava share needs Android 10+ (`MediaStore.Downloads`) and puts the TCX into the shared Download folder; the
-  Strava app takes no title or other details from the intent. "Csak mentés TCX-ként" writes into the shared
-  Download folder too, or into the app's own `exports` folder when that is not writable (`paths::export_dir`).
+- "Mentés TCX-ként" has no save dialog on Android: it writes into the shared Download folder, or into the app's own
+  `exports` folder when that is not writable (`paths::export_dir`). There is no upload or share intent any more.

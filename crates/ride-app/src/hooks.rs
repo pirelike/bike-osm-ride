@@ -10,6 +10,7 @@
 //! | `RIDE_GPX=<path>` | load a GPX file at start-up |
 //! | `RIDE_BLE_LOG=1` | write the raw BLE hex log to `%LOCALAPPDATA%/bike-osm-ride/ble.log` |
 //! | `RIDE_DIALOG=route|devices|settings|workouts|about` | open a dialog at start-up |
+//! | `RIDE_REVIEW=1` | open the review page at start-up |
 //! | `RIDE_WORKOUT=<id>` | select this workout at start-up (e.g. `e-ramp-20w`; ignored when unknown) |
 //! | `RIDE_TIMESCALE=<n>` | run the ride clock `n` times faster (1..=200), to reach the summary quickly |
 //! | `RIDE_DATA_DIR=<dir>` | use another data directory (tile cache, settings, recents) |
@@ -35,6 +36,8 @@ pub struct Hooks {
     pub gpx: Option<PathBuf>,
     pub ble_log: bool,
     pub dialog: Option<DialogKind>,
+    /// Open the review page at start-up (`RIDE_REVIEW=1`).
+    pub review: bool,
     pub time_scale: f64,
     pub tile_probe: bool,
     pub tile_base: Option<String>,
@@ -54,6 +57,7 @@ impl Default for Hooks {
             gpx: None,
             ble_log: false,
             dialog: None,
+            review: false,
             time_scale: 1.0,
             tile_probe: false,
             tile_base: None,
@@ -97,6 +101,7 @@ impl Hooks {
             gpx: get("RIDE_GPX").map(PathBuf::from),
             ble_log: flag("RIDE_BLE_LOG"),
             dialog: get("RIDE_DIALOG").and_then(|v| parse_dialog(&v)),
+            review: flag("RIDE_REVIEW"),
             time_scale,
             tile_probe: flag("RIDE_TILE_PROBE"),
             tile_base: get("RIDE_TILE_BASE").map(|b| b.trim_end_matches('/').to_string()),

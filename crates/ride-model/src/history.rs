@@ -35,11 +35,47 @@ pub struct RideRecord {
     pub summary: RideSummary,
     /// The 1 Hz recording (timer time, no pauses).
     pub points: Vec<RecordPoint>,
+    /// Where the ride came from. Records written before the review page have no such field.
+    #[serde(default)]
+    pub source: RideSource,
+    /// The watt values in `points` were estimated from speed and grade, not measured.
+    #[serde(default)]
+    pub power_estimated: bool,
+    /// The parameters of that estimate (`None` when the power was measured).
+    #[serde(default)]
+    pub estimate: Option<EstimateParams>,
+}
+
+/// Where a stored ride came from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RideSource {
+    /// Ridden in this app (trainer or simulated rider).
+    #[default]
+    Recorded,
+    /// Loaded from a GPX / TCX file of another app and projected onto the route.
+    Imported,
+}
+
+/// The rider and bike values a power estimate was made with.
+///
+/// Either the rider's own settings (`from_profile`) or values typed in for that one analysis
+/// (someone else's ride). Surface is only the rolling-resistance coefficient: there is no gravel
+/// model.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct EstimateParams {
+    pub rider_kg: f64,
+    pub bike_kg: f64,
+    pub crr: f64,
+    pub cda: f64,
+    pub drivetrain_eff: f64,
+    pub air_density: f64,
+    /// Taken from the rider's settings (rather than typed in for this analysis).
+    pub from_profile: bool,
 }
 
 /// One line of the per-route index: everything needed to pick a ghost or a PR without loading
 /// the records.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RideMeta {
     /// File stem of the record: the start time in whole seconds since the Unix epoch.
     pub stem: String,
@@ -55,6 +91,38 @@ pub struct RideMeta {
     /// The climbs that were ridden from foot to summit, with the time spent on them.
     #[serde(default)]
     pub segments: Vec<SegmentTime>,
+    #[serde(default)]
+    pub source: RideSource,
+    /// The record's watt values are an estimate (see [`RideRecord::power_estimated`]).
+    #[serde(default)]
+    pub power_estimated: bool,
+    /// Average power and heart rate, so the review list needs not open every record.
+    #[serde(default)]
+    pub avg_power_w: Option<f64>,
+    #[serde(default)]
+    pub avg_hr: Option<f64>,
+    /// Name of the route at the time of the ride (the review page lists routes that are no longer
+    /// among the recent ones). Empty in older index files.
+    #[serde(default)]
+    pub route_name: String,
+    /// Training stress score of the ride, so the weekly trend needs not open every record.
+    #[serde(default)]
+    pub tss: Option<f64>,
+    /// The best average power over the windows of `ride_sim::power_curve::DURATIONS` (watts).
+    /// `None`: not computed yet (an entry written before the power page existed; it is filled in
+    /// from the record on first use). `Some` with only `None` values: computed, and there is
+    /// nothing to show (no power, or not the rider's own watts).
+    #[serde(default)]
+    pub mmp: Option<Vec<Option<f32>>>,
+}
+
+/// All stored rides of one route, for the review page.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RouteRides {
+    pub route_id: String,
+    pub route_name: String,
+    /// Newest first.
+    pub rides: Vec<RideMeta>,
 }
 
 /// The time a ride needed on one segment (a detected climb).
@@ -170,6 +238,77 @@ mod tests {
             assert_eq!(serde_json::from_str::<GhostMode>(&json).unwrap(), mode);
         }
         assert_eq!(serde_json::to_string(&GhostMode::Last).unwrap(), "\"Last\"");
+    }
+
+    #[test]
+    fn an_index_line_and_a_record_from_before_the_review_page_still_load() {
+        let meta: RideMeta = serde_json::from_str(
+            r#"{"stem":"1700000000","started_unix_s":1700000000.0,"elapsed_s":900.0,
+                "start_dist":0.0,"end_dist":5000.0,"complete":true,"simulated":false}"#,
+        )
+        .unwrap();
+        assert_eq!(meta.source, RideSource::Recorded);
+        assert!(!meta.power_estimated);
+        assert_eq!(meta.avg_power_w, None);
+        assert_eq!(meta.avg_hr, None);
+        assert_eq!(meta.route_name, "");
+        // and from before the power page: no TSS, and "not computed yet" (not "nothing to show")
+        assert_eq!(meta.tss, None);
+        assert_eq!(meta.mmp, None);
+
+        let with_curve: RideMeta = serde_json::from_str(
+            r#"{"stem":"1","started_unix_s":1.0,"elapsed_s":900.0,"start_dist":0.0,
+                "end_dist":5000.0,"complete":true,"simulated":false,
+                "tss":61.5,"mmp":[500.0,300.0,null,null,null]}"#,
+        )
+        .unwrap();
+        assert_eq!(with_curve.tss, Some(61.5));
+        assert_eq!(
+            with_curve.mmp,
+            Some(vec![Some(500.0), Some(300.0), None, None, None])
+        );
+
+        let record = RideRecord {
+            version: RIDE_RECORD_VERSION,
+            route_id: "abc".into(),
+            route_name: "Teszt".into(),
+            simulated: false,
+            summary: RideSummary {
+                route_name: "Teszt".into(),
+                route_id: "abc".into(),
+                started_unix_s: 1_700_000_000.0,
+                elapsed_s: 900.0,
+                dist: 5_000.0,
+                ascent: 40.0,
+                avg_speed_ms: 5.5,
+                max_speed_ms: 9.0,
+                avg_power_w: None,
+                max_power_w: None,
+                normalized_power_w: None,
+                intensity_factor: None,
+                tss: None,
+                work_kj: 0.0,
+                kcal: 0.0,
+                avg_hr: None,
+                max_hr: None,
+                avg_cadence: None,
+                power_zone_secs: [0.0; 7],
+                hr_zone_secs: [0.0; 5],
+            },
+            points: Vec::new(),
+            source: RideSource::Imported,
+            power_estimated: true,
+            estimate: None,
+        };
+        let mut value = serde_json::to_value(&record).unwrap();
+        let object = value.as_object_mut().unwrap();
+        for key in ["source", "power_estimated", "estimate"] {
+            object.remove(key);
+        }
+        let old: RideRecord = serde_json::from_value(value).unwrap();
+        assert_eq!(old.source, RideSource::Recorded);
+        assert!(!old.power_estimated);
+        assert_eq!(old.estimate, None);
     }
 
     #[test]

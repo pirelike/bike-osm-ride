@@ -27,6 +27,7 @@ use ride_ui_kit::format::fmt_km;
 use ride_ui_kit::{Icon, IconName, ToastHost};
 use ride_ui_map::MapView;
 use ride_ui_profile::{ChartMetric, ElevationProfile, LiveChart, Pages, WorkoutProfile};
+use ride_ui_review::ReviewPage;
 use ride_ui_streetview::StreetViewPanel;
 
 use crate::browser;
@@ -283,6 +284,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .shell-dragcatcher[data-op="ns"] { cursor: ns-resize; }
 .shell-dragcatcher[data-op="ew"] { cursor: ew-resize; }
 
+/* ── the review page: fills the area below the top bar, over the ride screen, under the dialogs ── */
+.shell-review {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  top: calc(var(--top-h) + var(--safe-top));
+  z-index: 20;
+  background: var(--bg);
+}
+
 /* ── file drop ── */
 .shell-drop {
   position: fixed; inset: var(--space-3); z-index: 80;
@@ -299,21 +308,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 }
 .shell-drop__title { font: 600 var(--t-28)/1.1 var(--font-display); }
 .shell-drop__sub { color: var(--text-dim); font-size: var(--t-13); }
-/* ── Strava upload: the native view fills the window below this strip ── */
-.shell-strava {
-  position: fixed; inset: 0; z-index: 1200;
-  background: var(--bg-1);
-}
-.shell-strava__bar {
-  display: flex; align-items: center; gap: var(--space-3);
-  height: 52px; padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--rule-strong);
-}
-.shell-strava__title { font: 600 var(--t-15)/1 var(--font-display); white-space: nowrap; }
-.shell-strava__status {
-  flex: 1; min-width: 0; color: var(--text-dim); font-size: var(--t-13);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 @keyframes shell-fade { from { opacity: 0; } }
 
 /* ── an error the app caught: it kept running, the report is in crash.log ──
@@ -428,7 +422,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   .shell--compact .shell-route__name { display: none; }
   .shell--compact .shell-route { flex: 0 0 auto; padding: 0 8px; }
   .shell--compact .shell-tb { padding: 0 6px; min-width: 46px; justify-content: center; }
-  .shell--compact .shell-tb[aria-label^="Teljes képernyő"] { display: none; }
+  .shell--compact .shell-tb--fullscreen { display: none; }
+  /* no room for a seventh icon: the review page is opened from the route dialog on a phone.
+     (classes, not `[aria-label=…]`: an accented attribute value did not match here) */
+  .shell--compact .shell-tb--review { display: none; }
 }
 
 /* ── narrow windows: the labels give way to the icons ── */
@@ -452,6 +449,7 @@ pub fn css_bundle() -> String {
         ride_ui_hud::CSS,
         ride_ui_dialogs::CSS,
         ride_ui_streetview::CSS,
+        ride_ui_review::CSS,
         CSS,
     ]
     .join("\n")
@@ -615,6 +613,13 @@ fn use_android_picker(ctl: Controller) {
             if let Some(path) = crate::android_picker::take_picked() {
                 ctl.open_path(path);
             }
+            // a backup zip: the copy in the cache is ours to delete once it has been read
+            if let Some(path) = crate::android_picker::take_picked_backup() {
+                ctl.backup_restore_path(path, true);
+            }
+            if let Some(how) = crate::android_picker::take_saved_backup() {
+                ctl.backup_saved(how);
+            }
         }
     });
     #[cfg(not(target_os = "android"))]
@@ -696,7 +701,12 @@ pub fn App() -> Element {
                 e.prevent_default();
                 drag.set(false);
                 if let Some(file) = e.files().into_iter().next() {
-                    ctl.open_path(file.path());
+                    // on the review page a dropped file is a ride to compare, not a route
+                    if *st.review.open.peek() {
+                        ctl.review_import_path(file.path());
+                    } else {
+                        ctl.open_path(file.path());
+                    }
                 }
             },
             TopBar {}
@@ -705,13 +715,57 @@ pub fn App() -> Element {
             } else {
                 WorkArea {}
             }
+            if *st.review.open.read() {
+                ReviewLayer { compact }
+            }
             if let Some(op) = active_drag {
                 DragCatcher { op }
             }
             Dialogs {}
-            StravaBar {}
             DropOverlay {}
             CrashBanner {}
+        }
+    }
+}
+
+/// The review page: the stored rides of a route side by side. It sits over the ride screen (which
+/// keeps running underneath, so the map and the Street View are not reloaded when it closes).
+#[component]
+fn ReviewLayer(compact: bool) -> Element {
+    let st = use_context::<AppState>();
+    let ctl = use_context::<Controller>();
+    let r = st.review;
+    let settings = st.settings;
+    let theme = use_memo(move || settings.read().ui.theme);
+    let map_style = use_memo(move || settings.read().ui.map_style);
+    let rider = use_memo(move || settings.read().rider.clone());
+    let ftp_w = use_memo(move || settings.read().rider.ftp_w);
+    rsx! {
+        div { class: "shell-review",
+            ReviewPage {
+                routes: r.routes,
+                route_id: r.route_id,
+                route: r.route,
+                selected: r.selected,
+                loaded: r.loaded,
+                busy: r.busy,
+                notes: r.notes,
+                rider,
+                theme,
+                map_style,
+                analysis: r.analysis,
+                ftp_w,
+                compact,
+                on_close: move |_| ctl.review_close(),
+                on_route: move |id: String| ctl.review_select_route(id),
+                on_toggle: move |stem: String| ctl.review_toggle(stem),
+                on_import: move |_| ctl.review_import(),
+                on_delete: move |stem: String| ctl.review_delete(stem),
+                on_reestimate: move |(stem, params)| ctl.review_reestimate(stem, params),
+                on_map_style: move |style| ctl.set_map_style(style),
+                on_dismiss_notes: move |_| ctl.review_dismiss_notes(),
+                on_apply_ftp: move |watts: f64| ctl.review_apply_ftp(watts),
+            }
         }
     }
 }
@@ -1056,6 +1110,15 @@ fn TopBar() -> Element {
                     span { class: "shell-label", "Útvonal" }
                 }
                 button {
+                    class: "shell-tb shell-tb--review",
+                    r#type: "button",
+                    aria_label: "Áttekintés",
+                    title: "Az edzések áttekintése és összehasonlítása",
+                    onclick: move |_| ctl.review_open(),
+                    Icon { name: IconName::Gauge, size: 16 }
+                    span { class: "shell-label", "Áttekintés" }
+                }
+                button {
                     class: "shell-tb",
                     r#type: "button",
                     aria_label: "Eszközök",
@@ -1085,7 +1148,7 @@ fn TopBar() -> Element {
                     Icon { name: theme_icon, size: 16 }
                 }
                 button {
-                    class: "shell-tb shell-tb--icon",
+                    class: "shell-tb shell-tb--icon shell-tb--fullscreen",
                     r#type: "button",
                     aria_label: "Teljes képernyő (F11)",
                     title: "Teljes képernyő (F11)",
@@ -1940,7 +2003,8 @@ fn BrowserPanel() -> Element {
     });
     // The page cannot draw over a native window, so Firefox steps aside for dialogs and drags.
     use_effect(move || {
-        let covered = st.dialog.read().is_some() || st.drag.read().is_some();
+        let covered =
+            st.dialog.read().is_some() || st.drag.read().is_some() || *st.review.open.read();
         ctl.browser_visible(!covered);
     });
     let note = st.browser_note.read().clone();
@@ -1974,6 +2038,10 @@ fn Dialogs() -> Element {
             on_open_recent: move |id| ctl.open_recent(id),
             on_delete_recent: move |id| ctl.delete_recent(id),
             on_demo: move |_| ctl.load_demo(),
+            on_review: move |_| {
+                ctl.close_dialog();
+                ctl.review_open();
+            },
         }
         DevicesDialog {
             open: open == Some(DialogKind::Devices),
@@ -1989,6 +2057,8 @@ fn Dialogs() -> Element {
             ghost_status: st.ghost_status,
             on_change: move |settings| ctl.apply_settings(settings),
             on_close: move |_| ctl.close_dialog(),
+            on_backup: move |_| ctl.backup_save(),
+            on_restore: move |_| ctl.backup_restore(),
         }
         WorkoutsDialog {
             open: open == Some(DialogKind::Workouts),
@@ -2004,46 +2074,12 @@ fn Dialogs() -> Element {
             summary: st.summary,
             route: st.route,
             comparison: st.comparison,
-            details: st.ride_details,
-            on_details: move |details| ctl.set_ride_details(details),
             on_save_tcx: move |_| ctl.save_tcx(),
-            uploading: *st.strava_busy.read(),
-            on_upload_strava: move |_| ctl.upload_strava(),
             on_close: move |_| ctl.close_dialog(),
             on_new_ride: move |_| ctl.new_ride(),
         }
         AboutDialog { open: open == Some(DialogKind::About), on_close: move |_| ctl.close_dialog() }
         ToastHost { toasts: st.toasts, on_dismiss: move |id| st.dismiss_toast(id) }
-    }
-}
-
-/// The strip above the Strava upload view (a native child WebView fills the rest of the
-/// window): what to do next, and the way back to the summary.
-#[component]
-fn StravaBar() -> Element {
-    let st = use_context::<AppState>();
-    let ctl = use_context::<Controller>();
-    let Some(status) = st.strava_status.read().clone() else {
-        return rsx! {};
-    };
-    rsx! {
-        div { class: "shell-strava", role: "dialog", "aria-label": "Feltöltés Stravára",
-            div { class: "shell-strava__bar",
-                div { class: "shell-strava__title", "Feltöltés Stravára" }
-                div { class: "shell-strava__status", "{status}" }
-                button {
-                    class: "btn",
-                    r#type: "button",
-                    onclick: move |_| {
-                        #[cfg(not(target_os = "android"))]
-                        ctl.close_strava();
-                        #[cfg(target_os = "android")]
-                        let _ = ctl;
-                    },
-                    "Kész"
-                }
-            }
-        }
     }
 }
 

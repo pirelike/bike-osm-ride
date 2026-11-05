@@ -69,18 +69,6 @@ pub fn init_android_data_dir() {
     }
 }
 
-/// The TCX copies handed to the Strava upload view.
-#[cfg(not(target_os = "android"))]
-pub fn strava_dir() -> PathBuf {
-    data_dir().join("strava")
-}
-
-/// Profile of the Strava upload WebView, so the sign-in lasts between rides.
-#[cfg(not(target_os = "android"))]
-pub fn strava_webview_dir() -> PathBuf {
-    data_dir().join("strava-webview")
-}
-
 /// WebView user-data folder of this app (keeps the webview cache out of the same directory the
 /// system would pick from the executable name).
 pub fn webview_dir() -> PathBuf {

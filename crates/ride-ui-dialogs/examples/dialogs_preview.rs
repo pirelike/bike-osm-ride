@@ -311,10 +311,6 @@ fn SummaryStage() -> Element {
                 open: true,
                 summary,
                 on_save_tcx: move |_| {},
-                details: use_signal(ride_ui_dialogs::RideDetails::default),
-                on_details: move |_| {},
-                uploading: false,
-                on_upload_strava: move |_| {},
                 on_close: move |_| {},
                 on_new_ride: move |_| {},
             }

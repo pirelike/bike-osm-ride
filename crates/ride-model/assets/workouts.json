@@ -21008,7 +21008,7 @@
    "name": "FTP-teszt 20 perc (5 perces nyitással)",
    "category": "test",
    "goal": "Az FTP meghatározása Hunter Allen húszperces protokolljával",
-   "description": "Alapos bemelegítés, három pörgetés, egy öt perces maximális erőfeszítés, majd tíz perc pihenő után a húszperces teszt. Az FTP a 20 perces átlagteljesítmény 95%-a; az előtte végzett ötperces erőfeszítés levesz a frissességből, így a 20 perces szám közelebb esik az egyórás teljesítményhez. A tesztszakaszokban a trainer szabad módban van: te adagolsz.",
+   "description": "Alapos bemelegítés, három pörgetés, egy öt perces maximális erőfeszítés, majd tíz perc pihenő után a húszperces teszt. Az FTP a 20 perces átlagteljesítmény 95%-a; az előtte végzett ötperces erőfeszítés levesz a frissességből, így a 20 perces szám közelebb esik az egyórás teljesítményhez. A tesztszakaszokban a trainer szabad módban van: te adagolsz. A teszt után az Áttekintés → Teljesítmény oldal a legjobb 20 percből felajánlja az új FTP-t (csak mért wattból számol).",
    "ftp_pct": 105,
    "duration_min": 75,
    "tags": [

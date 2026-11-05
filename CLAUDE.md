@@ -17,8 +17,8 @@ Runs on Windows, Linux, macOS and Android from one code base. Public repo
 
 ```powershell
 cargo run -p ride-app                    # debug build + start (Windows: the exe needs WebView2Loader.dll beside it, build.rs copies it)
-cargo test --workspace                   # 954 tests, 3 ignored (network / Bluetooth); all green on Windows GNU, 2026-11-04
-cargo clippy --workspace --all-targets   # clean on 2026-11-04; keep it that way
+cargo test --workspace                   # 1054 tests, 3 ignored (network / Bluetooth); all green on Windows GNU, 2026-11-05
+cargo clippy --workspace --all-targets   # clean on 2026-11-05; keep it that way
 cargo fmt --all -- --check
 node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a built debug exe, Node 22+)
 .\scripts\third_party_licenses.ps1       # regenerate THIRD_PARTY_LICENSES.md after a dependency change
@@ -42,8 +42,8 @@ node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a 
   GNU exe is not shippable alone (it imports `WebView2Loader.dll`; exit `0xC0000135` without it).
 - A BLE adapter exists. The user's trainer is a generic FTMS "VE200" with firmware quirks (repeated "Reset"
   statuses, long Indoor Bike Data frames, no Stop/Pause); the 0.1.1 commit says it also left Request Control
-  unanswered at times, which the later capture does not show (see `docs/BLUETOOTH.md`). Other trainers, a Strava
-  login and a Google key were never available here.
+  unanswered at times, which the later capture does not show (see `docs/BLUETOOTH.md`). Other trainers and a Google key
+  were never available here.
 - `gh` is at `C:\Program Files\GitHub CLI\gh.exe` (not on PATH), logged in as `pirelike`.
 - Python's `open(p, 'w')` writes CRLF here: use `newline=''` or write bytes when patching files.
   `perl -pi` with Hungarian text double-encodes: use `-CSD` and `use utf8`. Prefer the Write/Edit tools.
@@ -58,21 +58,22 @@ node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a 
 
 ```
 crates/ride-model       shared data model = the contract (Route, Settings, RideSnapshot, Workout, ride log types). Depends on nothing of ours.
-crates/ride-route       GPX / bikerouter link -> Route; climbs; persistence (store, ride log). Pure + async loaders.
-crates/ride-sim         physics, RideEngine, stats, recorder, workouts runner/import, ghost, segments, TCX. No I/O, no clock.
+crates/ride-route       GPX / bikerouter link -> Route; climbs; persistence (store, ride log, backup zip). Pure + async loaders.
+crates/ride-sim         physics, RideEngine, stats, recorder, workouts runner/import, ghost, segments, TCX, power curve. No I/O, no clock.
 crates/ride-ble         sensor hub: transport traits, FTMS/CPS/CSC/HR/Zwift, simulated rider. btleplug types live in btle.rs only.
 crates/ride-ui-kit      design system: CSS tokens, palette, icons, formatting, base components, protocol URLs.
 crates/ride-ui-map      slippy map (pure geometry + Dioxus component)       crates/ride-ui-profile  elevation profile, live charts, workout view
 crates/ride-ui-hud      metric tiles, stats, climb/workout cards, controls  crates/ride-ui-dialogs   route, devices, settings, workouts, summary, about
 crates/ride-ui-streetview  optional Street View panel (user's own Google key)
-crates/ride-app         the shell: state, controller (ride loop), tiling dock, tile proxy, updater, Strava, Android glue
+crates/ride-ui-review   review page: compare the rides of one route, zoom into a section, estimated watts
+crates/ride-app         the shell: state, controller (ride loop), tiling dock, tile proxy, updater, Android glue
 packaging/ scripts/ docs/ tests/fixtures/ .github/workflows/release.yml
 ```
 
 Dependency rule: everything depends on `ride-model`; `ride-ui-map/profile/hud` add only `ride-ui-kit`;
 `ride-sim`, `ride-ble` and `ride-ui-kit` depend only on `ride-model`; `ride-route` also uses `ride-sim`
 (segment times must be computed exactly like the live engine); `ride-ui-streetview` also uses `ride-route`
-and `ride-ui-dialogs` uses `ride-ui-streetview`; `ride-app` depends on all. Keep it acyclic.
+`ride-ui-dialogs` uses `ride-ui-streetview`; `ride-ui-review` uses `ride-sim` (compare and estimate maths), `ride-ui-map` and `ride-ui-profile`; `ride-app` depends on all. Keep it acyclic.
 Full table: `docs/ARCHITECTURE.md`.
 
 Ride loop (`ride-app/src/controller.rs` + `ride_core.rs`): every 100 ms real elapsed time (capped 1 s,
@@ -106,7 +107,7 @@ times `RIDE_TIMESCALE`) goes into `RideEngine::step` with the latest merged `Sen
 
 - Project: `MIT OR Apache-2.0`. **Only permissive third-party code** (MIT, Apache-2.0, BSD, ISC, Zlib,
   CC0, Unlicense) may be copied, ported or vendored. **Never GPL/AGPL/LGPL/unlicensed** (OpenCycling,
-  suffice, GoldenCheetah, QDomyos-Zwift, StravaUploaderPy are idea-only). See `docs/PRIOR_ART.md`.
+  suffice, GoldenCheetah, QDomyos-Zwift are idea-only). See `docs/PRIOR_ART.md`.
 - Vendored/ported file = header comment (origin URL + commit, licence, changes) + a `NOTICE.md` section +
   the upstream licence text under `crates/<crate>/third_party/`.
 - **`README.md` must always contain the `## Licenc` section** (the user insisted): project licence, reused
@@ -122,11 +123,15 @@ times `RIDE_TIMESCALE`) goes into `RideEngine::step` with the latest merged `Sen
 - No 3D. Rust, not a web stack. UI language Hungarian. "Super modern" UI: the *head unit / printed race
   sheet* design, one accent colour, dark and light themes both first-class (`docs/DESIGN.md`).
 - Tiling layout "like a window manager, sizes adjustable"; separate layout with and without a workout.
-- **Strava: no API, ever** (it needs a paid subscription; a shared secret cannot ship in open source).
-  Desktop uploads through a hidden WebView on strava.com, Android through the share intent. Never
-  validated against the live site: if it breaks read `<data>/strava/strava-debug.log` (`docs/STRAVA.md`).
+- **No Strava upload** (removed 2026-11-05): the API needs a paid subscription and a shared secret cannot ship in
+  open source; the hidden-WebView route needed a fresh sign-in after every ride, so it was dropped. Do not bring it
+  back without asking. The TCX export stays (`Mentés TCX-ként`); the file is uploaded by hand (`docs/DECISIONS.md` V2).
 - Street View: the user's **own** Google key; imagery is only stored on an explicit download (30 days),
   panorama ids may be cached. The key is never logged, never in `Debug` output, only sent to Google.
+- Review page (`Áttekintés`): the rides of one route side by side, zoom into a section. A GPX/TCX of another app is
+  **imported by hand** (a file, never an API) and projected onto a stored route. A file without watts gets estimated
+  ones (the power model run backwards; never replaces measured watts, always marked `~`); imported rides are never a PR
+  or a ghost. Gravel has no model: the surface is only the Crr the user types in.
 - The virtual gearbox shows only when switched on **and** no workout (ERG) runs.
 - The app must start with no Bluetooth adapter and no network. OSM tile policy: no bulk prefetching.
 - Android `target_sdk` stays 34 until the edge-to-edge layout of 35+ has been checked on a phone.
@@ -146,9 +151,13 @@ TCX, the tiling dock, the UI crates, the FTMS control logic against the in-memor
 were accepted 928 times, Request Control and Start work, and the trainer answers Stop/Pause with "op code
 not supported". The capture contains **no terrain simulation**: its only six Set Indoor Bike Simulation
 writes are neutral (0 %) grades sent right before a pause. That the trainer follows hills is therefore
-**not confirmed on hardware**. **Never verified:** real Strava upload, real Google Street View (only a
-local mock), Android Bluetooth and the Strava share on a device, the macOS and Linux apps at runtime (CI
-builds them and smoke-tests Linux for 20 s), any trainer other than the VE200. Do not claim otherwise.
+**not confirmed on hardware**. **Never verified:** real Google Street View (only a
+local mock), Android Bluetooth on a device, the macOS and Linux apps at runtime (CI
+builds them and smoke-tests Linux for 20 s), any trainer other than the VE200, **a real Strava/Garmin export** on the review page's import (only synthetic files and the
+app's own TCX were read), and the estimated watts against a real power meter (checked only as a round trip through the
+app's own physics), the **Android keep-screen-on flag and the Android backup (system save / open dialogs)** (written and
+type-checked against the `jni` crate on the host, never built into an APK or run on a phone), and the FTP suggestion against a
+real power meter (only synthetic watts). Do not claim otherwise.
 Matrix: `docs/TESTING.md`.
 
 ## Docs: what to update when you change something

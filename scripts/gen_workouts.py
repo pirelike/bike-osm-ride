@@ -1243,7 +1243,8 @@ wk("c-test-ftp-20min", "FTP-teszt 20 perc (5 perces nyitással)", "test", 105,
    "Alapos bemelegítés, három pörgetés, egy öt perces maximális erőfeszítés, majd tíz perc pihenő után a "
    "húszperces teszt. Az FTP a 20 perces átlagteljesítmény 95%-a; az előtte végzett ötperces erőfeszítés "
    "levesz a frissességből, így a 20 perces szám közelebb esik az egyórás teljesítményhez. A tesztszakaszokban "
-   "a trainer szabad módban van: te adagolsz.",
+   "a trainer szabad módban van: te adagolsz. A teszt után az Áttekintés → Teljesítmény oldal a legjobb "
+   "20 percből felajánlja az új FTP-t (csak mért wattból számol).",
    ["testing", "threshold", "build"], [FTP_ALLEN, POWER_PROFILE],
    [wu(1200, 45, 75)]
    + intervals(3, 60, 95, 60, 55, label="Pörgetés", cad=110, note="Gyors láb, 110 fölött.")

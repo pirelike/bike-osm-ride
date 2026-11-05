@@ -62,7 +62,7 @@ fn iso_utc(unix_s: f64) -> String {
 }
 
 /// `2026-10-31`
-fn iso_date(unix_s: f64) -> String {
+pub fn iso_date(unix_s: f64) -> String {
     let (y, m, d, _, _, _) = unix_parts(unix_s);
     format!("{y:04}-{m:02}-{d:02}")
 }

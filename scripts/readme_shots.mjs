@@ -9,7 +9,7 @@
 //
 // What it does, per scenario: starts the app with that scenario's `RIDE_*` hooks (see
 // crates/ride-app/src/hooks.rs) and a throw-away data directory, so no setting, recent route,
-// ride, Google key or Strava login of the person running it can end up in a picture; waits until
+// ride or Google key of the person running it can end up in a picture; waits until
 // the page is up; pins the page to a fixed size and pixel density through the DevTools protocol
 // (the pictures do not depend on the screen they were made on); saves a PNG; and kills the whole
 // process tree. The map tiles come from the throw-away data directory's own cache, which the
@@ -31,10 +31,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const DESKTOP = { width: 1440, height: 900, dpr: 1 };
 const PHONE = { width: 412, height: 860, dpr: 2 };
+/** Tall enough for the review page's map, charts and table in one picture. */
+const REVIEW = { width: 1440, height: 1250, dpr: 1 };
 
 /** Click the compact layout's tab with this label (phone layout only). */
 const tab = label =>
   `(() => { const b = [...document.querySelectorAll('.compact-tab')].find(x => x.textContent.includes(${JSON.stringify(label)})); if (!b) return 'no tab ${label}'; b.click(); return 'ok'; })()`;
+
+/**
+ * Click a button of the review page: inside `scope`, the first button with this text, or (with no
+ * text) the first one matching `selector`.
+ */
+const reviewButton = (scope, text, selector = 'button') =>
+  `(() => { const b = [...document.querySelectorAll(${JSON.stringify(scope)} + ' ' + ${JSON.stringify(selector)})].find(x => ${text === null ? 'true' : `x.textContent.includes(${JSON.stringify(text)})`}); if (!b) return 'no button ${text ?? selector} in ${scope}'; b.click(); return 'ok'; })()`;
 
 /** Close a panel of the tiled layout (its neighbour takes the space), by its `data-panel` key. */
 const closePanel = key =>
@@ -126,15 +135,7 @@ const scenarios = [
     env: { ...ROUTE, ...RIDER, ...DARK, RIDE_TIMESCALE: '60' },
     waitFor: '.dialog',
     settle: 8,
-    steps: [{ scroll: 560, settle: 1 }],
-    view: DESKTOP,
-  },
-  {
-    name: 'summary-form',
-    about: 'the top of the end-of-ride dialog: the details Strava asks for',
-    env: { ...ROUTE, ...RIDER, ...DARK, RIDE_TIMESCALE: '60' },
-    waitFor: '.dialog',
-    settle: 8,
+    steps: [],
     view: DESKTOP,
   },
   {
@@ -152,6 +153,40 @@ const scenarios = [
     seed: LEARNED_SWIPE,
     settle: 33,
     steps: [{ js: tab('Térkép'), settle: 3 }],
+    view: PHONE,
+  },
+  {
+    name: 'review',
+    about: 'the review page: two rides of one route (one imported, watts estimated), zoomed to the climb',
+    env: { ...ROUTE, ...DARK, RIDE_REVIEW: '1' },
+    seedRides: true,
+    waitFor: '.rv-table',
+    settle: 4,
+    steps: [
+      { js: reviewButton('.rv-section-bar', 'emelkedő'), settle: 3 },
+      { js: reviewButton('.rv-ride-actions', null, '[aria-label="A becslés beállításai"]'), settle: 2 },
+      { move: `document.querySelector('.rv-plot .rv-hit')`, settle: 1 },
+    ],
+    view: REVIEW,
+  },
+  {
+    name: 'review-power',
+    about: 'the power view of the review page: best powers, the FTP suggestion and the weekly load',
+    env: { ...ROUTE, ...DARK, RIDE_REVIEW: '1' },
+    seedRides: true,
+    waitFor: '.rv-table',
+    settle: 4,
+    steps: [{ js: reviewButton('.rv-views', 'Teljesítmény'), settle: 3 }],
+    view: { width: 1440, height: 1060, dpr: 1 },
+  },
+  {
+    name: 'review-phone',
+    about: 'phone layout of the review page, the Grafikon tab',
+    env: { ...ROUTE, ...DARK, RIDE_REVIEW: '1' },
+    seedRides: true,
+    waitFor: '.rv-table',
+    settle: 4,
+    steps: [{ js: reviewButton('.rv-tabs', 'Grafikon'), settle: 3 }],
     view: PHONE,
   },
 ];
@@ -176,8 +211,7 @@ function parseArgs(argv) {
 }
 
 /** Files and folders of the data directory that make a scenario unclean. `tiles` and `webview` stay. */
-const STATE = ['settings.json', 'recent.json', 'routes', 'rides', 'workouts', 'streetview', 'strava',
-  'strava-webview', 'crash.log', 'crash.log.1', 'ble.log', 'ble.log.1'];
+const STATE = ['settings.json', 'recent.json', 'routes', 'rides', 'workouts', 'streetview', 'crash.log', 'crash.log.1', 'ble.log', 'ble.log.1'];
 
 function wipe(dataDir, names) {
   for (const name of names) fs.rmSync(path.join(dataDir, name), { recursive: true, force: true });
@@ -225,12 +259,31 @@ function seedSettings(dataDir, seed) {
   fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify(seed, null, 2));
 }
 
+/**
+ * Stores rides of the picture route in the throw-away data directory: two made by the ride engine
+ * and one imported from a GPX without watts (`crates/ride-route/examples/seed_review.rs`).
+ */
+function seedRides(dataDir, routeFile) {
+  const run = spawnSync('cargo', ['run', '-q', '-p', 'ride-route', '--example', 'seed_review', '--', dataDir, routeFile],
+    { cwd: root, stdio: 'inherit' });
+  if (run.status !== 0) throw new Error('seeding the rides failed');
+}
+
 /** A real left click, or a drag, with trusted mouse events (the tiling dock listens to those). */
 async function pointerCenter(cdp, finder) {
   const box = await cdp.evaluate(
     `(() => { const e = ${finder}; if (!e) return null; const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
   if (!box) throw new Error(`no element for ${finder}`);
   return { x: box[0], y: box[1] };
+}
+
+/** Moves the mouse onto the centre of an element, so its hover read-outs show. */
+async function moveOnto(cdp, finder) {
+  const at = await pointerCenter(cdp, finder);
+  for (let i = 0; i < 4; i++) {
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x - 20 + i * 10, y: at.y, button: 'none', buttons: 0 });
+    await sleep(40);
+  }
 }
 
 async function dragFromTo(cdp, finder, x, y) {
@@ -324,6 +377,7 @@ function pngSize(buffer) {
 async function runScenario(scenario, options, dataDir, routeFile) {
   wipe(dataDir, ['settings.json', 'rides', 'crash.log', 'crash.log.1', 'ble.log', 'ble.log.1']);
   if (scenario.seed) seedSettings(dataDir, scenario.seed);
+  if (scenario.seedRides) seedRides(dataDir, routeFile);
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('RIDE_')));
   const hooks = Object.fromEntries(Object.entries(scenario.env).map(([key, value]) => [key, value === '$ROUTE' ? routeFile : value]));
   Object.assign(env, hooks, {
@@ -349,6 +403,8 @@ async function runScenario(scenario, options, dataDir, routeFile) {
       for (const step of scenario.steps ?? []) {
         if (step.drag) {
           await dragFromTo(cdp, step.drag.from, step.drag.x, step.drag.y);
+        } else if (step.move) {
+          await moveOnto(cdp, step.move);
         } else if (step.scroll !== undefined) {
           const answer = await cdp.evaluate(
             `(() => { const d = document.querySelector('.dialog'); if (!d) return 'no dialog';

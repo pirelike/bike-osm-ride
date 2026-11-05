@@ -349,7 +349,7 @@ fn read_coord(e: &BytesStart<'_>) -> Option<(f64, f64)> {
 }
 
 /// Parse a finite decimal number; a decimal comma is accepted when there is no dot.
-fn parse_number(s: &str) -> Option<f64> {
+pub(crate) fn parse_number(s: &str) -> Option<f64> {
     let t = s.trim();
     if t.is_empty() {
         return None;

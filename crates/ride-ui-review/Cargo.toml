@@ -1,0 +1,17 @@
+[package]
+name = "ride-ui-review"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Review page: compare the stored rides of one route, zoom into a section, estimate watts"
+
+[dependencies]
+ride-model = { workspace = true }
+ride-sim = { workspace = true }
+ride-ui-kit = { workspace = true }
+ride-ui-map = { workspace = true }
+ride-ui-profile = { workspace = true }
+dioxus = { workspace = true }
+
+[dev-dependencies]
+dioxus-ssr = "0.7"
