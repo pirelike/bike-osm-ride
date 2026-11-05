@@ -25,7 +25,6 @@ mod paths;
 mod ride_core;
 mod shell;
 mod state;
-#[cfg(not(target_os = "android"))]
 mod streetview_images;
 mod tiles;
 mod updater;
@@ -154,6 +153,25 @@ mod packaging_tests {
             "MainActivity.kt has to alias {identifier}.BuildConfig"
         );
         assert!(ACTIVITY.contains("package dev.dioxus.main"));
+    }
+
+    /// Android is built by CI only, so a module that is switched off there can break the APK without
+    /// any host build noticing (0.4.0: a stray `cfg` left behind by a deleted module hid
+    /// `streetview_images` from the phone). Only `android_picker` is Android-only; nothing is
+    /// hidden from Android.
+    #[test]
+    fn no_module_of_the_shell_is_hidden_from_android() {
+        const MAIN: &str = include_str!("main.rs");
+        let lines: Vec<&str> = MAIN.lines().collect();
+        for (at, line) in lines.iter().enumerate() {
+            if line.trim_start().starts_with("mod ") && at > 0 {
+                assert!(
+                    !lines[at - 1].contains("not(target_os = \"android\")"),
+                    "`{}` is not built for Android; the phone build would fail on its first use",
+                    line.trim()
+                );
+            }
+        }
     }
 
     /// The screen flag may only change on the UI thread, and Rust calls from its own thread.

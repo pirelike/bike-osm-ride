@@ -7,7 +7,7 @@ hardware or against real services. Numbers measured on 2026-11-04 on the maintai
 ## 1. Running
 
 ```powershell
-cargo test --workspace            # 1054 passed, 0 failed, 3 ignored
+cargo test --workspace            # 1055 passed, 0 failed, 3 ignored
 cargo clippy --workspace --all-targets   # clean, no warnings
 cargo fmt --all -- --check        # clean
 ```
@@ -19,7 +19,7 @@ and 50 tests across four crates go red although nothing is wrong (`ride-app` 10,
 
 | Crate | Passed | Of which in `tests/` |
 |---|---|---|
-| `ride-app` | 132 | |
+| `ride-app` | 133 | |
 | `ride-ble` | 286 (+1 ignored) | |
 | `ride-model` | 20 | |
 | `ride-route` | 137 + 10 (+2 ignored) | `fixtures_pipeline.rs` |
