@@ -226,24 +226,30 @@ the rider disc).
 
 ## Layout contract (shell)
 
-≥ 1280 px: top bar (40 px) · map full-bleed with a flush `ClimbCard` panel (top-left, ruled to the edges)
-and square map controls (top-right) · right rail 380 px · bottom profile ~232 px with transport docked
-at its left edge. < 1100 px the rail moves under the map. Window default 1440 × 900, minimum 1024 × 640.
-The map keeps the rider at ~60 % of the viewport height in follow mode.
+The ride screen is a **tiling of flush, ruled panels**, not a rail and a bottom strip (the first contract, with a
+380 px rail, a bottom profile and a floating small pane, was replaced by the tiling dock on 2026-11-01). The
+mechanics (the 96 × 64 grid, drag, split, swap, park as chips, separate layouts with and without a workout) are in
+[`UI.md`](UI.md); what matters visually:
 
-The rail starts with the flush `WorkoutCard` (only while a workout is selected: block name, ERG target,
-countdowns, a 4 px progress rule) and then the power hero, so the workout context sits above the live
-numbers. The workout picker is a three-column ruled dialog (categories and tag chips | workouts | blocks)
-opened from the top bar or `W`; tag chips are grouped by facet, combine with AND, show the count
-they would leave and are disabled when that count is zero; the selected row is marked with the accent rule, never with a card or a shadow.
+- **Top bar** 40 px (52 px on a phone): mark and name, the route chip with its length, the parked panels as chips,
+  then *Edzés · Útvonal · Eszközök (with status dots) · Beállítások*, theme, full screen, about. A *Frissítés* button
+  appears when a newer release exists.
+- **Panels** share one frame: a 24 px title bar (a six-dot grip to carry it by, the title, optional action buttons such as
+  *Street View*, a close ×) and a body; 1 px `--rule-strong` borders that coincide with the neighbours', no shadows,
+  no radius. Map, profile and browser fill their body; the others scroll.
+- **Default arrangement** (desktop): map left of the power hero, the next-climb card and the statistics on the right,
+  the transport controls and the elevation profile along the bottom; the simulated-rider panel, the workout card
+  and the gearbox join when they apply; *Grafikonok* and *Böngésző* start parked.
+- **Dialogs** are one common frame (2 px `--rule-ink` top rule, 560 px wide, 960 px for the wide ones, height
+  `clamp(720px, 85vh, 960px)`); the workout picker is a three-column ruled dialog (categories and tag chips | workouts |
+  description, block chart, block list). Selection is marked with the accent rule, never with a card or a shadow.
+- **Sizes.** Window default 1440 × 900, minimum 360 × 560. Below 1000 px the tiling gives way to tabs
+  (*Tekerés · Térkép · Grafikonok · Adatok*), see [`UI.md`](UI.md) §4. The map keeps the rider at about 60 % of the
+  viewport height in follow mode.
+- In the small Street View slot the map is a rider minimap at a fixed street-level zoom; it never fits a whole route
+  into a few hundred pixels.
 
-The shell is adjustable: the rail's left rule and the profile's top rule are drag splitters (a 1 px
-accent line appears on hover), and the map and Street View can swap roles (`X`, or the panel's swap
-button). The focused pane fills the stage; the other one moves into a shared small-pane rectangle
-(fractions of the stage, persisted), with a 6-dot move grip on its header/edge and a 10 px corner
-bracket for resizing. In the small pane the map is a rider minimap at a fixed street-level zoom;
-it never fits a whole route into a few hundred pixels. The small pane is a flush ruled tile, not a
-floating card; nothing gets a shadow or a blur.
+Reference screenshots of the real app: [`screenshots/`](screenshots/).
 
 ## Icons
 

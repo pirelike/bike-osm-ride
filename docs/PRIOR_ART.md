@@ -28,3 +28,27 @@ Everything above is young and lightly hardware-tested. Mitigations: (1) differen
 tests `ftms` crate vs `cycling-ble` vs hand-computed spec vectors; (2) raw hex logging of
 every notification / control-point exchange (`RIDE_BLE_LOG=1` → `%LOCALAPPDATA%/bike-osm-ride/ble.log`);
 (3) a fully simulated trainer backend so every other part of the app is testable without hardware.
+
+## Added after the first research (2026-11-01 to 2026-11-03)
+
+| What | Where | Licence | How it is used |
+|---|---|---|---|
+| Zwift Click / Play / Hub protocol | github.com/pymmog/virtual-cog (`VirtualCog/Devices/...`, `Physics/GearModel.swift`) | Unlicense (public domain) | **ported** to Rust: key exchange, packet framing, debouncer, protobuf subset: `ride-ble/src/zwift/` (see `NOTICE.md`) |
+| Zwift protocol documentation | Makinolo's interoperability notes (makinolo.com) | documentation only | read as documentation, no code; unofficial work, not affiliated with Zwift |
+| Cryptography for the Zwift handshake | RustCrypto `p256`, `hkdf`, `sha2`, `aes`, `ccm` | MIT OR Apache-2.0 | dependencies |
+| bikerouter / brouter-web link formats | github.com/nrenner/brouter-web (`leaflet-fullHash.js`, `BRouter.js`) and BRouter's `RoutingParamCollector.java` | MIT | read to verify the accepted link formats (`ride-route/src/bikerouter.rs` documents the commit); no code copied |
+| Martin et al. (1998) power model | J. Appl. Biomech. 14:276-291; the open-source `rouleur` package for a worked example | paper / package | the model is implemented from the paper; one worked example's number is a test value |
+| Fonts | Barlow and Barlow Condensed (the Barlow Project) | SIL OFL 1.1 | embedded (subset, WOFF2): see `NOTICE.md` |
+| Web upload form of Strava | StravaUploaderPy | GPL-3.0 | **idea only** (names of the form fields); no code copied; the app does not use the Strava API ([`STRAVA.md`](STRAVA.md)) |
+| Map data | OpenStreetMap, BRouter, Open-Meteo, Google Maps Platform | ODbL, public services, CC BY 4.0, the user's own key | external services, attributed in the README |
+
+Zwift Hub trainer messages are decoded by `zwift/proto.rs` but not wired into the trainer control.
+
+## Status of the "open risk" (2026-11-04)
+
+The risk above was that the reused trainer code is young and lightly hardware-tested. What has happened since:
+all three mitigations exist (differential tests, an always-on hex log, a simulated trainer). A real trainer
+(a generic FTMS "VE200") was captured for about 3.3 hours: it exposed behaviours no specification mentions (it
+reports "Reset" four times a second, it sends Indoor Bike Data frames longer than their flags describe, it answers
+Stop/Pause with "not supported"), and the control session now handles each of them ([`BLUETOOTH.md`](BLUETOOTH.md) §4 and §9). What the capture does **not** contain is a terrain simulation, so
+the grade path is still proven only against the fake transport and the specification.

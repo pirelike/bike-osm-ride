@@ -4332,7 +4332,7 @@ checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
 name = "ride-app"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "core-foundation",
  "dbus",
@@ -4362,7 +4362,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ble"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "aes",
  "btleplug",
@@ -4383,7 +4383,7 @@ dependencies = [
 
 [[package]]
 name = "ride-model"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -4391,7 +4391,7 @@ dependencies = [
 
 [[package]]
 name = "ride-route"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "quick-xml",
  "reqwest",
@@ -4408,7 +4408,7 @@ dependencies = [
 
 [[package]]
 name = "ride-sim"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "quick-xml",
  "ride-model",
@@ -4419,7 +4419,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-dialogs"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4430,7 +4430,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-hud"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4440,7 +4440,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-kit"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4450,7 +4450,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-map"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4460,7 +4460,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-profile"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
@@ -4470,7 +4470,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-streetview"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "dioxus",
  "dioxus-ssr",

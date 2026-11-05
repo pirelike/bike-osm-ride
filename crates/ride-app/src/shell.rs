@@ -343,10 +343,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; padding: 8px;
 }
-.compact[data-tab="map"] .compact-stage { padding: 0; gap: 0; grid-template-rows: auto minmax(0, 1fr) 176px; align-content: stretch; overflow: hidden; }
-.compact-extra { border: 0; }
-.compact-extra--power { order: -1; border-bottom: 1px solid var(--rule-strong); }
-.compact-extra--profile { order: 1; border-top: 1px solid var(--rule-strong); }
+.compact[data-tab="map"] .compact-stage { grid-template-rows: auto minmax(0, 1fr) 176px; align-content: stretch; overflow: hidden; }
+.compact-extra--power { order: -1; }
+.compact-extra--profile { order: 1; }
 /* the ride tab: the head unit at its own height, the profile takes the rest of the screen */
 .compact[data-tab="ride"] .compact-stage { grid-template-rows: auto minmax(200px, 1fr); align-content: stretch; }
 .compact-panel {
@@ -356,7 +355,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .compact-panel.is-hidden { display: none; }
 .compact-panel__body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .compact-panel__body > * { flex: 1 1 auto; min-height: 0; }
-.compact-panel[data-panel="map"] { border: 0; min-height: 0; height: 100%; }
+.compact-panel[data-panel="map"] { min-height: 0; height: 100%; }
 /* the panels were made to fill a tile; here each is as tall as its content (a fixed height left
    empty grey boxes under the short ones) */
 .compact-panel[data-panel="metrics"],
