@@ -70,6 +70,10 @@ temporary files there); builds were done in a normal shell and in CI.
   come from `packaging/android/make-icons.py` (Python + Pillow) out of `packaging/icons/1024.png`.
   *(The header comment of `resoverlay.sh` still mentions `@style/BikeSplash` and `ic_launcher_round`; the pinned
   manifest and the script's behaviour use `AppTheme` and `ic_launcher`.)*
+- **Data folder.** `paths::init_android_data_dir` asks the activity for `getFilesDir()` (`android_picker::files_dir`)
+  and falls back to `/data/user/<uid/100000>/<package>/files`, then `/data/data/<package>/files`; each candidate must
+  pass a write probe. The old fixed `/data/data/...` guess gave "Permission denied" on phones with a second user, work
+  profile or dual apps. Not run on a device.
 - **btleplug's Java half.** The droidplug backend looks Java classes up by name from Rust
   (`com.nonpolynomial.btleplug.android.impl.Adapter`, plus `io.github.gedgygedgy.rust.*`). `dx` does not know them,
   so the first APKs failed the first scan with *failed to resolve java class ... class not found*. `resoverlay.sh`

@@ -87,7 +87,8 @@ pub fn spawn_sensor_hub(opts: HubOptions) -> SensorLink {
             let log = match &opts.hex_log {
                 Some(path) => hexlog::HexLog::open(path).unwrap_or_else(|e| {
                     let _ = evt_tx.send(SensorEvent::Notice(format!(
-                        "A BLE-napló nem nyitható meg: {e}"
+                        "A BLE-napló nem nyitható meg ({}): {e}",
+                        path.display()
                     )));
                     hexlog::HexLog::disabled()
                 }),

@@ -11,6 +11,11 @@ következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címk�
 ## [Kiadatlan]
 
 ### Javítva
+- **Android: „A BLE-napló nem nyitható meg: Permission denied (os error 13)”.** Az app adatmappáját eddig csak a
+  `/data/data/<csomag>/files` útvonalból találtuk ki, ami másodlagos felhasználónál, munkaprofilnál, Secure Foldernél vagy
+  „kettős alkalmazásnál” nem a saját mappánk. Most az Activity `getFilesDir()` válasza az első, a kitalált útvonalak
+  (`/data/user/<n>/…`, `/data/data/…`) csak tartalékok, és mindegyiket írási próba előzi meg. A hibaüzenet a fájl útvonalát
+  is kiírja.
 - **Android: „Bluetooth nem érhető el: failed to resolve java class … Adapter class not found”.** Két oka volt. A btleplug
   Java oldala nem került bele az APK-ba: a csomagoló szkript (`packaging/android/resoverlay.sh`) most bemásolja a
   Gradle-projektbe a használt btleplug-verzió Java forrását, és R8-szabályt is ad hozzá, hogy a kiadási build ki ne dobja

@@ -45,13 +45,34 @@ pub fn export_dir() -> PathBuf {
     own
 }
 
-/// Android gives every app a private files folder (`/data/data/<package>/files`) but no
-/// `LOCALAPPDATA`/`HOME`; pointing `RIDE_DATA_DIR` at it makes every crate use it.
-/// Called first thing in `main`, before any thread exists.
+/// Android gives every app a private files folder but no `LOCALAPPDATA`/`HOME`; pointing
+/// `RIDE_DATA_DIR` at it makes every crate use it. Called first thing in `main`, before any
+/// thread exists.
+///
+/// The folder is asked from the activity (`getFilesDir()`), because the path is not the same on
+/// every phone: with a second user, a work profile, Secure Folder or "dual apps" it lives under
+/// `/data/user/<n>/<package>`, while `/data/data/<package>` points at user 0's folder, which this
+/// process may not touch ("Permission denied"). The guessed paths only back that call up, and
+/// every candidate has to pass a write probe before it is used.
 #[cfg(target_os = "android")]
 pub fn init_android_data_dir() {
     if std::env::var_os("RIDE_DATA_DIR").is_some_and(|v| !v.is_empty()) {
         return;
+    }
+    if let Some(dir) = android_candidate_dirs().into_iter().find(|d| writable(d)) {
+        std::env::set_var("RIDE_DATA_DIR", &dir);
+        std::env::set_var("HOME", &dir);
+    }
+}
+
+/// The places the app's private files folder can be, best first.
+#[cfg(target_os = "android")]
+fn android_candidate_dirs() -> Vec<PathBuf> {
+    use std::os::unix::fs::MetadataExt;
+
+    let mut dirs = Vec::new();
+    if let Some(dir) = crate::android_picker::files_dir() {
+        dirs.push(dir);
     }
     let package = std::fs::read("/proc/self/cmdline")
         .ok()
@@ -62,11 +83,31 @@ pub fn init_android_data_dir() {
         .map(|s| s.split(':').next().unwrap_or_default().to_string())
         .filter(|s| !s.is_empty());
     if let Some(package) = package {
-        let dir = PathBuf::from("/data/data").join(package).join("files");
-        let _ = std::fs::create_dir_all(&dir);
-        std::env::set_var("RIDE_DATA_DIR", &dir);
-        std::env::set_var("HOME", &dir);
+        // Android user id = uid / 100000 (user 0 is the owner).
+        if let Ok(meta) = std::fs::metadata("/proc/self") {
+            let user = meta.uid() / 100_000;
+            dirs.push(
+                PathBuf::from("/data/user")
+                    .join(user.to_string())
+                    .join(&package)
+                    .join("files"),
+            );
+        }
+        dirs.push(PathBuf::from("/data/data").join(package).join("files"));
     }
+    dirs
+}
+
+/// True when `dir` exists (or can be created) and a file can be written into it.
+#[cfg(target_os = "android")]
+fn writable(dir: &std::path::Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(".write-probe");
+    let ok = std::fs::write(&probe, b"").is_ok();
+    let _ = std::fs::remove_file(&probe);
+    ok
 }
 
 /// WebView user-data folder of this app (keeps the webview cache out of the same directory the

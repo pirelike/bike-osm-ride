@@ -95,6 +95,41 @@ pub fn set_keep_screen_on(on: bool) -> Result<(), String> {
     call_activity_with("setKeepScreenOn", "(Z)V", &[Arg::Bool(on)])
 }
 
+/// The app's private files folder as the activity reports it (`getFilesDir().getAbsolutePath()`),
+/// or `None` when the activity is not reachable. Runs before the UI exists, so it never throws.
+pub fn files_dir() -> Option<PathBuf> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(files_dir_unguarded))
+        .ok()
+        .flatten()
+}
+
+fn files_dir_unguarded() -> Option<PathBuf> {
+    let context = ndk_context::android_context();
+    // SAFETY: as in `call_activity_unguarded`.
+    let vm = unsafe { JavaVM::from_raw(context.vm().cast()) }.ok()?;
+    let mut env = vm.attach_current_thread().ok()?;
+    // SAFETY: as above; `JObject` does not free what it wraps.
+    let activity = unsafe { JObject::from_raw(context.context().cast()) };
+    let result = (|| {
+        let file = env
+            .call_method(&activity, "getFilesDir", "()Ljava/io/File;", &[])
+            .ok()?
+            .l()
+            .ok()?;
+        let path = env
+            .call_method(&file, "getAbsolutePath", "()Ljava/lang/String;", &[])
+            .ok()?
+            .l()
+            .ok()?;
+        let path: String = env.get_string(&JString::from(path)).ok()?.into();
+        Some(PathBuf::from(path)).filter(|p| p.is_absolute())
+    })();
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+    }
+    result
+}
+
 /// Calls a no-argument method on the live activity, with a JNI environment attached to this thread.
 fn call_activity(method: &str) -> Result<(), String> {
     call_activity_with(method, "()V", &[])
