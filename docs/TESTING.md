@@ -36,7 +36,7 @@ and 50 tests across four crates go red although nothing is wrong (`ride-app` 10,
 `ride-route`'s `live_bikerouter_share_link` (public BRouter server) and `live_open_meteo_fills_missing_elevation`
 (public Open-Meteo API), and `ride-ble`'s `btle::tests::smoke_adapter_count` (the machine's Bluetooth stack).
 
-CI runs `cargo test --workspace` on `windows-latest`, `ubuntu-22.04` and `macos-14`, but only inside the manually
+CI runs `cargo test --workspace` on `windows-latest`, `ubuntu-22.04` and `macos-15`, but only inside the manually
 started release workflow ([`RELEASING.md`](RELEASING.md)); there is no CI on push or pull request.
 
 ## 2. Kinds of tests

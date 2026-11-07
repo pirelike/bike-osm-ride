@@ -15,7 +15,8 @@
 #
 # Linux is built on Ubuntu 22.04 (glibc 2.35) so both the AppImage and the .deb still start on
 # older distributions. macOS is built on one Apple Silicon runner that cross-compiles the Intel
-# half and `lipo`s the two into a single universal binary (GitHub no longer offers macos-13).
+# half and `lipo`s the two into a single universal binary (GitHub no longer offers macos-13, and since 2026-11 it refuses macos-14 with "The configuration 'macos-14-arm64-us-default' is
+# not supported").
 name: release
 
 # Started by hand for now (Actions -> release -> Run workflow, on a version tag); switch to
@@ -35,7 +36,7 @@ jobs:
       # One red platform must not hide the other two.
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04, macos-14]
+        os: [windows-latest, ubuntu-22.04, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -193,7 +194,7 @@ jobs:
             dist/bike-osm-ride-*-linux-amd64.deb
 
   macos:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

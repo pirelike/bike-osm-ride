@@ -47,11 +47,11 @@ exist as tags without a release because their runs failed; removing a tag is the
 
 | Job | Runner | Steps |
 |---|---|---|
-| `test` | `windows-latest`, `ubuntu-22.04`, `macos-14` (`fail-fast: false`: one red platform must not hide the others) | on Linux install `libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libdbus-1-dev pkg-config`; `cargo test --workspace` |
+| `test` | `windows-latest`, `ubuntu-22.04`, `macos-15` (`fail-fast: false`: one red platform must not hide the others) | on Linux install `libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libdbus-1-dev pkg-config`; `cargo test --workspace` |
 | `windows` | `windows-latest` | `cargo build --release -p ride-app` with `RUSTFLAGS=-C target-feature=+crt-static`; copy to the asset name |
 | `android` | `ubuntu-latest` | Rust target `aarch64-linux-android`; Temurin 21; `setup-android` with `packages: platform-tools`; `sdkmanager "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"`; Dioxus CLI 0.7.10 (binstall, fallback to `cargo install --locked`); `dx bundle --platform android --package-types apk --release --target aarch64-linux-android`; `resoverlay.sh`; sign with the keystore secrets if set, else keep the debug-signed APK |
 | `linux` | `ubuntu-22.04` | build dependencies and `xvfb`; plain `cargo build --release -p ride-app`; **smoke test**: run the binary with `RIDE_DEMO=1` under `xvfb-run -a timeout 20` and require exit code 124 (still running, nothing crashed); `dx bundle --platform linux --package-types appimage --package-types deb` (`continue-on-error`); `fallback.sh` when that failed; name and verify both files exist |
-| `macos` | `macos-14` | Rust targets `aarch64-apple-darwin` and `x86_64-apple-darwin`; `bundle.sh`; check that `Info.plist` lints, holds `NSBluetoothAlwaysUsageDescription` (without it macOS kills the app the moment it touches CoreBluetooth) and that `lipo -archs` is `x86_64 arm64` |
+| `macos` | `macos-15` | Rust targets `aarch64-apple-darwin` and `x86_64-apple-darwin`; `bundle.sh`; check that `Info.plist` lints, holds `NSBluetoothAlwaysUsageDescription` (without it macOS kills the app the moment it touches CoreBluetooth) and that `lipo -archs` is `x86_64 arm64` |
 | `release` | `ubuntu-latest` | needs all of the above; only on a `v*` tag; `softprops/action-gh-release` with generated release notes |
 
 ## 4. Platform notes
@@ -81,6 +81,7 @@ exist as tags without a release because their runs failed; removing a tag is the
 | 0.2.2 | `linuxdeploy` (`continuous`) rejects an icon file whose name does not match `Icon=` | 0.2.3: install the icon into the hicolor tree under the right name |
 | 0.4.0 (caught on a dry run, no tag lost) | deleting `mod strava;` left its `#[cfg(not(target_os = "android"))]` in front of `mod streetview_images;`, so only the APK build failed (E0433); the host build cannot see it | removed the stray `cfg`; `no_module_of_the_shell_is_hidden_from_android` in `main.rs` |
 | 0.5.0 (caught on a dry run, no tag lost) | the string extractor turned two constants in the Linux- and macOS-only code of `wake.rs` into `const … = t("…")`; `t()` is not a `const fn` and was not imported there (E0425), and a Windows build never compiles that code | look the text up at call time; `no_constant_is_initialised_with_a_lookup` in `ride-i18n/tests/catalogs.rs` scans every platform's sources |
+| 0.5.0 (the same dry run) | both macOS jobs ended after one second with no step: "The configuration 'macos-14-arm64-us-default' is not supported", GitHub had retired the image | `macos-15` for the `test` matrix and the `macos` job |
 
 Lesson: run the whole workflow on a branch (it builds everything and publishes nothing) before tagging. It was worth
 it for 0.4.0: Android code is never compiled by a local test run. One expected red on a branch: the Linux fallback
