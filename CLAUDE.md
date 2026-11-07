@@ -31,7 +31,7 @@ Runs on Windows, Linux, macOS and Android from one code base. Public repo
 
 ```powershell
 cargo run -p ride-app                    # debug build + start (Windows: the exe needs WebView2Loader.dll beside it, build.rs copies it)
-cargo test --workspace                   # 1097 tests, 3 ignored (network / Bluetooth); all green on Windows GNU, 2026-11-06
+cargo test --workspace                   # 1098 tests, 3 ignored (network / Bluetooth); all green on Windows GNU, 2026-11-07
 cargo clippy --workspace --all-targets   # clean on 2026-11-06; keep it that way
 cargo fmt --all -- --check
 node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a built debug exe, Node 22+)

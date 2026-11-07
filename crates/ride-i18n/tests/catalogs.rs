@@ -461,3 +461,49 @@ fn italian_calls_a_rider_a_ciclista() {
         }
     }
 }
+
+fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            rust_sources(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+}
+
+/// `t()` is not a `const fn`, so a `const X: &str = t(…)` does not compile. The extractor once
+/// wrote two of them into Linux- and macOS-only code, which a Windows build never compiles: only
+/// the 0.5.0 dry run in CI caught it. This scan sees every platform's code.
+#[test]
+fn no_constant_is_initialised_with_a_lookup() {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut files = Vec::new();
+    rust_sources(&crates, &mut files);
+    assert!(files.len() > 50, "the crate sources were found");
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for (at, line) in text.lines().enumerate() {
+            let line = line.trim_start();
+            let constant = line.starts_with("const ")
+                || line.starts_with("static ")
+                || line.starts_with("pub const ")
+                || line.starts_with("pub static ");
+            let lookup = [" t(", " tf(", " tn(", "ride_i18n::t("]
+                .iter()
+                .any(|call| line.contains(call));
+            assert!(
+                !(constant && lookup),
+                "{}:{}: a constant cannot call the catalog: {line}",
+                file.display(),
+                at + 1
+            );
+        }
+    }
+}

@@ -47,7 +47,10 @@ mod imp {
 
     /// Shown by the desktop in its power settings next to the inhibition.
     const APP: &str = "bike-osm-ride";
-    const REASON: &str = t("app.wake.tekeres_folyamatban");
+    /// Looked up at call time: the catalog is not a `const` and the language can change.
+    fn reason() -> &'static str {
+        ride_i18n::t("app.wake.tekeres_folyamatban")
+    }
     const SERVICE: &str = "org.freedesktop.ScreenSaver";
     const PATH: &str = "/org/freedesktop/ScreenSaver";
     const INTERFACE: &str = "org.freedesktop.ScreenSaver";
@@ -91,7 +94,7 @@ mod imp {
         let conn = Connection::new_session().ok()?;
         let (cookie,): (u32,) = conn
             .with_proxy(SERVICE, PATH, TIMEOUT)
-            .method_call(INTERFACE, "Inhibit", (APP, REASON))
+            .method_call(INTERFACE, "Inhibit", (APP, reason()))
             .ok()?;
         Some((conn, cookie))
     }
@@ -118,7 +121,6 @@ mod imp {
     const LEVEL_ON: u32 = 255;
     /// `kIOReturnSuccess`
     const SUCCESS: i32 = 0;
-    const NAME: &str = t("app.wake.bike_osm_ride_tekeres_folyamatban");
 
     #[link(name = "IOKit", kind = "framework")]
     extern "C" {
@@ -148,7 +150,8 @@ mod imp {
                 // The two CFStrings must outlive the call: they are moved into the assertion id
                 // only on success, so keep them alive until we return.
                 let kind = CFString::new(ASSERTION);
-                let name = CFString::new(NAME);
+                let name =
+                    CFString::new(ride_i18n::t("app.wake.bike_osm_ride_tekeres_folyamatban"));
                 let mut id: u32 = 0;
                 // SAFETY: both strings are alive for the whole call and the API writes `id`
                 // only on success (which we check before using it).
