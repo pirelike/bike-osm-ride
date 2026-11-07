@@ -1,5 +1,12 @@
 # Felhasználói kézikönyv
 
+> **Angolul / Spanyolul / Portugálul / Németül / Olaszul / Kínaiul:** [User guide](i18n/en/USER_GUIDE.md) ·
+> [Guía del usuario](i18n/es/USER_GUIDE.md) · [Manual do utilizador](i18n/pt/USER_GUIDE.md) ·
+> [Benutzerhandbuch](i18n/de/USER_GUIDE.md) · [Guida dell'utente](i18n/it/USER_GUIDE.md) ·
+> [用户指南](i18n/zh/USER_GUIDE.md)
+> (ugyanez a dokumentum angolul, spanyolul, portugálul, németül, olaszul és kínaiul). A felület nyelve a *Beállítások → Megjelenés → Nyelv* alatt
+> váltható.
+
 A bike-osm-ride használata az első indítástól a tekerés összegzéséig. A telepítés és a rövid áttekintés a
 [README](../README.md)-ben van; a fejlesztői részletek az [`ARCHITECTURE.md`](ARCHITECTURE.md)-ben és társaiban.
 A képernyőképek a 0.3.0-s verzióról készültek, a dokumentumban látható útvonal a BRouter egy valódi, a repóban
@@ -121,6 +128,10 @@ Edzés** kapcsoló az edzés blokkjait mutatja.
 
 **Szövegméret.** *Beállítások → Megjelenés → Szövegméret* (80–160 %).
 
+**Nyelv.** *Beállítások → Megjelenés → Nyelv*: „Automatikus” (a rendszer nyelvét követi, ha annak a szövege
+hiánytalan), „Magyar”, „English”, „Español”, „Português”, „Deutsch”, „Italiano”, „简体中文”. A váltás azonnal érvénybe lép; a korábban elnevezett útvonalak és
+tekerések nevét nem írja át (azok maradnak, ahogy elnevezted őket).
+
 ## Edzések
 
 A felső sáv **Edzés** gombja (vagy `W`). A beépített könyvtár **93 edzés**, 12 kategóriában (regeneráció, állóképesség,
@@ -187,8 +198,10 @@ háttérben futó feltöltő, de nálunk a bejelentkezés minden tekerés után 
 
 ## Edzések áttekintése és összehasonlítása
 
-Az **`Áttekintés`** gomb (felső sáv; telefonon az `Útvonal` ablak alján a *Mentett edzések áttekintése*) egy teljes
-képernyős oldalt nyit. Az `Esc` vagy a `Vissza` bezárja; alatta a tekerés képernyője változatlanul marad.
+Az **`Áttekintés`** gomb (felső sáv; telefonon a mérőóra ikon a téma-kapcsoló helyén, és az `Útvonal` ablak alján a
+*Mentett edzések áttekintése* is) egy teljes képernyős oldalt nyit. Az `Esc` vagy a `Vissza` bezárja; alatta a tekerés
+képernyője változatlanul marad. Telefonon a részek fülekre oszlanak (`Edzések`, `Térkép`, `Grafikon`, `Szakasz`), a
+fejlécben a vissza nyíl, az **Összehasonlítás | Teljesítmény** váltó és az importálás ikonja.
 
 ![Az áttekintés oldal](screenshots/review.png)
 
@@ -197,17 +210,22 @@ legújabb elöl. Jelölj ki legfeljebb négyet: mindegyik kap egy betűt (A–D)
 különbözik (az A folytonos). Az **A a viszonyítási edzés**: az *Időkülönbség* grafikon és a tábla *Különbség* oszlopa hozzá képest
 értendő (pozitív = lassabb). A kuka megerősítést kér, mielőtt töröl. Alapból az útvonal két legújabb edzése van kijelölve.
 
-**Grafikon.** *Teljesítmény*, *Pulzus*, *Kadencia*, *Sebesség* vagy *Időkülönbség* a távolság függvényében. Ha az egeret
-(vagy az ujjad) a profilon vagy a grafikonon mozgatod, a kurzornál az edzések értéke a jelmagyarázatban olvasható, és a
-térképen egy pont jelzi a helyet. Ha egy edzésben nincs ilyen érzékelő (például pulzusmérő nélkül), annak nincs vonala.
+**Grafikon.** *Teljesítmény*, *Pulzus*, *Kadencia*, *Sebesség* vagy *Időkülönbség* a távolság függvényében (telefonon a
+gombokon a mértékegység áll: `W`, `bpm`, `rpm`, `km/h`, `±s`). Ha az egeret a profilon vagy a grafikonon mozgatod,
+a kurzornál az edzések értéke a jelmagyarázatban olvasható, és a térképen egy pont jelzi a helyet; érintőképernyőn
+**koppints** oda, és a kurzor ott marad. Kurzor nélkül a jelmagyarázat a látható szakasz átlagát mutatja (`Ø`; az
+időkülönbségnél a szakasz végén mért különbséget). Ha egy edzésben nincs ilyen érzékelő (például pulzusmérő nélkül),
+annak nincs vonala.
 
-**Ráközelítés egy szakaszra.** Húzd végig az egeret (érintőképernyőn az ujjad) a profilon vagy a grafikonon, vagy kattints az
-*emelkedő* gombokra; a `Teljes útvonal` visszaállít. A térkép a szakaszra közelít és kiemeli, a grafikon és a tábla ugyanarra
-a szakaszra szűkül. 100 m-nél rövidebb húzás nem számít szakasznak.
+**Ráközelítés egy szakaszra.** Húzd végig az egeret a profilon vagy a grafikonon (érintőképernyőn **vízszintesen** az
+ujjad; a függőleges húzás az oldalt görgeti), vagy kattints az *emelkedő* gombokra; a `Teljes útvonal` visszaállít. A
+térkép a szakaszra közelít és kiemeli, a grafikon és a tábla ugyanarra a szakaszra szűkül. 100 m-nél rövidebb húzás nem
+számít szakasznak.
 
 **Szakasztábla.** Edzésenként: idő, átlagsebesség, átlag- és normalizált teljesítmény (NP, legalább 30 másodpercnyi adatból),
-átlag- és maximális pulzus, kadencia, emelkedés, VAM és a különbség a viszonyítási edzéshez. Csak olyan szakaszra van adat,
-amelyet az edzés **teljesen végigtekert**; egy részleges menet a többi szakaszon üres.
+átlag- és maximális pulzus, kadencia, emelkedés, VAM és a különbség a viszonyítási edzéshez. Telefonon a tábla el van
+forgatva: soronként egy szám, oszloponként egy edzés (A–D). Csak olyan szakaszra van adat, amelyet az edzés **teljesen
+végigtekert**; egy részleges menet a többi szakaszon üres.
 
 ### Teljesítmény: csúcsok, FTP, terhelés
 
@@ -309,7 +327,7 @@ Minden módosítás azonnal érvénybe lép és mentődik.
 |---|---|
 | **Kerékpáros** | testsúly (75 kg), a bicikli súlya (9 kg), FTP (200 W), max. pulzus (190), CdA (0,32 m²), Crr (0,004) |
 | **Trainer** | meredekség erőssége (0–150 %), a trainer sebességének használata, virtuális váltó |
-| **Megjelenés** | szövegméret (80–160 %), téma (sötét/világos), térképstílus (sötét/világos/OSM) |
+| **Megjelenés** | nyelv (automatikus/magyar/angol/spanyol/portugál/német/olasz/kínai), szövegméret (80–160 %), téma (sötét/világos), térképstílus (sötét/világos/OSM) |
 | **Térkép és profil** | a térkép kövesse a kerékpárost, profilnézet (előretekintés/teljes), előretekintés hossza, szellem |
 | **Elrendezés** | az alaphelyzet visszaállítása |
 | **Biztonsági mentés** | *Mentés fájlba* és *Visszaállítás fájlból* (lásd lent) |

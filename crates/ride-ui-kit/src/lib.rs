@@ -12,6 +12,7 @@
 //!   current webview: Windows `http://`, macOS/Linux `scheme://`, Android `https://`.
 
 use dioxus::prelude::*;
+use ride_i18n::{t, tf};
 use ride_model::Theme;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -47,7 +48,9 @@ pub fn theme_attr(theme: Theme) -> &'static str {
 /// of all UI crates (the app itself injects the CSS differently).
 pub fn html_document(theme: Theme, css: &[&str], body_html: &str) -> String {
     let mut out = String::with_capacity(CSS.len() + body_html.len() + 512);
-    out.push_str("<!doctype html><html lang=\"hu\" data-theme=\"");
+    out.push_str("<!doctype html><html lang=\"");
+    out.push_str(ride_i18n::current().html_lang());
+    out.push_str("\" data-theme=\"");
     out.push_str(theme_attr(theme));
     out.push_str("\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>bike-osm-ride</title><style>");
     out.push_str(CSS);
@@ -253,8 +256,8 @@ fn DialogPanel(
                     button {
                         class: "btn btn--ghost btn--icon btn--sm dialog__close",
                         r#type: "button",
-                        "aria-label": "Bezárás",
-                        title: "Bezárás (Esc)",
+                        "aria-label": t("ui_kit.bezaras"),
+                        title: t("ui_kit.bezaras_esc").to_string(),
                         onclick: move |_| on_close.call(()),
                         Icon { name: IconName::Close, size: 16 }
                     }
@@ -279,6 +282,10 @@ pub fn Segmented(
     #[props(default = String::new())] aria_label: String,
     #[props(default = false)] small: bool,
     #[props(default = false)] block: bool,
+    /// Let the items wrap onto more rows instead of overflowing a narrow frame (a long option list,
+    /// e.g. one button per UI language on a phone).
+    #[props(default = false)]
+    wrap: bool,
     #[props(default = false)] tabs: bool,
 ) -> Element {
     let mut mounted = use_signal(Vec::<Option<Rc<MountedData>>>::new);
@@ -288,9 +295,10 @@ pub fn Segmented(
         "tabs".to_string()
     } else {
         format!(
-            "seg{}{}",
+            "seg{}{}{}",
             if small { " seg--sm" } else { "" },
-            if block { " seg--block" } else { "" }
+            if block { " seg--block" } else { "" },
+            if wrap { " seg--wrap" } else { "" }
         )
     };
     let (group_role, item_role, item_base) = if tabs {
@@ -480,15 +488,18 @@ pub fn NumberField(
         .as_ref()
         .is_some_and(|t| format::parse_in_range(t, min, max).is_none());
     let message = if invalid {
-        format!(
-            "Érvényes tartomány: {} – {}{}",
-            format::fmt_step_value(min, step),
-            format::fmt_step_value(max, step),
-            if unit.is_empty() {
-                String::new()
-            } else {
-                format!(" {unit}")
-            }
+        let unit = if unit.is_empty() {
+            String::new()
+        } else {
+            format!(" {unit}")
+        };
+        tf(
+            "ui_kit.ervenyes_tartomany",
+            &[
+                ("min", &format::fmt_step_value(min, step)),
+                ("max", &format::fmt_step_value(max, step)),
+                ("unit", &unit),
+            ],
         )
     } else {
         hint.clone()
@@ -536,7 +547,7 @@ pub fn NumberField(
                         class: "field__step",
                         r#type: "button",
                         tabindex: "-1",
-                        "aria-label": "Csökkentés",
+                        "aria-label": t("ui_kit.csokkentes"),
                         disabled,
                         onclick: move |_| {
                             on_change.call(format::snap_to_step(base - step, min, max, step));
@@ -548,7 +559,7 @@ pub fn NumberField(
                         class: "field__step",
                         r#type: "button",
                         tabindex: "-1",
-                        "aria-label": "Növelés",
+                        "aria-label": t("ui_kit.noveles"),
                         disabled,
                         onclick: move |_| {
                             on_change.call(format::snap_to_step(base + step, min, max, step));
@@ -666,7 +677,7 @@ pub fn ToastHost(
     #[props(default = 5000)] auto_dismiss_ms: u64,
 ) -> Element {
     rsx! {
-        div { class: "toasts", role: "region", "aria-label": "Értesítések",
+        div { class: "toasts", role: "region", "aria-label": t("ui_kit.ertesitesek"),
             for t in toasts.read().iter().cloned() {
                 ToastItem { key: "{t.id}", toast: t, on_dismiss, auto_dismiss_ms }
             }
@@ -710,7 +721,7 @@ fn ToastItem(toast: Toast, on_dismiss: EventHandler<u64>, auto_dismiss_ms: u64) 
             button {
                 class: "btn btn--ghost btn--icon btn--sm toast__close",
                 r#type: "button",
-                "aria-label": "Értesítés bezárása",
+                "aria-label": t("ui_kit.ertesites_bezarasa"),
                 onclick: move |_| on_dismiss.call(id),
                 Icon { name: IconName::Close, size: 14 }
             }
@@ -732,6 +743,14 @@ mod tests {
         assert!(kit_at < extra_at, "kit CSS must come first");
         assert!(doc.contains("<body><p>hi</p></body>"));
         assert_eq!(theme_attr(Theme::Dark), "dark");
+        assert!(doc.contains("<html lang=\"hu\""), "source language");
+        ride_i18n::with_lang(ride_i18n::Lang::ES, || {
+            let es = html_document(Theme::Dark, &[], "");
+            assert!(
+                es.contains("<html lang=\"es\""),
+                "language follows the catalog"
+            );
+        });
     }
 
     #[test]
@@ -813,6 +832,49 @@ mod tests {
         );
         assert!(CSS.starts_with("/* Barlow"), "fonts come first in CSS");
         assert!(CSS.contains("--font-num"));
+    }
+
+    #[test]
+    fn cjk_languages_fall_back_to_a_system_face_but_keep_barlow_numerals() {
+        // Barlow has no Han glyphs: the text faces switch to a system CJK stack, the numerals do
+        // not (--font-num stays Barlow Condensed, the tabular figures of the head unit).
+        assert!(KIT_CSS.contains("--font-cjk:"), "a CJK fallback stack");
+        let at = KIT_CSS
+            .find(":root:lang(zh-Hans)")
+            .expect("the zh-Hans font rule");
+        let end = KIT_CSS[at..]
+            .find('}')
+            .expect("the zh-Hans font rule is closed");
+        let block = &KIT_CSS[at..at + end];
+        assert!(
+            block.contains("--font-ui: \"Barlow\", var(--font-cjk)"),
+            "text falls back after Barlow: {block}"
+        );
+        assert!(
+            block.contains(
+                "--font-display: \"Barlow Condensed\", \"Arial Narrow\", var(--font-cjk)"
+            ),
+            "headings fall back after Barlow Condensed: {block}"
+        );
+        assert!(
+            !block.contains("--font-num"),
+            "the numerals must keep Barlow Condensed: {block}"
+        );
+        assert!(KIT_CSS.contains("--font-num: \"Barlow Condensed\""));
+    }
+
+    #[test]
+    fn chinese_sets_the_html_lang_the_css_keys_on() {
+        let zh = ride_i18n::Lang::from_code("zh").expect("a zh row in languages.tsv");
+        assert_eq!(zh.html_lang(), "zh-Hans");
+        assert_eq!(zh.script(), "cjk");
+        ride_i18n::with_lang(zh, || {
+            let doc = html_document(Theme::Light, &[], "");
+            assert!(
+                doc.contains("<html lang=\"zh-Hans\""),
+                "the document carries the language the font rule keys on"
+            );
+        });
     }
 
     #[test]
@@ -1193,6 +1255,24 @@ mod tests {
             html.contains("role=\"radiogroup\"") && html.contains("seg__item is-active"),
             "{html}"
         );
+    }
+
+    #[test]
+    fn segmented_wraps_when_asked() {
+        fn app() -> Element {
+            rsx! {
+                Segmented {
+                    options: vec![("a".to_string(), "Egy".to_string()), ("b".to_string(), "Kettő".to_string())],
+                    value: "a".to_string(),
+                    on_change: move |_| {},
+                    wrap: true,
+                }
+            }
+        }
+        let mut vdom = VirtualDom::new(app);
+        vdom.rebuild_in_place();
+        let html = dioxus_ssr::render(&vdom);
+        assert!(html.contains("seg seg--wrap"), "{html}");
     }
 
     #[test]

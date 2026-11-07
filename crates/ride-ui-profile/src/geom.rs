@@ -350,8 +350,11 @@ pub fn window_bounds(total_m: f64, mode: ProfileMode, dist: f64, lookahead_m: f6
             let behind = lookahead_behind_m(look);
             let dist = finite_or(dist, 0.0).clamp(0.0, total);
             let mut d0 = (dist - behind).max(0.0);
-            let mut d1 = (d0 + look).min(total);
-            if d1 - d0 < look {
+            let mut d1 = d0 + look;
+            // Compare the end, not the length: `(d0 + look) - d0` rounds below `look` for
+            // about a third of all distances, which threw the window to the end of the route
+            // for single frames (the profile vanished and the marker hit the left edge).
+            if d1 > total {
                 // the window hit the end of the route: slide it back, keeping its length
                 d0 = (total - look).max(0.0);
                 d1 = total;
@@ -1109,6 +1112,25 @@ mod tests {
                 d0.is_finite() && d1.is_finite() && d1 > d0,
                 "{dist}: {d0}..{d1}"
             );
+        }
+    }
+
+    #[test]
+    fn lookahead_window_follows_the_rider_at_every_fractional_distance() {
+        // Regression: the end-of-route test compared `(d0 + look) - d0` with `look`, which
+        // rounds below it for many fractional distances and threw the window to the route end
+        // for a frame. The live engine never sits on whole metres.
+        let (total, look) = (12_300.0, 3_000.0);
+        let behind = lookahead_behind_m(look);
+        let mut dist = 0.0;
+        while dist < 7_000.0 {
+            let (d0, d1) = window_bounds(total, ProfileMode::Lookahead, dist, look);
+            let want = (dist - behind).max(0.0);
+            assert!(
+                (d0 - want).abs() < 1e-6 && d1 < total,
+                "{dist}: {d0}..{d1}, expected the window to start at {want}"
+            );
+            dist += 0.791_3;
         }
     }
 

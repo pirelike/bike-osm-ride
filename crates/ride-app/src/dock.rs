@@ -11,6 +11,7 @@
 //! Panels that cannot be shown right now (the workout card without a chosen workout, the
 //! simulated-rider panel without a simulated rider) stay in the tree but take no space.
 
+use ride_i18n::t;
 use ride_model::TileNode;
 
 /// Cells per step of the original 24 x 16 grid. Dividers snap to whole cells, so this decides how
@@ -81,17 +82,17 @@ impl PanelId {
     /// Title bar text and the label of the chip in the top bar.
     pub fn title(self) -> &'static str {
         match self {
-            PanelId::Map => "Térkép",
-            PanelId::Profile => "Magassági profil",
-            PanelId::Controls => "Vezérlés",
-            PanelId::Metrics => "Teljesítmény",
-            PanelId::Climb => "Következő emelkedő",
-            PanelId::Stats => "Statisztika",
-            PanelId::Charts => "Grafikonok",
-            PanelId::Workout => "Edzés",
-            PanelId::Rider => "Szimulált kerékpáros",
-            PanelId::Gears => "Váltó",
-            PanelId::Browser => "Böngésző",
+            PanelId::Map => t("app.dock.terkep"),
+            PanelId::Profile => t("app.dock.magassagi_profil"),
+            PanelId::Controls => t("app.dock.vezerles"),
+            PanelId::Metrics => t("app.dock.teljesitmeny"),
+            PanelId::Climb => t("app.dock.kovetkezo_emelkedo"),
+            PanelId::Stats => t("app.dock.statisztika"),
+            PanelId::Charts => t("app.dock.grafikonok"),
+            PanelId::Workout => t("app.dock.edzes"),
+            PanelId::Rider => t("app.dock.szimulalt_kerekparos"),
+            PanelId::Gears => t("app.dock.valto"),
+            PanelId::Browser => t("app.dock.bongeszo"),
         }
     }
 

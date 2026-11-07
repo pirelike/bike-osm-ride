@@ -18,6 +18,7 @@ use ride_sim::estimate::{apply_estimate, profile_params};
 use crate::activity::{Activity, ActivitySample};
 use crate::matching::{match_to_route, Matched};
 use crate::{err, Result};
+use ride_i18n::{t, tf};
 
 /// A gap between two samples longer than this may be a pause, seconds.
 const PAUSE_GAP_S: f64 = 10.0;
@@ -59,14 +60,18 @@ pub fn import_activity(
     let matched = match_to_route(&activity.samples, route)?;
     let frames = key_frames(&activity.samples, &matched);
     let Some((timeline, paused_s)) = timer_times(&frames) else {
-        return err("Az edzés időbélyegei nem használhatók (nincs benne mozgás).");
+        return err(t(
+            "route.import.az_edzes_idobelyegei_nem_hasznalhatok_nincs_benne_mo",
+        ));
     };
     let total_s = *timeline.last().unwrap_or(&0.0);
     if total_s < 1.0 {
-        return err("Az edzés túl rövid az importáláshoz.");
+        return err(t("route.import.az_edzes_tul_rovid_az_importalashoz"));
     }
     if total_s > MAX_DURATION_S {
-        return err("Az edzés 24 óránál hosszabb, valószínűleg hibás az időbélyeg.");
+        return err(t(
+            "route.import.az_edzes_24_oranal_hosszabb_valoszinuleg_hibas_az_id",
+        ));
     }
 
     let mut points = resample(&frames, &timeline, route);
@@ -77,36 +82,40 @@ pub fn import_activity(
     } else {
         let params = estimate.unwrap_or_else(|| profile_params(rider));
         apply_estimate(&mut points, &params);
-        warnings.push(format!(
-            "A fájlban nincs teljesítményadat, ezért a wattokat a szimuláció fizikájából becsültük ({} kg versenyző, {} kg kerékpár, Crr {}). Szél és szélárnyék nélkül ez közelítés.",
-            hu(params.rider_kg, 1),
-            hu(params.bike_kg, 1),
-            hu(params.crr, 4)
+        warnings.push(tf(
+            "route.import.a_fajlban_nincs_teljesitmenyadat_ezert_a_wattokat_a_",
+            &[
+                ("rider", &ride_i18n::decimal_trimmed(params.rider_kg, 1)),
+                ("bike", &ride_i18n::decimal_trimmed(params.bike_kg, 1)),
+                ("crr", &ride_i18n::decimal_trimmed(params.crr, 4)),
+            ],
         ));
         Some(params)
     };
 
     let Some(summary) = summarize(&route.name, &route.id, &points, rider) else {
-        return err("Az edzésből nem készíthető összegzés.");
+        return err(t("route.import.az_edzesbol_nem_keszitheto_osszegzes"));
     };
     if matched.is_partial() {
-        warnings.push(format!(
-            "Az edzés az útvonal {:.0}%-át fedi le ({:.1}–{:.1} km), a többi szakaszt nem lehet összehasonlítani.",
-            matched.coverage * 100.0,
-            matched.start_dist / 1000.0,
-            matched.end_dist / 1000.0
+        warnings.push(tf(
+            "route.import.az_edzes_az_utvonal_0_at_fedi_le_1_1_km_a_tobbi_szak",
+            &[
+                ("pct", &ride_i18n::decimal(matched.coverage * 100.0, 0)),
+                ("from", &ride_i18n::decimal(matched.start_dist / 1000.0, 1)),
+                ("to", &ride_i18n::decimal(matched.end_dist / 1000.0, 1)),
+            ],
         ));
     }
     if matched.off_route > 0 {
-        warnings.push(format!(
-            "{} pont az útvonalon kívülre esett (kitérő vagy GPS-hiba), ezeket a távolságot a környező pontokból becsültük.",
-            matched.off_route
+        warnings.push(tf(
+            "route.import.pont_az_utvonalon_kivulre_esett_kitero_vagy_gps_hiba",
+            &[("n", &matched.off_route.to_string())],
         ));
     }
     if paused_s >= 1.0 {
-        warnings.push(format!(
-            "{:.0} másodpercnyi megállást (automatikus szünet) nem számoltunk az időbe.",
-            paused_s
+        warnings.push(tf(
+            "route.import.0_masodpercnyi_megallast_automatikus_szunet_nem_szam",
+            &[("s", &ride_i18n::decimal(paused_s, 0))],
         ));
     }
 
@@ -137,14 +146,14 @@ pub fn reestimate(
     rider: &RiderSettings,
 ) -> Result<RideRecord> {
     if !record.power_estimated {
-        return err(
-            "Ennek az edzésnek mért teljesítményadata van, ezt nem írjuk felül becsléssel.",
-        );
+        return err(t(
+            "route.import.ennek_az_edzesnek_mert_teljesitmenyadata_van_ezt_nem",
+        ));
     }
     let mut points = record.points.clone();
     apply_estimate(&mut points, &params);
     let Some(mut summary) = summarize(&record.route_name, &record.route_id, &points, rider) else {
-        return err("Az edzésből nem készíthető összegzés.");
+        return err(t("route.import.az_edzesbol_nem_keszitheto_osszegzes"));
     };
     // the stem of the stored file is the start time: it must stay as it was
     summary.started_unix_s = record.summary.started_unix_s;
@@ -154,17 +163,6 @@ pub fn reestimate(
         estimate: Some(params),
         ..record.clone()
     })
-}
-
-/// A number with a decimal comma, trailing zeros of the fraction kept short (`75`, `9,5`, `0,004`).
-fn hu(value: f64, decimals: usize) -> String {
-    let text = format!("{value:.decimals$}");
-    let trimmed = if text.contains('.') {
-        text.trim_end_matches('0').trim_end_matches('.').to_string()
-    } else {
-        text
-    };
-    trimmed.replace('.', ",")
 }
 
 /// One on-route sample with its distance.

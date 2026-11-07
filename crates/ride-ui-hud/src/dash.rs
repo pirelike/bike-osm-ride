@@ -13,6 +13,7 @@ use ride_ui_kit::format::{fmt_duration, fmt_hm_text, fmt_opt0};
 use ride_ui_kit::palette;
 
 use crate::{zone_bar_pct, MetricView, DASH};
+use ride_i18n::{t, tf};
 
 /// How far the power may be from the target and still count as "on target": 5 % of the target,
 /// at least 5 W.
@@ -27,7 +28,7 @@ pub fn target_state(power_w: Option<f64>, target_w: Option<f64>) -> Option<(&'st
     let target = target_w.filter(|t| t.is_finite() && *t > 0.0)?;
     let delta = power - target;
     Some(if delta.abs() <= target_tolerance_w(target) {
-        ("ok", "célban".to_string())
+        ("ok", t("ui_hud.dash.celban").to_string())
     } else if delta < 0.0 {
         ("low", format!("−{:.0} W", delta.abs()))
     } else {
@@ -52,7 +53,7 @@ fn DashWorkout(w: WorkoutProgress) -> Element {
     if w.finished {
         return rsx! {
             div { class: "hud-dash__wo hud-dash__wo--done",
-                span { class: "hud-dash__step", "Edzés kész" }
+                span { class: "hud-dash__step", {t("ui_hud.dash.edzes_kesz")} }
                 span { class: "hud-label", "{w.workout_name}" }
             }
         };
@@ -63,7 +64,14 @@ fn DashWorkout(w: WorkoutProgress) -> Element {
                 div { class: "hud-dash__wotext",
                     span { class: "hud-dash__step", "{w.step_name}" }
                     span { class: "hud-label",
-                        "{w.step_index + 1}/{w.step_count} · edzés vége {fmt_hm_text(w.total_remaining_s)}"
+                        {tf(
+                            "ui_hud.dash.w_step_index_1_w_step_count_edzes_vege_fmt_hm_text_w",
+                            &[
+                                ("step", &(w.step_index + 1).to_string()),
+                                ("count", &w.step_count.to_string()),
+                                ("end", &fmt_hm_text(w.total_remaining_s)),
+                            ],
+                        )}
                     }
                 }
                 span { class: "num num--lg hud-dash__left", "{fmt_duration(w.step_remaining_s)}" }
@@ -71,7 +79,7 @@ fn DashWorkout(w: WorkoutProgress) -> Element {
             div { class: "progress hud-dash__bar", style: "--p: {block_pct}; --c: {color}", i {} }
             if let Some(next) = next {
                 div { class: "hud-dash__next",
-                    span { class: "hud-label", "Következik" }
+                    span { class: "hud-label", {t("ui_hud.dash.kovetkezik")} }
                     span { class: "hud-dash__nexttext", "{next}" }
                 }
             }
@@ -135,7 +143,7 @@ pub fn RideDash(
     let power_dim = view.power_text == DASH;
 
     rsx! {
-        section { class: "hud-dash", aria_label: "Tekerés közben",
+        section { class: "hud-dash", aria_label: t("ui_hud.dash.tekeres_kozben").to_string(),
             if let Some(w) = workout.clone() {
                 if slim {
                     if !w.finished {
@@ -157,21 +165,21 @@ pub fn RideDash(
                     span { class: "unit", "W" }
                 }
                 div { class: "hud-dash__side",
-                    if let Some(t) = target {
+                    if let Some(target_w) = target {
                         div { class: "hud-kv",
-                            span { class: "hud-label", "Cél" }
-                            span { class: "num num--md", "{fmt_opt0(Some(t))}" span { class: "unit", "W" } }
+                            span { class: "hud-label", {t("ui_hud.dash.cel")} }
+                            span { class: "num num--md", "{fmt_opt0(Some(target_w))}" span { class: "unit", "W" } }
                         }
                         if let Some((kind, text)) = state.clone() {
                             span { class: "hud-dash__delta hud-dash__delta--{kind}", "{text}" }
                         }
                     } else {
                         div { class: "hud-kv",
-                            span { class: "hud-label", "Azonnali" }
+                            span { class: "hud-label", {t("ui_hud.dash.azonnali")} }
                             span { class: "num num--md", "{view.power_instant_text}" span { class: "unit", "W" } }
                         }
                         div { class: "hud-kv",
-                            span { class: "hud-label", "Fajlagos" }
+                            span { class: "hud-label", {t("ui_hud.dash.fajlagos")} }
                             span { class: "num num--md", "{view.wkg_text}" span { class: "unit", "W/kg" } }
                         }
                     }
@@ -185,23 +193,23 @@ pub fn RideDash(
                         span { class: "hud-zone__name", "Z{z} {view.zone_name}" }
                     }
                 } else {
-                    span { class: "hud-label", "Nincs teljesítmény" }
+                    span { class: "hud-label", {t("ui_hud.dash.nincs_teljesitmeny")} }
                 }
                 span { class: "hud-label", "FTP {view.ftp_text} W" }
             }
             div { class: "cells cells--4 cells--flush hud-dash__cells",
                 div { class: "cell cell--md hud-dash__cell",
                     div { class: "cell__label",
-                        span { "Kadencia" }
+                        span { {t("ui_hud.dash.kadencia")} }
                         if let Some(c) = cadence_goal {
-                            span { class: "hud-label--faint", "cél {c}" }
+                            span { class: "hud-label--faint", {tf("ui_hud.dash.cel_c", &[("c", &c.to_string())])} }
                         }
                     }
                     div { class: "cell__value", "{view.cadence_text}" span { class: "cell__unit", "rpm" } }
                 }
                 div { class: "cell cell--md hud-dash__cell",
                     div { class: "cell__label",
-                        span { "Pulzus" }
+                        span { {t("ui_hud.dash.pulzus")} }
                         if view.hr_zone.is_some() {
                             span { class: "hud-sw", style: "--c: {hr_color}" }
                         }
@@ -209,12 +217,12 @@ pub fn RideDash(
                     div { class: "cell__value", "{view.hr_text}" span { class: "cell__unit", "bpm" } }
                 }
                 div { class: "cell cell--md hud-dash__cell",
-                    div { class: "cell__label", span { "Sebesség" } }
+                    div { class: "cell__label", span { {t("ui_hud.dash.sebesseg")} } }
                     div { class: "cell__value", "{view.speed_text}" span { class: "cell__unit", "km/h" } }
                 }
                 div { class: "cell cell--md hud-dash__cell",
                     div { class: "cell__label",
-                        span { "Meredekség" }
+                        span { {t("ui_hud.dash.meredekseg")} }
                         if let Some(color) = grade_color.clone() {
                             span { class: "hud-sw", style: "--c: {color}" }
                         }
@@ -224,8 +232,8 @@ pub fn RideDash(
             }
             if !view.has_sensor_data && view.state != RideState::Empty {
                 div { class: "hud-note", role: "status",
-                    span { class: "hud-note__title", "Nincs szenzoradat" }
-                    span { "Csatlakoztass eszközt az Eszközök menüben." }
+                    span { class: "hud-note__title", {t("ui_hud.dash.nincs_szenzoradat")} }
+                    span { {t("ui_hud.dash.csatlakoztass_eszkozt_az_eszkozok_menuben")} }
                 }
             }
         }

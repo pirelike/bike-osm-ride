@@ -272,3 +272,9 @@ Reference screenshots of the real app: [`screenshots/`](screenshots/).
 where the object has a straight edge (circles and arcs stay round), transport glyphs solid without outline,
 coordinates on whole pixels. Constants `ICON_STROKE_WIDTH`, `ICON_LINECAP`, `ICON_LINEJOIN`. Tests check
 well-formed markup, no rounded rects, no per-icon styling, and that every coordinate stays inside the grid.
+
+**The app icon is the one exception.** The logo in the top bar is the application icon itself
+(`ride-app/src/icon.rs::svg_markup`): the dark rounded tile with the teal ridge that the window, the Linux/macOS
+packages and the APK show, drawn from the same constants as their PNGs. It keeps its own colours, corner radius and
+faint vertical shading in both themes, because it is a brand mark, not UI chrome. The values live in the SVG,
+not in the CSS, so the shell's CSS lints still hold.

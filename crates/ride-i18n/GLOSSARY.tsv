@@ -1,0 +1,103 @@
+# Term glossary for the translators. One row per concept; the language columns hold the word used in
+# that catalog, `note` carries a rule that must not be broken. A new language adds a column, filled
+# from the English column first and reviewed before the bulk translation starts.
+#
+# The source language is Hungarian; `en` is the pivot of the pipeline. Keep the rows in this order:
+# the workout library, the ride log and the About dialog all lean on these words.
+hu	en	es	pt	de	zh	it	note
+tekerő	rider	ciclista	ciclista	Fahrer	骑行者	ciclista	a rider on a bicycle, never cavaleiro / jinete / Reiter / Pferd
+tekerés	ride	pedaleo	pedalada	Fahrt	骑行	pedalata	the activity; the verb is pedalar
+menet	ride	salida	volta	Fahrt	骑行记录	uscita	a recorded ride in the ride log
+túra	ride	salida	volta	Fahrt	骑行	uscita	a finished ride, the summary's subject
+edzés	workout	entrenamiento	treino	Workout	训练	allenamento	structured workout, also the library entry
+útvonal	route	ruta	percurso	Route	路线	percorso	never "rota", which is a route in the sense of a shipping route
+okos trainer	smart trainer	rodillo inteligente	rolo inteligente	Smart-Trainer	智能骑行台	rullo intelligente	the FTMS trainer; "trainer" alone may stay
+szellem	ghost	fantasma	fantasma	Geist	幽灵	fantasma	the replay of an earlier ride
+emelkedő	climb	subida	subida	Anstieg	爬坡	salita	the hill; "gradient" is meredekség
+lejtő	descent	descenso	descida	Abfahrt	下坡	discesa	
+szintemelkedés	elevation gain	desnivel	desnível	Höhenmeter	爬升	dislivello	the sum of the climbs
+szint	elevation	altitud	elevação	Höhe	海拔	quota	the height above sea level
+magassági profil	elevation profile	perfil de altitud	perfil de elevação	Höhenprofil	海拔剖面	profilo altimetrico	
+teljesítmény	power	potencia	potência	Leistung	功率	potenza	watt, W
+normalizált teljesítmény	normalized power	potencia normalizada	potência normalizada	Normalisierte Leistung	标准化功率	potenza normalizzata	
+pulzus	heart rate	pulso	pulso	Puls	心率	frequenza cardiaca	short labels; prose may say frequência cardíaca
+max. pulzus	max. heart rate	pulso máx.	pulso máx.	Max. Puls	最大心率	frequenza cardiaca max	
+kadencia	cadence	cadencia	cadência	Trittfrequenz	踏频	cadenza	
+fordulat	cadence (rpm)	cadencia	cadência	Trittfrequenz (U/min)	踏频（rpm）	cadenza (rpm)	the number of turns per minute
+terhelés	load	carga	carga	Belastung	负荷	carico	TSS is also "carga"
+küszöb	threshold	umbral	limiar	Schwelle	阈值	soglia	
+küszöbteljesítmény	threshold power	potencia umbral	potência de limiar	Schwellenleistung	阈值功率	potenza di soglia	
+zóna	zone	zona	zona	Zone	区间	zona	
+blokk	block	bloque	bloco	Block	区块	blocco	
+ismétlés	repetition	repetición	repetição	Wiederholung	重复	ripetizione	
+sorozat	set	serie	série	Satz	组	serie	a set of repetitions
+intervallum	interval	intervalo	intervalo	Intervall	间歇	intervallo	
+bemelegítés	warm-up	calentamiento	aquecimento	Aufwärmen	热身	riscaldamento	
+levezetés	cool-down	enfriamiento	arrefecimento	Ausfahren	放松	defaticamento	
+pörgetés	spin	pedaleo rápido	pedalada rápida	Spin	高踏频	frullata	high-cadence, easy effort
+tempó	tempo	ritmo	ritmo	Tempo	节奏	tempo	
+egyenletes	steady	estable	constante	gleichmäßig	平稳	costante	
+alapozás	base	base	base	Basis	基础期	base	the base period
+állóképesség	endurance	resistencia	resistência	Ausdauer	耐力	resistenza	
+regeneráció	recovery	recuperación	recuperação	Regeneration	恢复	recupero	
+verseny	race	carrera	corrida	Rennen	比赛	gara	
+versenydinamika	race dynamics	dinámica de carrera	dinâmica de corrida	Renndynamik比赛动态	dinamica di gara	
+időfutam	time trial	contrarreloj	contrarrelógio	Zeitfahren	计时赛	cronometro	
+hegymenet	uphill	subida	subida	Bergauf	爬坡	salita	the workout tag
+sík	flat	llano	plano	Flach	平路	pianura	
+szabad	free	libre	livre	Frei	自由骑行	libero	a free ride, without a workout
+vegyes	mixed	mixto	misto	Gemischt	混合	misto	
+teszt	test	prueba	teste	Test	测试	test	
+kutatáson alapul	research-based	basado en estudios	baseado em estudos	wissenschaftlich belegt	基于研究	basato su studi	
+kezdőknek	beginners	principiantes	iniciantes	Einsteiger	初学者	principianti	
+haladóknak	advanced	avanzados	avançados	Fortgeschrittene	进阶者	avanzati	
+munka	work	trabajo	trabalho	Arbeit	做功	lavoro	kJ
+energia	energy	energía	energia	Energie	能量	energia	kcal
+átlag	average	media	média	Ø	平均	media	
+csúcs	peak	pico	pico	Spitzenwert	峰值	picco	
+hátralévő	remaining	restante	restante	übrig	剩余	rimanente	
+megtett	done	recorrido	percorrido	bisher	已完成	percorso	the distance covered
+beállítások	settings	ajustes	definições	Einstellungen	设置	impostazioni	European Portuguese, not configurações; the Settings dialog
+eszközök	devices	dispositivos	dispositivos	Geräte	设备	dispositivi	
+névjegy	about	acerca de	sobre	Über	关于	informazioni	the About dialog
+összegzés	summary	resumen	resumo	Zusammenfassung	总结	riepilogo	
+áttekintés	review	revisión	revisão	Übersicht	回顾	analisi	the review page; the review page
+mentés	save	guardar	guardar	speichern	保存	salva	not salvar
+betöltés	load	cargar	carregar	laden	加载	carica	
+törlés	delete	eliminar	eliminar	löschen	删除	elimina	not excluir
+bezárás	close	cerrar	fechar	schließen	关闭	chiudi	
+megnyitás	open	abrir	abrir	öffnen	打开	apri	
+vissza	back	atrás	voltar	zurück	返回	indietro	
+szünet	pause	pausa	pausa	Pause	暂停	pausa	
+folytatás	resume	continuar	continuar	fortsetzen	继续	riprendi	
+újrakezdés	restart	reiniciar	recomeçar	neu starten	重新开始	ricomincia	
+befejezés	finish	terminar	terminar	beenden	结束	termina	
+kezdés	start	inicio	início	Start	开始	inizio	
+indítás	start	iniciar	iniciar	starten	启动	avvia	
+leállítás	stop	detener	parar	stoppen	停止	ferma	
+keresés	scan	búsqueda	procura	Scan	扫描	ricerca	Bluetooth scan; a text search is pesquisa / Suche
+csatlakoztatva	connected	conectado	ligado	verbunden	已连接	connesso	
+kapcsolódás	connecting	conectando	a ligar	verbinden	连接中	connessione	
+lecsatlakozás	disconnect	desconectar	desligar	trennen	断开连接	scollega	
+pulzusmérő	heart rate monitor	pulsómetro	monitor de pulso	Pulssensor	心率带	cardiofrequenzimetro	
+teljesítménymérő	power meter	potenciómetro	potenciómetro	Leistungsmesser	功率计	misuratore di potenza	
+sebesség	speed	velocidad	velocidade	Tempo	速度	velocità	km/h; the label is Tempo
+táv	distance	distancia	distância	Distanz	距离	distanza	
+idő	time	tiempo	tempo	Zeit	时间	tempo	
+térkép	map	mapa	mapa	Karte	地图	mappa	
+grafikon	chart	gráfico	gráfico	Diagramm	图表	grafico	
+szegmens	segment	segmento	segmento	Abschnitt	赛段	segmento	
+PR	PR	PR	PR	PR	PR	PR	never translated
+IF	IF	IF	IF	IF	IF	IF	never translated
+FTP	FTP	FTP	FTP	FTP	FTP	FTP	never translated
+ERG	ERG	ERG	ERG	ERG	ERG	ERG	never translated
+TCX	TCX	TCX	TCX	TCX	TCX	TCX	never translated
+GPX	GPX	GPX	GPX	GPX	GPX	GPX	never translated
+BRouter	BRouter	BRouter	BRouter	BRouter	BRouter	BRouter	never translated
+bikerouter.de	bikerouter.de	bikerouter.de	bikerouter.de	bikerouter.de	bikerouter.de	bikerouter.de	never translated
+Open-Meteo	Open-Meteo	Open-Meteo	Open-Meteo	Open-Meteo	Open-Meteo	Open-Meteo	never translated
+Street View	Street View	Street View	Street View	Street View	Street View	Street View	never translated
+Zwift	Zwift	Zwift	Zwift	Zwift	Zwift	Zwift	never translated
+MyWhoosh	MyWhoosh	MyWhoosh	MyWhoosh	MyWhoosh	MyWhoosh	MyWhoosh	never translated
+bike-osm-ride	bike-osm-ride	bike-osm-ride	bike-osm-ride	bike-osm-ride	bike-osm-ride	bike-osm-ride	never translated
+Barlow	Barlow	Barlow	Barlow	Barlow	Barlow	Barlow	never translated

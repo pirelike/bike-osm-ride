@@ -1,6 +1,12 @@
 //! Display formatting shared by every UI crate (Hungarian conventions: decimal comma
 //! is NOT used in the HUD — numbers stay dot-free for tabular alignment; units are
 //! rendered by the caller). Pure functions, unit-tested.
+//!
+//! [`decimal`] and [`decimal_trimmed`] are re-exported from `ride-i18n`: they follow the UI
+//! language's separator, unlike the HUD's tabular dot.
+
+use ride_i18n::tf;
+pub use ride_i18n::{decimal, decimal_trimmed};
 
 /// `1:05:09` for >= 1 h, `5:09` otherwise. Negative / NaN → `0:00`.
 pub fn fmt_duration(secs: f64) -> String {
@@ -91,9 +97,12 @@ pub fn fmt_hm_text(secs: f64) -> String {
     if h > 0 {
         // `h:mm ó`, not `h ó mm p`: in the condensed numeral font a lone "ó" between two numbers
         // reads as a 6 ("1 ó 23 p" looks like 16 23)
-        format!("{h}:{m:02} ó")
+        tf(
+            "ui_kit.format.h_m_02_o",
+            &[("h", &h.to_string()), ("m", &format!("{m:02}"))],
+        )
     } else {
-        format!("{m} p")
+        tf("ui_kit.format.minutes_short", &[("m", &m.to_string())])
     }
 }
 

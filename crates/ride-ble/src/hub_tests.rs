@@ -20,7 +20,7 @@ use crate::control::ControlConfig;
 use crate::error::BleError;
 use crate::fake::{FakeAdapter, FakePeripheral};
 use crate::hexlog::HexLog;
-use crate::hub::{self, SIM_ID, SIM_NAME};
+use crate::hub::{self, sim_name, SIM_ID};
 use crate::link::HubConfig;
 use crate::merge::STALE_AFTER;
 use crate::transport::short_id;
@@ -282,7 +282,7 @@ async fn scan_lists_the_simulated_rider_first() {
     };
     assert_eq!(first.len(), 1);
     assert_eq!(first[0].id, SIM_ID);
-    assert_eq!(first[0].name, SIM_NAME, "Szimulált tekerő");
+    assert_eq!(first[0].name, sim_name(), "Szimulált tekerő");
     assert_eq!(first[0].rssi, None);
     assert_eq!(
         first[0].kinds,
@@ -1064,7 +1064,7 @@ async fn simulated_rider_connects_and_the_sample_rate_is_bounded() {
     let name = hub
         .wait_state(DeviceKind::Trainer, &ConnState::Connected)
         .await;
-    assert_eq!(name.as_deref(), Some(SIM_NAME), "Szimulált tekerő");
+    assert_eq!(name.as_deref(), Some(sim_name()), "Szimulált tekerő");
     hub.send(SensorCommand::SetVirtualPower(180.0));
 
     let samples = hub.samples_for(Duration::from_millis(200)).await;
@@ -1263,7 +1263,7 @@ async fn a_real_trainer_replaces_the_simulated_rider_in_the_same_role() {
     let name = hub
         .wait_state(DeviceKind::Trainer, &ConnState::Connected)
         .await;
-    assert_eq!(name.as_deref(), Some(SIM_NAME));
+    assert_eq!(name.as_deref(), Some(sim_name()));
     hub.wait_until("the trainer link to close", || trainer.disconnects() >= 1)
         .await;
     assert!(!trainer.is_connected_now());

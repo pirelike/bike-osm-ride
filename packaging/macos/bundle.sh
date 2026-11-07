@@ -65,8 +65,15 @@ cp "$root/packaging/icons/1024.png" "$iconset/icon_512x512@2x.png"
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
 rm -rf "$iconset"
 
-# 4. Info.plist (version from the tag) and the classic type/creator record.
+# 4. Info.plist (version from the tag) and the classic type/creator record. The product name is a
+#    brand, but the Bluetooth permission prompt is localized: every `*.lproj` beside the template
+#    is copied into the bundle (macOS picks it by the system language, the base stays Hungarian).
 sed "s/__VERSION__/$version/g" "$root/packaging/macos/Info.plist" > "$app/Contents/Info.plist"
+for lproj in "$root"/packaging/macos/*.lproj; do
+    [ -d "$lproj" ] || continue
+    mkdir -p "$app/Contents/Resources/$(basename "$lproj")"
+    cp "$lproj/InfoPlist.strings" "$app/Contents/Resources/$(basename "$lproj")/"
+done
 plutil -lint "$app/Contents/Info.plist"
 printf 'APPL????' > "$app/Contents/PkgInfo"
 

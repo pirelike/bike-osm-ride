@@ -6,9 +6,9 @@ license.workspace = true
 description = "BLE sensor hub (FTMS trainer, HR, power meter, CSC) + simulated rider backend"
 
 [dependencies]
+ride-i18n = { workspace = true }
 ride-model = { workspace = true }
 tokio = { workspace = true }
-thiserror = { workspace = true }
 btleplug = "0.13"
 ftms = "0.2"
 futures = "0.3"

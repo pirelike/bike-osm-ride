@@ -1,0 +1,5 @@
+/* German localization of the bundle metadata. The keys are the ones in Info.plist; only the
+   Bluetooth permission text is user-visible, the names are the product's brand. */
+"CFBundleDisplayName" = "bike-osm-ride";
+"CFBundleName" = "bike-osm-ride";
+"NSBluetoothAlwaysUsageDescription" = "bike-osm-ride verbindet sich über Bluetooth mit dem Smart-Trainer, dem Pulssensor, dem Leistungsmesser, dem Trittfrequenzsensor und der Zwift-Schaltung. Ohne diese Berechtigung lässt sich kein Sensor suchen.";

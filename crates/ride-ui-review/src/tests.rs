@@ -394,6 +394,113 @@ fn the_phone_layout_has_tabs() {
     }
 }
 
+#[test]
+fn the_phone_table_has_a_row_per_number_and_a_column_per_ride() {
+    let mut props = two_rides();
+    props.compact = true;
+    let html = render(props);
+    assert!(html.contains("rv-table--by-metric"), "the turned table");
+    // one header cell per ride, lettered, and every number as a row head
+    assert!(html.contains(">A</span>") && html.contains(">B</span>"));
+    for head in table_head() {
+        assert!(
+            html.contains(&format!("<th scope=\"row\">{head}</th>")),
+            "row {head}"
+        );
+    }
+    assert!(!html.contains("NaN"));
+}
+
+#[test]
+fn the_phone_header_is_one_row_with_icon_buttons() {
+    let mut props = two_rides();
+    props.compact = true;
+    let html = render(props);
+    assert!(
+        html.contains("rv-head-views"),
+        "the views live in the header"
+    );
+    assert!(!html.contains("rv-views"), "no second row for them");
+    assert!(
+        !html.contains("rv-title"),
+        "the top bar already names the page"
+    );
+    assert!(
+        html.contains("aria-label=\"Edzés importálása\""),
+        "the icon button keeps its name"
+    );
+    assert!(!html.contains("rv-panel-bar"), "the tabs name the sections");
+}
+
+#[test]
+fn the_desktop_sections_are_titled_panels() {
+    let html = render(two_rides());
+    assert!(html.contains("rv-panel-bar"));
+    for title in [
+        "Edzések",
+        "Térkép",
+        "Szakasz",
+        "Grafikon",
+        "A szakasz adatai",
+    ] {
+        assert!(
+            html.contains(&format!("<h2 class=\"rv-panel-title\">{title}</h2>")),
+            "panel {title}"
+        );
+    }
+    assert!(
+        html.contains(" km</span>"),
+        "the distance axes carry the unit"
+    );
+}
+
+#[test]
+fn without_a_cursor_the_legend_shows_the_window_mean() {
+    let html = render(two_rides());
+    assert!(html.contains("Ø "), "a mean instead of a dash");
+}
+
+#[test]
+fn the_window_value_is_the_mean_and_the_final_time_difference() {
+    let a =
+        DistSeries::from_points(&record(1_790_000_000.0, 8.0, false).points, GRID_M).map(Arc::new);
+    let b =
+        DistSeries::from_points(&record(1_790_100_000.0, 10.0, false).points, GRID_M).map(Arc::new);
+    let rides: Vec<Arc<DistSeries>> = [a, b].into_iter().flatten().collect();
+    assert_eq!(rides.len(), 2);
+    let cadence = chart::window_value(&rides, 0, chart::Metric::Cadence, 500.0, 3_500.0);
+    assert!(
+        cadence.is_some_and(|v| (v - 86.0).abs() < 0.5),
+        "{cadence:?}"
+    );
+    let speed = chart::window_value(&rides, 1, chart::Metric::Speed, 500.0, 3_500.0);
+    assert!(speed.is_some_and(|v| (v - 36.0).abs() < 0.5), "{speed:?}");
+    // the faster ride is ahead at the end of the window: a negative difference
+    let delta = chart::window_value(&rides, 1, chart::Metric::Delta, 500.0, 3_500.0);
+    assert!(delta.is_some_and(|d| d < -50.0), "{delta:?}");
+    assert_eq!(
+        chart::window_value(&rides, 0, chart::Metric::Delta, 500.0, 3_500.0),
+        Some(0.0)
+    );
+    assert_eq!(
+        chart::window_value(&rides, 5, chart::Metric::Power, 0.0, 1.0),
+        None
+    );
+    assert_eq!(
+        chart::window_value(&rides, 0, chart::Metric::Power, 3_000.0, 1_000.0),
+        None
+    );
+}
+
+#[test]
+fn a_finger_can_still_scroll_over_the_plots() {
+    assert!(
+        CSS.contains("touch-action: pan-y"),
+        "vertical swipes must scroll the page"
+    );
+    assert!(!CSS.contains("touch-action: none"));
+}
+
 // ── the power view ─────────────────────────────────────────────────────────
 
 use ride_sim::power_curve::{analyze, Analysis, DURATIONS};

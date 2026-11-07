@@ -1,0 +1,6 @@
+/* zh-Hans localization of the bundle's user-visible strings.
+   The product name is a brand and is never translated; the Bluetooth prompt is the one
+   user-visible sentence the bundle owns. Keep the Hungarian Info.plist as the development region. */
+"CFBundleDisplayName" = "bike-osm-ride";
+"CFBundleName" = "bike-osm-ride";
+"NSBluetoothAlwaysUsageDescription" = "bike-osm-ride 通过蓝牙连接智能骑行台、心率带、功率计、踏频传感器和 Zwift 变速器。没有此权限将无法搜索传感器。";

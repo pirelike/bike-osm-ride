@@ -47,7 +47,7 @@ mod imp {
 
     /// Shown by the desktop in its power settings next to the inhibition.
     const APP: &str = "bike-osm-ride";
-    const REASON: &str = "Tekerés folyamatban";
+    const REASON: &str = t("app.wake.tekeres_folyamatban");
     const SERVICE: &str = "org.freedesktop.ScreenSaver";
     const PATH: &str = "/org/freedesktop/ScreenSaver";
     const INTERFACE: &str = "org.freedesktop.ScreenSaver";
@@ -118,7 +118,7 @@ mod imp {
     const LEVEL_ON: u32 = 255;
     /// `kIOReturnSuccess`
     const SUCCESS: i32 = 0;
-    const NAME: &str = "bike-osm-ride: tekerés folyamatban";
+    const NAME: &str = t("app.wake.bike_osm_ride_tekeres_folyamatban");
 
     #[link(name = "IOKit", kind = "framework")]
     extern "C" {

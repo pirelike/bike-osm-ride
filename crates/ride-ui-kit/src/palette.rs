@@ -9,20 +9,12 @@
 //! colour that carries meaning is also shown with a text label by the UI crates.
 
 use crate::color::{self, Rgb};
+use ride_i18n::t;
 use ride_model::{ClimbCategory, Theme};
 use std::sync::OnceLock;
 
-pub const POWER_ZONE_NAMES: [&str; 7] = [
-    "Aktív regeneráció",
-    "Állóképesség",
-    "Tempó",
-    "Küszöb",
-    "VO₂max",
-    "Anaerob",
-    "Neuromuszkuláris",
-];
-
-pub const HR_ZONE_NAMES: [&str; 5] = ["Pihenő", "Könnyű", "Aerob", "Küszöb", "Maximális"];
+// Zone names live in the text catalog now (the source language is Hungarian), so they are
+// functions rather than `const` arrays: a `const` cannot call `t()`.
 
 // ───────────────────────────── palettes (validated, see docs/DESIGN.md) ─────────────────────────────
 
@@ -211,11 +203,27 @@ pub fn hr_zone_color(zone: u8, theme: Theme) -> String {
 
 /// Hungarian zone names, clamped like the colour functions.
 pub fn power_zone_name(zone: u8) -> &'static str {
-    POWER_ZONE_NAMES[usize::from(zone.clamp(1, 7)) - 1]
+    let names = [
+        t("ui_kit.palette.aktiv_regeneracio"),
+        t("ui_kit.palette.allokepesseg"),
+        t("ui_kit.palette.tempo"),
+        t("ui_kit.palette.kuszob"),
+        t("ui_kit.palette.vo_max"),
+        t("ui_kit.palette.anaerob"),
+        t("ui_kit.palette.neuromuszkularis"),
+    ];
+    names[usize::from(zone.clamp(1, 7)) - 1]
 }
 
 pub fn hr_zone_name(zone: u8) -> &'static str {
-    HR_ZONE_NAMES[usize::from(zone.clamp(1, 5)) - 1]
+    let names = [
+        t("ui_kit.palette.piheno"),
+        t("ui_kit.palette.konnyu"),
+        t("ui_kit.palette.aerob"),
+        t("ui_kit.palette.kuszob"),
+        t("ui_kit.palette.maximalis"),
+    ];
+    names[usize::from(zone.clamp(1, 5)) - 1]
 }
 
 /// CSS custom property reference for a zone, for inline styles that should follow the theme
@@ -246,12 +254,13 @@ pub fn hr_zone_var(zone: u8) -> &'static str {
 
 pub fn climb_category_label(cat: Option<ClimbCategory>) -> &'static str {
     match cat {
+        // `HC` is the same in every language (hors catégorie).
         Some(ClimbCategory::Hc) => "HC",
-        Some(ClimbCategory::Cat1) => "1. kat.",
-        Some(ClimbCategory::Cat2) => "2. kat.",
-        Some(ClimbCategory::Cat3) => "3. kat.",
-        Some(ClimbCategory::Cat4) => "4. kat.",
-        None => "Emelkedő",
+        Some(ClimbCategory::Cat1) => t("ui_kit.palette.cat_1"),
+        Some(ClimbCategory::Cat2) => t("ui_kit.palette.cat_2"),
+        Some(ClimbCategory::Cat3) => t("ui_kit.palette.cat_3"),
+        Some(ClimbCategory::Cat4) => t("ui_kit.palette.cat_4"),
+        None => t("ui_kit.palette.emelkedo"),
     }
 }
 

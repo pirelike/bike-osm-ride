@@ -8,6 +8,7 @@
 use std::fmt::Write as _;
 use std::sync::Arc;
 
+use ride_i18n::t;
 use ride_model::{RideRecord, Route};
 use ride_sim::compare::{delta_time, section_stats, DistSeries, SectionStats};
 use ride_ui_kit::format::{fmt_delta_s, fmt_opt0, fmt_speed_kmh};
@@ -61,11 +62,11 @@ impl Metric {
 
     pub fn title(self) -> &'static str {
         match self {
-            Metric::Power => "Teljesítmény",
-            Metric::HeartRate => "Pulzus",
-            Metric::Cadence => "Kadencia",
-            Metric::Speed => "Sebesség",
-            Metric::Delta => "Időkülönbség",
+            Metric::Power => t("ui_review.chart.teljesitmeny"),
+            Metric::HeartRate => t("ui_review.chart.pulzus"),
+            Metric::Cadence => t("ui_review.chart.kadencia"),
+            Metric::Speed => t("ui_review.chart.sebesseg"),
+            Metric::Delta => t("ui_review.chart.idokulonbseg"),
         }
     }
 
@@ -76,6 +77,15 @@ impl Metric {
             Metric::Cadence => "rpm",
             Metric::Speed => "km/h",
             Metric::Delta => "s",
+        }
+    }
+
+    /// The metric's button on a phone: its unit, which reads the same in every language and fits
+    /// five buttons into one row (the time difference is `±s`, a difference in seconds).
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Metric::Delta => "±s",
+            other => other.unit(),
         }
     }
 
@@ -303,6 +313,41 @@ pub fn value_at(rides: &[Arc<DistSeries>], slot: usize, metric: Metric, dist: f6
     metric.raw(series, i)
 }
 
+/// What the legend shows for ride `slot` while no cursor is down: the mean of the metric over
+/// `[d0, d1]`, or for [`Metric::Delta`] the difference at the end of the window (what the ride
+/// gained or lost over the section). `None` when the ride has no value there.
+pub fn window_value(
+    rides: &[Arc<DistSeries>],
+    slot: usize,
+    metric: Metric,
+    d0: f64,
+    d1: f64,
+) -> Option<f64> {
+    let series = rides.get(slot)?;
+    if series.is_empty() || !(d0.is_finite() && d1.is_finite()) || d1 <= d0 {
+        return None;
+    }
+    let lo = series.index_of(d0.max(series.start_dist))?;
+    let hi = series.index_of(d1.min(series.end_dist()))?;
+    if hi < lo {
+        return None;
+    }
+    if metric == Metric::Delta {
+        if slot == 0 {
+            return Some(0.0);
+        }
+        let delta = delta_time(series, rides.first()?);
+        return (lo..=hi)
+            .rev()
+            .find_map(|i| delta.get(i).copied().flatten());
+    }
+    let (sum, n) = (lo..=hi)
+        .filter_map(|i| metric.raw(series, i))
+        .filter(|v| v.is_finite())
+        .fold((0.0, 0usize), |(s, n), v| (s + v, n + 1));
+    (n > 0).then(|| sum / n as f64)
+}
+
 /// The stretch every selected ride covers, `None` when they share less than 100 m.
 pub fn common_span(rides: &[Arc<DistSeries>]) -> Option<(f64, f64)> {
     let start = rides
@@ -365,18 +410,13 @@ pub fn climb_ranges(route: &Route, max: usize) -> Vec<(usize, f64, f64)> {
     all
 }
 
-/// A number with a decimal comma and no trailing zeros of the fraction: `75`, `9,5`, `0,004`.
+/// A number with the language's decimal separator and no trailing zeros of the fraction:
+/// `75`, `9,5`, `0,004` (Hungarian).
 pub fn hu(value: f64, decimals: usize) -> String {
     if !value.is_finite() {
         return "—".into();
     }
-    let text = format!("{value:.decimals$}");
-    let trimmed = if text.contains('.') {
-        text.trim_end_matches('0').trim_end_matches('.').to_string()
-    } else {
-        text
-    };
-    trimmed.replace('.', ",")
+    ride_i18n::decimal_trimmed(value, decimals)
 }
 
 /// `2026-10-04 07:30` (UTC, like the summary dialog's date).

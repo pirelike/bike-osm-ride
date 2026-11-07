@@ -8,6 +8,7 @@
 //! (5.0 == 5 %), degrees for lat/lon/heading. Display conversion (km/h, h:mm:ss)
 //! belongs to the UI layer only.
 
+use ride_i18n::t;
 use serde::{Deserialize, Serialize};
 
 mod extras;
@@ -244,6 +245,11 @@ pub enum ProfileView {
 #[serde(default)]
 pub struct UiSettings {
     pub theme: Theme,
+    /// UI language code (`"hu"`, `"en"`, `"es"`, ...) or `"auto"` for the operating system's
+    /// language. A settings file written before the language existed has no such field and loads
+    /// as `"hu"`; a fresh install starts from `"auto"` (see [`UiSettings::default`]).
+    #[serde(default = "default_language")]
+    pub language: String,
     pub map_style: MapStyle,
     pub profile_mode: ProfileMode,
     /// The profile mode while a workout is selected (`None`: the same as without one, until the
@@ -389,7 +395,7 @@ impl std::fmt::Debug for UiSettings {
             .field(
                 "google_maps_key",
                 &if self.google_maps_key.is_empty() {
-                    "<üres>"
+                    t("model.ures")
                 } else {
                     "<elrejtve>"
                 },
@@ -401,14 +407,22 @@ impl std::fmt::Debug for UiSettings {
             .field("tiles", &self.tiles.is_some())
             .field("tiles_workout", &self.tiles_workout.is_some())
             .field("text_scale", &self.text_scale)
+            .field("language", &self.language)
             .finish()
     }
+}
+
+/// Serde default for a settings file that predates the language field: the app was Hungarian, so
+/// it stays Hungarian (a fresh install uses `UiSettings::default`, which is `"auto"`).
+fn default_language() -> String {
+    "hu".to_string()
 }
 
 impl Default for UiSettings {
     fn default() -> Self {
         Self {
             theme: Theme::Dark,
+            language: "auto".to_string(),
             map_style: MapStyle::Dark,
             profile_mode: ProfileMode::Lookahead,
             profile_mode_workout: None,
@@ -772,5 +786,11 @@ mod ui_settings_debug_tests {
         let old: Settings = serde_json::from_str(r#"{"ui":{"theme":"Light"}}"#).expect("loads");
         assert_eq!(old.ui.text_scale(), 1.0);
         assert!(old.ui.tiles_workout.is_none() && old.ui.profile_mode_workout.is_none());
+        // the language field did not exist then either: the app was Hungarian
+        assert_eq!(old.ui.language, "hu");
+        // a fresh install follows the operating system until the rider picks a language
+        assert_eq!(UiSettings::default().language, "auto");
+        let picked: Settings = serde_json::from_str(r#"{"ui":{"language":"es"}}"#).expect("loads");
+        assert_eq!(picked.ui.language, "es");
     }
 }

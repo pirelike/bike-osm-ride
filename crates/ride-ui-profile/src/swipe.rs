@@ -8,6 +8,7 @@
 //! sideways twice, so the gesture is discovered rather than explained.
 
 use dioxus::prelude::*;
+use ride_i18n::t;
 
 /// A swipe has to travel this far sideways, CSS pixels.
 pub const SWIPE_MIN_PX: f64 = 48.0;
@@ -48,9 +49,9 @@ pub fn PageDots(pages: Pages) -> Element {
     let label = pages.labels.get(pages.current).cloned().unwrap_or_default();
     let on_page = pages.on_page;
     rsx! {
-        div { class: "profile-pages", role: "tablist", aria_label: "A profil nézetei",
+        div { class: "profile-pages", role: "tablist", aria_label: t("ui_profile.swipe.a_profil_nezetei").to_string(),
             if pages.hint {
-                span { class: "profile-pages__hint", "‹ húzd oldalra ›" }
+                span { class: "profile-pages__hint", {t("ui_profile.swipe.huzd_oldalra")} }
             }
             span { class: "profile-pages__label", "{label}" }
             span { class: "profile-pages__dots",

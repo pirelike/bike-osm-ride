@@ -16,7 +16,7 @@ pub mod controller;
 pub mod crypto;
 pub mod proto;
 
-use thiserror::Error;
+use ride_i18n::t;
 use uuid::Uuid;
 
 pub use controller::{play_shift_buttons, ControllerEvent, ControllerSession, ShiftDebouncer};
@@ -71,21 +71,30 @@ pub fn advertised_type(manufacturer: &[u8]) -> Option<u8> {
 
 /// Failures of the Zwift protocol layer. Messages are Hungarian: they can end up in a log
 /// line that is shown to the rider.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZwiftError {
-    #[error("a kézfogás válasza hibás")]
     BadHandshake,
-    #[error("nincs helyi kulcs a kézfogáshoz")]
     MissingKey,
-    #[error("a csatorna még nincs kész")]
     NotReady,
-    #[error("a csomag túl rövid")]
     ShortPacket,
-    #[error("a csomag hitelesítése sikertelen")]
     AuthFailed,
-    #[error("a titkosítás nem sikerült")]
     Crypto,
 }
+
+impl std::fmt::Display for ZwiftError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ZwiftError::BadHandshake => f.write_str(t("ble.zwift.a_kezfogas_valasza_hibas")),
+            ZwiftError::MissingKey => f.write_str(t("ble.zwift.nincs_helyi_kulcs_a_kezfogashoz")),
+            ZwiftError::NotReady => f.write_str(t("ble.zwift.a_csatorna_meg_nincs_kesz")),
+            ZwiftError::ShortPacket => f.write_str(t("ble.zwift.a_csomag_tul_rovid")),
+            ZwiftError::AuthFailed => f.write_str(t("ble.zwift.a_csomag_hitelesitese_sikertelen")),
+            ZwiftError::Crypto => f.write_str(t("ble.zwift.a_titkositas_nem_sikerult")),
+        }
+    }
+}
+
+impl std::error::Error for ZwiftError {}
 
 #[cfg(test)]
 mod tests {

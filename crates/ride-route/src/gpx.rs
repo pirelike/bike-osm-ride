@@ -27,6 +27,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
 use crate::{err, geo, Result};
+use ride_i18n::{t, tf};
 
 /// One point as found in the file.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -200,7 +201,9 @@ impl Parser {
     fn start(&mut self, el: El, e: &BytesStart<'_>) -> Result<()> {
         if self.path.is_empty() {
             if el != El::Gpx {
-                return err("A fájl nem GPX-fájl (hiányzik a <gpx> gyökérelem).");
+                return err(t(
+                    "route.activity.a_fajl_nem_gpx_fajl_hianyzik_a_gpx_gyokerelem",
+                ));
             }
             self.saw_root = true;
         }
@@ -473,7 +476,7 @@ fn line_of(text: &str, byte_pos: u64) -> usize {
 pub fn parse(text: &str) -> Result<GpxData> {
     let text = text.trim_start_matches('\u{feff}').trim_start();
     if text.is_empty() {
-        return err("A fájl üres.");
+        return err(t("route.activity.a_fajl_ures"));
     }
     let mut reader = Reader::from_str(text);
     let mut p = Parser::default();
@@ -485,8 +488,9 @@ pub fn parse(text: &str) -> Result<GpxData> {
                 let line = line_of(text, reader.error_position());
                 // The parser's own message is English and technical; keep the UI text Hungarian.
                 let _ = e;
-                return err(format!(
-                    "A GPX-fájl hibás vagy sérült (XML-hiba a(z) {line}. sor környékén). Próbáld meg újra letölteni vagy exportálni."
+                return err(tf(
+                    "route.gpx.a_gpx_fajl_hibas_vagy_serult_xml_hiba_a_z_line_sor_k",
+                    &[("line", &line.to_string())],
                 ));
             }
         };
@@ -526,10 +530,14 @@ pub fn parse(text: &str) -> Result<GpxData> {
     }
 
     if !p.saw_root {
-        return err("A fájl nem GPX-fájl (nem található <gpx> elem).");
+        return err(t(
+            "route.activity.a_fajl_nem_gpx_fajl_nem_talalhato_gpx_elem",
+        ));
     }
     if !p.path.is_empty() {
-        return err("A GPX-fájl csonka vagy sérült (hiányzó záró elemek). Próbáld meg újra letölteni vagy exportálni.");
+        return err(t(
+            "route.gpx.a_gpx_fajl_csonka_vagy_serult_hianyzo_zaro_elemek_pr",
+        ));
     }
 
     let mut data = p.data;
@@ -544,7 +552,9 @@ pub fn parse(text: &str) -> Result<GpxData> {
     }
     data.name = p.trk_name.or(p.rte_name).or(p.meta_name);
     if data.points.is_empty() {
-        return err("A GPX-fájl nem tartalmaz útvonalpontokat (trkpt vagy rtept).");
+        return err(t(
+            "route.gpx.a_gpx_fajl_nem_tartalmaz_utvonalpontokat_trkpt_vagy_",
+        ));
     }
     Ok(data)
 }
@@ -649,7 +659,10 @@ fn split_segment_tracks(
     for (i, &(a, b)) in ranges.iter().enumerate() {
         if is_segment[i] {
             let name = if spans[i].name.is_empty() {
-                format!("Szegmens {}", segments.len() + 1)
+                tf(
+                    "route.gpx.szegmens",
+                    &[("n", &(segments.len() + 1).to_string())],
+                )
             } else {
                 spans[i].name.clone()
             };

@@ -35,6 +35,7 @@ use crate::controller::Controller;
 use crate::dock::{self, PanelId, Workspace, CLICK_SLOP};
 use crate::gearbox;
 use crate::state::{kind_label, AppState, DialogKind, DragOp};
+use ride_i18n::{t, tf};
 
 // ───────────────────────────── CSS / head ─────────────────────────────
 
@@ -77,10 +78,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   font: 600 var(--t-20)/1 var(--font-display);
   white-space: nowrap;
 }
+/* the app icon itself (`icon::svg_markup`): its own colours and corners, the same picture as the
+   window, the packages and the APK, so it sits on the bar instead of filling a block */
 .shell-logo__mark {
-  display: grid; place-items: center; width: var(--top-h); height: var(--top-h);
-  background: var(--text); color: var(--bg-1);
+  display: grid; place-items: center; flex: none;
+  width: var(--top-h); height: var(--top-h); padding: 7px;
 }
+.shell-logo__mark svg { display: block; }
 .shell-route {
   display: flex; align-items: center; gap: var(--space-3);
   min-width: 0; max-width: min(28vw, 400px);
@@ -356,7 +360,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .compact-panel[data-panel="climb"],
 .compact-panel[data-panel="stats"],
 .compact-panel[data-panel="gears"],
-.compact-panel[data-panel="rider"] { height: auto; }
+.compact-panel[data-panel="rider"] { height: auto; min-height: max-content; }
+/* (`min-height`: a panel clips its overflow, which lets the grid squeeze it below its content
+   when the tab is taller than the screen: the data tab cut the table's last row and the rider
+   panel's buttons off) */
+/* the simulated rider is a dialog-sized card; on the phone it is the panel itself: full width,
+   no second frame, its own head kept (the phone's panels have no title bar) */
+.compact-panel__body .dlg-vr { width: 100%; max-width: none; }
+.compact-panel__body .dlg-vr.panel { border: 0; background: transparent; }
 .compact-panel[data-panel="profile"] { height: auto; min-height: 200px; }
 /* the charts tab holds only the charts: they take the whole height (at least 600 px) */
 .compact[data-tab="charts"] .compact-stage { grid-template-rows: minmax(600px, 1fr); align-content: stretch; }
@@ -364,6 +375,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .compact-panel[data-panel="charts"] .profile-chart { flex: 1 1 0; }
 .compact-panel[data-panel="charts"] .profile-chart-plot { flex: 1 1 auto; height: auto; min-height: 64px; }
 .shell--compact .hud-controls__kbd { display: none; }
+/* the phone has tabs, not the tiling: the settings' layout group (drag panels by their title
+   bar, reset the tiling) describes something that is not on the screen */
+.shell--compact .dlg-group--layout { display: none; }
 /* the transport bar of the phone: full-width, thumb-sized buttons (pause twice as wide as
    finish), the gear buttons beside them while the virtual gearbox is on */
 .compact-controls {
@@ -423,9 +437,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   .shell--compact .shell-route { flex: 0 0 auto; padding: 0 8px; }
   .shell--compact .shell-tb { padding: 0 6px; min-width: 46px; justify-content: center; }
   .shell--compact .shell-tb--fullscreen { display: none; }
-  /* no room for a seventh icon: the review page is opened from the route dialog on a phone.
-     (classes, not `[aria-label=…]`: an accented attribute value did not match here) */
-  .shell--compact .shell-tb--review { display: none; }
+  /* no room for a seventh icon: the review page keeps its button and the theme switch gives way
+     (the theme is one tap away in Settings → Appearance; the review page was only reachable
+     through the route dialog before). Classes, not `[aria-label=…]`: an accented attribute value
+     did not match here. */
+  .shell--compact .shell-tb--theme { display: none; }
 }
 
 /* ── narrow windows: the labels give way to the icons ── */
@@ -483,16 +499,17 @@ pub fn background_rgba(theme: Theme) -> (u8, u8, u8, u8) {
     }
 }
 
-/// Content injected into `<head>`: the theme attribute and the text scale (set before first
-/// paint, no flash) and all CSS.
-pub fn head_html(theme: Theme, text_scale: f64) -> String {
+/// Content injected into `<head>`: the theme attribute, the language and the text scale (set
+/// before first paint, no flash) and all CSS.
+pub fn head_html(theme: Theme, text_scale: f64, lang: ride_i18n::Lang) -> String {
     let size = text_size_attr(text_scale);
     let css = css_bundle().replace("</style", "<\\/style");
     format!(
         "<meta name=\"color-scheme\" content=\"dark light\">\
-         <script>document.documentElement.setAttribute('data-theme','{}');         document.documentElement.style.setProperty('--ui-scale','{text_scale:.2}');\
+         <script>document.documentElement.setAttribute('lang','{}');         document.documentElement.setAttribute('data-theme','{}');         document.documentElement.style.setProperty('--ui-scale','{text_scale:.2}');\
          document.documentElement.setAttribute('data-text','{size}');</script>\
          <style id=\"ride-css\">{css}</style>",
+        lang.html_lang(),
         theme_attr(theme)
     )
 }
@@ -601,6 +618,14 @@ fn use_theme_sync(st: AppState) {
             text_size_attr(scale)
         ));
     });
+    use_effect(move || {
+        let setting = st.settings.read().ui.language.clone();
+        let lang = ride_i18n::init(&setting);
+        let _ = eval_js(&format!(
+            "document.documentElement.setAttribute('lang', '{}');",
+            lang.html_lang()
+        ));
+    });
 }
 
 /// Android: the system file picker answers on its own schedule (see `android_picker`), so the
@@ -650,6 +675,10 @@ fn use_crash_watch(st: AppState) {
 pub fn App() -> Element {
     let win = use_window();
     let st = use_hook(AppState::new);
+    // The language is resolved before the subtree renders; the root's key makes a change remount
+    // the whole UI, so no label keeps the old language.
+    let language = st.settings.read().ui.language.clone();
+    let lang = ride_i18n::init(&language);
     let ctl = use_hook(move || {
         let ctl = Controller::new(st, win);
         ctl.boot();
@@ -683,6 +712,7 @@ pub fn App() -> Element {
     };
     rsx! {
         div {
+            key: "{lang}",
             class: if compact { "shell shell--compact" } else { "shell" },
             id: "shell",
             onmounted: on_mount,
@@ -787,7 +817,7 @@ fn CrashBanner() -> Element {
                 class: "btn btn--sm",
                 r#type: "button",
                 onclick: move |_| st.dismiss_crash(),
-                "Rendben"
+                {t("app.shell.rendben")}
             }
         }
     }
@@ -947,13 +977,16 @@ pub fn device_dot(slots: &[DeviceSlot], kinds: &[DeviceKind], label: &str) -> Do
             .unwrap_or_default();
         return Dot {
             state: "ok",
-            title: format!("{label}: csatlakoztatva{name}"),
+            title: tf(
+                "app.shell.label_csatlakoztatva_name",
+                &[("label", label), ("name", &name)],
+            ),
         };
     }
     if pick(|s| *s == ConnState::Connecting).is_some() {
         return Dot {
             state: "busy",
-            title: format!("{label}: csatlakozás…"),
+            title: tf("app.shell.label_csatlakozas", &[("label", label)]),
         };
     }
     if let Some(slot) = pick(|s| matches!(s, ConnState::Failed(_))) {
@@ -963,12 +996,15 @@ pub fn device_dot(slots: &[DeviceSlot], kinds: &[DeviceKind], label: &str) -> Do
         };
         return Dot {
             state: "bad",
-            title: format!("{label}: a kapcsolódás nem sikerült{reason}"),
+            title: tf(
+                "app.shell.label_a_kapcsolodas_nem_sikerult_reason",
+                &[("label", label), ("reason", &reason)],
+            ),
         };
     }
     Dot {
         state: "off",
-        title: format!("{label}: nincs csatlakoztatva"),
+        title: tf("app.shell.label_nincs_csatlakoztatva", &[("label", label)]),
     }
 }
 
@@ -988,7 +1024,7 @@ pub fn device_dots(slots: &[DeviceSlot]) -> [Dot; 3] {
         device_dot(
             slots,
             &[DeviceKind::PowerMeter, DeviceKind::Cadence],
-            "Teljesítmény- és kadenciaszenzor",
+            t("app.shell.teljesitmeny_es_kadenciaszenzor"),
         ),
     ]
 }
@@ -1002,8 +1038,8 @@ fn TopBar() -> Element {
     let av = st.availability_live();
     let dots = device_dots(&st.slots.read());
     let (theme_icon, theme_label) = match theme {
-        Theme::Dark => (IconName::Sun, "Váltás világos témára (T)"),
-        Theme::Light => (IconName::Moon, "Váltás sötét témára (T)"),
+        Theme::Dark => (IconName::Sun, t("app.shell.valtas_vilagos_temara_t")),
+        Theme::Light => (IconName::Moon, t("app.shell.valtas_sotet_temara_t")),
     };
     let dragged_chip = match *st.drag.read() {
         Some(DragOp::Carry {
@@ -1025,7 +1061,8 @@ fn TopBar() -> Element {
     rsx! {
         header { class: "shell-top", role: "banner",
             div { class: "shell-logo",
-                span { class: "shell-logo__mark", Icon { name: IconName::Bike, size: 20 } }
+                // the app's own icon (window, packages, APK), drawn from the same constants
+                span { class: "shell-logo__mark", dangerous_inner_html: crate::icon::svg_markup() }
                 span { "bike-osm-ride" }
             }
             if let Some(route) = route {
@@ -1037,14 +1074,17 @@ fn TopBar() -> Element {
                     }
                 }
             }
-            div { class: "shell-tray", role: "group", aria_label: "Bezárt panelek",
+            div { class: "shell-tray", role: "group", aria_label: t("app.shell.bezart_panelek").to_string(),
                 for id in parked {
                     button {
                         key: "{id.key()}",
                         class: "shell-chip",
                         r#type: "button",
                         "data-dragging": if dragged_chip == Some(id) { "true" } else { "false" },
-                        title: "{id.title()}: kattints a megjelenítéshez, vagy húzd a felületre",
+                        title: tf(
+                            "app.shell.id_title_kattints_a_megjeleniteshez_vagy_huzd_a_felu",
+                            &[("id", id.title())],
+                        ).to_string(),
                         // a press starts the drag; the release decides between click and drop
                         onmousedown: move |e: Event<MouseData>| {
                             e.prevent_default();
@@ -1076,55 +1116,63 @@ fn TopBar() -> Element {
                     }
                 }
             }
-            nav { class: "shell-nav", aria_label: "Fő műveletek",
+            nav { class: "shell-nav", aria_label: t("app.shell.fo_muveletek").to_string(),
                 if let Some(update) = update {
                     button {
                         class: "shell-tb shell-tb--update",
                         r#type: "button",
                         disabled: updating,
-                        aria_label: "Frissítés: {update.version}",
-                        title: "Új verzió: {update.version}",
+                        aria_label: tf(
+                            "app.shell.frissites_update_version",
+                            &[("version", &update.version)],
+                        )
+                        .to_string(),
+                        title: tf(
+                            "app.shell.uj_verzio_update_version",
+                            &[("version", &update.version)],
+                        )
+                        .to_string(),
                         onclick: move |_| ctl.install_update(),
                         Icon { name: IconName::Download, size: 16 }
                         span { class: "shell-label",
-                            if updating { "Frissítés…" } else { "Frissítés" }
+                            if updating { {t("app.shell.frissites")} } else { {t("app.shell.frissites_2")} }
                         }
                     }
                 }
                 button {
                     class: "shell-tb",
                     r#type: "button",
-                    aria_label: "Edzés",
-                    title: "Edzés kiválasztása (W)",
+                    aria_label: t("app.dock.edzes").to_string(),
+                    title: t("app.shell.edzes_kivalasztasa_w").to_string(),
                     onclick: move |_| ctl.open_dialog(DialogKind::Workouts),
                     Icon { name: IconName::Trophy, size: 16 }
-                    span { class: "shell-label", "Edzés" }
+                    span { class: "shell-label", {t("app.dock.edzes")} }
                 }
                 button {
                     class: "shell-tb",
                     r#type: "button",
-                    aria_label: "Útvonal",
-                    title: "Útvonal kiválasztása (Ctrl+O megnyitja a fájlválasztót)",
+                    aria_label: t("app.shell.utvonal").to_string(),
+                    title: t("app.shell.utvonal_kivalasztasa_ctrl_o_megnyitja_a_fajlvalaszto").to_string(),
                     onclick: move |_| ctl.open_dialog(DialogKind::Route),
                     Icon { name: IconName::Folder, size: 16 }
-                    span { class: "shell-label", "Útvonal" }
+                    span { class: "shell-label", {t("app.shell.utvonal")} }
                 }
                 button {
                     class: "shell-tb shell-tb--review",
                     r#type: "button",
-                    aria_label: "Áttekintés",
-                    title: "Az edzések áttekintése és összehasonlítása",
+                    aria_label: t("app.shell.attekintes").to_string(),
+                    title: t("app.shell.az_edzesek_attekintese_es_osszehasonlitasa").to_string(),
                     onclick: move |_| ctl.review_open(),
                     Icon { name: IconName::Gauge, size: 16 }
-                    span { class: "shell-label", "Áttekintés" }
+                    span { class: "shell-label", {t("app.shell.attekintes")} }
                 }
                 button {
                     class: "shell-tb",
                     r#type: "button",
-                    aria_label: "Eszközök",
+                    aria_label: t("app.shell.eszkozok").to_string(),
                     onclick: move |_| ctl.open_dialog(DialogKind::Devices),
                     Icon { name: IconName::Bluetooth, size: 16 }
-                    span { class: "shell-label", "Eszközök" }
+                    span { class: "shell-label", {t("app.shell.eszkozok")} }
                     span { class: "shell-dots", aria_hidden: "true",
                         for dot in dots {
                             span { class: "shell-dot", "data-state": dot.state, title: "{dot.title}" }
@@ -1134,13 +1182,13 @@ fn TopBar() -> Element {
                 button {
                     class: "shell-tb",
                     r#type: "button",
-                    aria_label: "Beállítások",
+                    aria_label: t("app.shell.beallitasok").to_string(),
                     onclick: move |_| ctl.open_dialog(DialogKind::Settings),
                     Icon { name: IconName::Settings, size: 16 }
-                    span { class: "shell-label", "Beállítások" }
+                    span { class: "shell-label", {t("app.shell.beallitasok")} }
                 }
                 button {
-                    class: "shell-tb shell-tb--icon",
+                    class: "shell-tb shell-tb--icon shell-tb--theme",
                     r#type: "button",
                     aria_label: "{theme_label}",
                     title: "{theme_label}",
@@ -1150,16 +1198,16 @@ fn TopBar() -> Element {
                 button {
                     class: "shell-tb shell-tb--icon shell-tb--fullscreen",
                     r#type: "button",
-                    aria_label: "Teljes képernyő (F11)",
-                    title: "Teljes képernyő (F11)",
+                    aria_label: t("app.shell.teljes_kepernyo_f11").to_string(),
+                    title: t("app.shell.teljes_kepernyo_f11").to_string(),
                     onclick: move |_| ctl.toggle_fullscreen(),
                     Icon { name: IconName::Fullscreen, size: 16 }
                 }
                 button {
                     class: "shell-tb shell-tb--icon",
                     r#type: "button",
-                    aria_label: "Névjegy és licencek",
-                    title: "Névjegy és licencek",
+                    aria_label: t("app.shell.nevjegy_es_licencek").to_string(),
+                    title: t("app.shell.nevjegy_es_licencek").to_string(),
                     onclick: move |_| ctl.open_dialog(DialogKind::About),
                     Icon { name: IconName::Info, size: 16 }
                 }
@@ -1243,7 +1291,7 @@ fn WorkArea() -> Element {
         main {
             id: "shell-stage",
             class: "dock",
-            aria_label: "Munkaterület",
+            aria_label: t("app.shell.munkaterulet").to_string(),
             onmounted: on_mount,
             for tile in tiles {
                 PanelFrame {
@@ -1334,10 +1382,10 @@ impl CompactTab {
 
     pub fn label(self) -> &'static str {
         match self {
-            CompactTab::Ride => "Tekerés",
-            CompactTab::Map => "Térkép",
-            CompactTab::Charts => "Grafikonok",
-            CompactTab::Data => "Adatok",
+            CompactTab::Ride => t("app.shell.tekeres"),
+            CompactTab::Map => t("app.dock.terkep"),
+            CompactTab::Charts => t("app.dock.grafikonok"),
+            CompactTab::Data => t("app.shell.adatok"),
         }
     }
 
@@ -1419,7 +1467,7 @@ fn CompactArea() -> Element {
             id: "shell-stage",
             class: "compact",
             "data-tab": active.key(),
-            aria_label: "Munkaterület",
+            aria_label: t("app.shell.munkaterulet").to_string(),
             div { class: "compact-stage",
                 for (id, t) in panels {
                     section {
@@ -1435,13 +1483,13 @@ fn CompactArea() -> Element {
                 section {
                     key: "map-power",
                     class: if active == CompactTab::Map { "compact-panel compact-extra compact-extra--power" } else { "compact-panel compact-extra compact-extra--power is-hidden" },
-                    aria_label: "Teljesítmény",
+                    aria_label: t("app.dock.teljesitmeny").to_string(),
                     StripPanel {}
                 }
                 section {
                     key: "map-profile",
                     class: if active == CompactTab::Map { "compact-panel compact-extra compact-extra--profile" } else { "compact-panel compact-extra compact-extra--profile is-hidden" },
-                    aria_label: "Magassági profil",
+                    aria_label: t("app.dock.magassagi_profil").to_string(),
                     div { class: "compact-panel__body", MapProfile {} }
                 }
             }
@@ -1449,7 +1497,7 @@ fn CompactArea() -> Element {
                 ControlsPanel {}
                 CompactGears {}
             }
-            nav { class: "compact-tabs", role: "tablist", aria_label: "Nézetek",
+            nav { class: "compact-tabs", role: "tablist", aria_label: t("app.shell.nezetek").to_string(),
                 for t in CompactTab::ALL {
                     button {
                         key: "{t.key()}",
@@ -1529,7 +1577,7 @@ fn PanelFrame(id: PanelId, rect: dock::Rect, carried: bool, children: Element) -
                         class: "dock-act",
                         r#type: "button",
                         "aria-pressed": "{sv_on}",
-                        title: "Street View a térképen: kis ablak jobb alul, cserélhető (V, X)",
+                        title: t("app.shell.street_view_a_terkepen_kis_ablak_jobb_alul_cserelhet").to_string(),
                         onmousedown: move |e: Event<MouseData>| e.stop_propagation(),
                         onclick: move |_| ctl.toggle_streetview(),
                         span { class: "dock-act__sq", aria_hidden: "true" }
@@ -1539,8 +1587,8 @@ fn PanelFrame(id: PanelId, rect: dock::Rect, carried: bool, children: Element) -
                 button {
                     class: "dock-close",
                     r#type: "button",
-                    aria_label: "{title} bezárása",
-                    title: "Bezárás (a felső sávba kerül)",
+                    aria_label: tf("app.shell.title_bezarasa", &[("title", title)]).to_string(),
+                    title: t("app.shell.bezaras_a_felso_savba_kerul").to_string(),
                     // the button must not start a drag
                     onmousedown: move |e: Event<MouseData>| e.stop_propagation(),
                     onclick: move |_| ctl.hide_panel(id),
@@ -1584,12 +1632,12 @@ fn MapPanel() -> Element {
                 class: if sv_focus { "tile-view tile-view--small" } else { "tile-view tile-view--big" },
                 if sv_focus {
                     div { class: "tile-pip__bar",
-                        span { class: "tile-pip__title", "Térkép" }
+                        span { class: "tile-pip__title", {t("app.dock.terkep")} }
                         button {
                             class: "tile-pip__btn",
                             r#type: "button",
-                            aria_label: "Térkép és Street View cseréje",
-                            title: "Csere: a térkép lesz nagy (X)",
+                            aria_label: t("app.shell.terkep_es_street_view_csereje").to_string(),
+                            title: t("app.shell.csere_a_terkep_lesz_nagy_x").to_string(),
                             onclick: move |_| ctl.toggle_streetview_size(),
                             Icon { name: IconName::Fullscreen, size: 12 }
                         }
@@ -1748,10 +1796,10 @@ pub struct ProfilePage {
 impl ProfilePage {
     pub fn label(self) -> &'static str {
         match (self.view, self.mode) {
-            (ProfileView::Workout, ProfileMode::Lookahead) => "Edzés · előre",
-            (ProfileView::Workout, ProfileMode::Full) => "Edzés · teljes",
-            (ProfileView::Elevation, ProfileMode::Lookahead) => "Szint · előre",
-            (ProfileView::Elevation, ProfileMode::Full) => "Szint · teljes",
+            (ProfileView::Workout, ProfileMode::Lookahead) => t("app.shell.edzes_elore"),
+            (ProfileView::Workout, ProfileMode::Full) => t("app.shell.edzes_teljes"),
+            (ProfileView::Elevation, ProfileMode::Lookahead) => t("app.shell.szint_elore"),
+            (ProfileView::Elevation, ProfileMode::Full) => t("app.shell.szint_teljes"),
         }
     }
 }
@@ -1851,18 +1899,18 @@ fn CompactGears() -> Element {
     if st.shifter_connected() {
         return rsx! {
             div { class: "compact-gears compact-gears--readout", role: "status", aria_label: "Fokozat: {index + 1}",
-                span { class: "compact-gears__label", "Fokozat" }
+                span { class: "compact-gears__label", {t("app.shell.fokozat")} }
                 span { class: "compact-gears__num num", "{index + 1}" }
             }
         };
     }
     rsx! {
-        div { class: "compact-gears", role: "group", aria_label: "Virtuális váltó",
+        div { class: "compact-gears", role: "group", aria_label: t("app.shell.virtualis_valto").to_string(),
             button {
                 class: "btn compact-gears__btn",
                 r#type: "button",
                 disabled: index == 0,
-                aria_label: "Könnyebb fokozat",
+                aria_label: t("app.shell.konnyebb_fokozat").to_string(),
                 onclick: move |_| ctl.shift_gear(-1),
                 Icon { name: IconName::Minus, size: 18 }
             }
@@ -1871,7 +1919,7 @@ fn CompactGears() -> Element {
                 class: "btn compact-gears__btn",
                 r#type: "button",
                 disabled: index + 1 == count,
-                aria_label: "Nehezebb fokozat",
+                aria_label: t("app.shell.nehezebb_fokozat").to_string(),
                 onclick: move |_| ctl.shift_gear(1),
                 Icon { name: IconName::Plus, size: 18 }
             }
@@ -1920,8 +1968,8 @@ fn GearsPanel() -> Element {
                 class: "btn shell-gear__btn",
                 r#type: "button",
                 disabled: index == 0,
-                aria_label: "Könnyebb fokozat",
-                title: "Könnyebb fokozat (←)",
+                aria_label: t("app.shell.konnyebb_fokozat").to_string(),
+                title: t("app.shell.konnyebb_fokozat_2").to_string(),
                 onclick: move |_| ctl.shift_gear(-1),
                 Icon { name: IconName::Minus, size: 16 }
             }
@@ -1933,14 +1981,14 @@ fn GearsPanel() -> Element {
                 class: "btn shell-gear__btn",
                 r#type: "button",
                 disabled: index + 1 == gears.len(),
-                aria_label: "Nehezebb fokozat",
-                title: "Nehezebb fokozat (→)",
+                aria_label: t("app.shell.nehezebb_fokozat").to_string(),
+                title: t("app.shell.nehezebb_fokozat_2").to_string(),
                 onclick: move |_| ctl.shift_gear(1),
                 Icon { name: IconName::Plus, size: 16 }
             }
             div { class: "shell-gear__info",
                 span { class: "shell-gear__ratio", "{gear.label()} · {gear.ratio():.2}" }
-                span { class: "shell-gear__sub", "{speed} · ellenállás {offset:+.1} %" }
+                span { class: "shell-gear__sub", {tf("app.shell.speed_ellenallas_offset_1", &[("speed", &speed), ("offset", &format!("{offset:+.1}"))])} }
             }
         }
     }
@@ -2093,8 +2141,8 @@ fn DropOverlay() -> Element {
         div { class: "shell-drop", role: "presentation",
             div { class: "shell-drop__hint",
                 Icon { name: IconName::Upload, size: 32 }
-                div { class: "shell-drop__title", "Engedd el a GPX-fájlt az útvonal megnyitásához" }
-                div { class: "shell-drop__sub", "bikerouter.de-ről exportált vagy bármilyen más GPX" }
+                div { class: "shell-drop__title", {t("app.shell.engedd_el_a_gpx_fajlt_az_utvonal_megnyitasahoz")} }
+                div { class: "shell-drop__sub", {t("app.shell.bikerouter_de_rol_exportalt_vagy_barmilyen_mas_gpx")} }
             }
         }
     }
@@ -2265,8 +2313,12 @@ mod tests {
 
     #[test]
     fn head_contains_theme_and_all_css() {
-        let head = head_html(Theme::Light, 1.25);
+        let head = head_html(Theme::Light, 1.25, ride_i18n::Lang::HU);
         assert!(head.contains("setAttribute('data-theme','light')"));
+        assert!(
+            head.contains("setAttribute('lang','hu')"),
+            "html lang follows"
+        );
         assert!(
             head.contains("setProperty('--ui-scale','1.25')"),
             "the text scale is set"

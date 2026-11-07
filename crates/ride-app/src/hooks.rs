@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use ride_model::Theme;
 
 use crate::state::DialogKind;
+use ride_i18n::{t, tf};
 
 pub const MIN_WINDOW: (u32, u32) = (360, 560);
 pub const DEFAULT_WINDOW: (u32, u32) = (1440, 900);
@@ -83,7 +84,13 @@ impl Hooks {
         let sim_watts = get("RIDE_SIM").and_then(|v| match v.parse::<f64>() {
             Ok(w) if w.is_finite() && (0.0..=2000.0).contains(&w) => Some(w),
             _ => {
-                eprintln!("[ride-app] RIDE_SIM={v}: érvénytelen teljesítmény (0..2000 W), figyelmen kívül hagyva");
+                eprintln!(
+                    "{}",
+                    tf(
+                        "app.hooks.ride_app_ride_sim_v_ervenytelen_teljesitmeny_0_2000_",
+                        &[("v", &v)],
+                    )
+                );
                 None
             }
         });
@@ -125,7 +132,8 @@ pub fn parse_streetview_base(v: &str) -> Option<String> {
         Some(_) => Some(v.trim().trim_end_matches('/').to_string()),
         None => {
             eprintln!(
-                "[ride-app] RIDE_STREETVIEW_BASE: csak helyi (127.0.0.1 / localhost) cím fogadható el, figyelmen kívül hagyva"
+                "{}",
+                t("app.hooks.ride_app_ride_streetview_base_csak_helyi_127_0_0_1_l")
             );
             None
         }
@@ -152,18 +160,18 @@ pub fn parse_window(v: &str) -> Option<(u32, u32)> {
 
 fn parse_theme(v: &str) -> Option<Theme> {
     match v.to_ascii_lowercase().as_str() {
-        "dark" | "sotet" | "sötét" => Some(Theme::Dark),
-        "light" | "vilagos" | "világos" => Some(Theme::Light),
+        "dark" | "sotet" => Some(Theme::Dark),
+        "light" | "vilagos" => Some(Theme::Light),
         _ => None,
     }
 }
 
 fn parse_dialog(v: &str) -> Option<DialogKind> {
     match v.to_ascii_lowercase().as_str() {
-        "route" | "utvonal" | "útvonal" => Some(DialogKind::Route),
+        "route" | "utvonal" => Some(DialogKind::Route),
         "devices" | "eszkozok" => Some(DialogKind::Devices),
         "settings" | "beallitasok" => Some(DialogKind::Settings),
-        "workouts" | "edzes" | "edzések" => Some(DialogKind::Workouts),
+        "workouts" | "edzes" => Some(DialogKind::Workouts),
         "about" | "nevjegy" => Some(DialogKind::About),
         _ => None,
     }

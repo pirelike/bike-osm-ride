@@ -90,6 +90,8 @@
   --font-ui: "Barlow", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-display: "Barlow Condensed", "Arial Narrow", "Barlow", "Segoe UI", system-ui, sans-serif;
   --font-num: "Barlow Condensed", "Arial Narrow", "Barlow", "Segoe UI", system-ui, sans-serif;
+  /* scripts the embedded Barlow has no glyphs for (Han today): the system face, per platform. */
+  --font-cjk: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
   /* the size scale: 11 label / 13 body / 15 emphasis / 20 title / 28 headline / 56 value / 96 hero */
   --ui-scale: 1; /* the rider's text size setting (Beállítások → Megjelenés), set by the shell */
   --t-11: calc(11px * var(--ui-scale)); --t-13: calc(13px * var(--ui-scale)); --t-15: calc(15px * var(--ui-scale));
@@ -98,6 +100,14 @@
   /* the older names map onto that scale */
   --fs-2xs: var(--t-11); --fs-xs: var(--t-11); --fs-sm: var(--t-13); --fs-md: var(--t-13); --fs-base: var(--t-13); --fs-lg: var(--t-15);
   --fs-xl: var(--t-20); --fs-2xl: var(--t-20); --fs-3xl: var(--t-28); --fs-4xl: var(--t-56); --fs-hero: var(--t-96);
+}
+
+/* CJK languages: Barlow has no Han glyphs, so the UI text falls back to the system CJK face while
+   the Latin letters stay Barlow. The numerals keep --font-num (Barlow Condensed) untouched: only
+   the text faces are switched. The html lang is set by the shell from the language registry. */
+:root:lang(zh-Hans) {
+  --font-ui: "Barlow", var(--font-cjk);
+  --font-display: "Barlow Condensed", "Arial Narrow", var(--font-cjk);
 }
 
 /* ───────────────────────────── tokens: light (warm paper) ───────────────────────────── */
@@ -409,6 +419,10 @@ button.chip:hover, a.chip:hover { background: var(--fill-2); color: var(--text);
 .seg--sm .seg__item { height: 24px; padding: 0 8px; font-size: var(--t-11); }
 .seg--block { display: flex; }
 .seg--block .seg__item { flex: 1; }
+/* The language picker has one option per complete catalog; seven of them no longer fit one row on
+   a phone, so this variant wraps inside its frame instead of clipping the last language. */
+.seg--wrap { flex-wrap: wrap; max-width: 100%; }
+.seg--wrap .seg__item { flex: 0 0 auto; }
 
 /* ───────────────────────────── switch ───────────────────────────── */
 .switch { display: inline-flex; align-items: center; gap: 12px; cursor: pointer; user-select: none; position: relative; }

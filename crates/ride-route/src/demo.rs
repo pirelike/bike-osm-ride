@@ -13,6 +13,7 @@ use ride_model::{Route, RouteSource};
 use crate::build;
 use crate::geo::EARTH_RADIUS_M;
 use crate::gpx::{GpxData, RawPoint};
+use ride_i18n::t;
 
 const START_LAT: f64 = 47.5390;
 const START_LON: f64 = 18.9805;
@@ -73,16 +74,16 @@ fn raw_points() -> Vec<RawPoint> {
 
 fn build_demo() -> Route {
     let data = GpxData {
-        name: Some("Demó útvonal (Budai-hegység)".to_string()),
+        name: Some(t("route.demo.demo_utvonal_budai_hegyseg").to_string()),
         points: raw_points(),
         ..GpxData::default()
     };
-    match build::build_route(&data, "Demó útvonal", RouteSource::Demo) {
+    match build::build_route(&data, t("route.demo.demo_utvonal"), RouteSource::Demo) {
         Ok(r) => r,
         // Cannot happen (fixed, valid input); keep the API infallible without panicking.
         Err(_) => Route {
             id: "demo".into(),
-            name: "Demó útvonal".into(),
+            name: t("route.demo.demo_utvonal").into(),
             source: RouteSource::Demo,
             points: Vec::new(),
             total_dist: 0.0,

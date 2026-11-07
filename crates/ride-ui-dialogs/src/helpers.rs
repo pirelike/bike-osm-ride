@@ -10,6 +10,7 @@ use ride_ui_kit::format;
 use ride_ui_kit::IconName;
 
 use crate::DeviceSlot;
+use ride_i18n::{t, tf, tn};
 
 /// Id under which the sensor hub offers the simulated rider as a normal device.
 pub const SIM_DEVICE_ID: &str = "sim:rider";
@@ -34,14 +35,20 @@ pub const SLOT_ORDER: [DeviceKind; 5] = [
 pub fn bikerouter_hint(text: &str) -> Option<String> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
-        return Some("Illessz be egy bikerouter.de linket, vagy nyiss meg egy GPX-fájlt.".into());
+        return Some(
+            t("ui_dialogs.helpers.illessz_be_egy_bikerouter_de_linket_vagy_nyiss_meg_e").into(),
+        );
     }
     let lower = trimmed.to_lowercase();
     if !lower.contains("bikerouter.de") {
-        return Some("Ez nem bikerouter.de-link. A bikerouter.de „Megosztás” gombjával másolt linket illeszd be.".into());
+        return Some(
+            t("ui_dialogs.helpers.ez_nem_bikerouter_de_link_a_bikerouter_de_megosztas_").into(),
+        );
     }
     if !lower.contains("lonlats=") {
-        return Some("A linkből hiányzik az útvonal (lonlats=…). Nyisd meg a bikerouter.de-n az útvonalat, és onnan másold ki a linket.".into());
+        return Some(
+            t("ui_dialogs.helpers.a_linkbol_hianyzik_az_utvonal_lonlats_nyisd_meg_a_bi").into(),
+        );
     }
     None
 }
@@ -122,7 +129,7 @@ pub fn route_source_label(source: RouteSource) -> &'static str {
     match source {
         RouteSource::GpxFile => "GPX",
         RouteSource::Bikerouter => "Bikerouter",
-        RouteSource::Demo => "Bemutató",
+        RouteSource::Demo => t("ui_dialogs.helpers.bemutato"),
     }
 }
 
@@ -132,21 +139,21 @@ pub fn route_source_label(source: RouteSource) -> &'static str {
 pub fn kind_label(kind: DeviceKind) -> &'static str {
     match kind {
         DeviceKind::Trainer => "Trainer",
-        DeviceKind::HeartRate => "Pulzus",
-        DeviceKind::PowerMeter => "Teljesítménymérő",
-        DeviceKind::Cadence => "Cadence-szenzor",
-        DeviceKind::Shifter => "Váltó",
+        DeviceKind::HeartRate => t("ui_dialogs.helpers.pulzus"),
+        DeviceKind::PowerMeter => t("ui_dialogs.helpers.teljesitmenymero"),
+        DeviceKind::Cadence => t("ui_dialogs.helpers.kadenciaszenzor"),
+        DeviceKind::Shifter => t("ui_dialogs.helpers.valto"),
     }
 }
 
 /// One line below the slot title: which BLE profile the slot speaks.
 pub fn kind_hint(kind: DeviceKind) -> &'static str {
     match kind {
-        DeviceKind::Trainer => "Okos trainer – FTMS",
-        DeviceKind::HeartRate => "Pulzusmérő – BLE",
-        DeviceKind::PowerMeter => "Teljesítménymérő – CPS",
-        DeviceKind::Cadence => "Sebesség- és kadenciaszenzor – CSC",
-        DeviceKind::Shifter => "Zwift Click / Play – virtuális váltó",
+        DeviceKind::Trainer => t("ui_dialogs.helpers.okos_trainer_ftms"),
+        DeviceKind::HeartRate => t("ui_dialogs.helpers.pulzusmero_ble"),
+        DeviceKind::PowerMeter => t("ui_dialogs.helpers.teljesitmenymero_cps"),
+        DeviceKind::Cadence => t("ui_dialogs.helpers.sebesseg_es_kadenciaszenzor_csc"),
+        DeviceKind::Shifter => t("ui_dialogs.helpers.zwift_click_play_virtualis_valto"),
     }
 }
 
@@ -164,10 +171,10 @@ pub fn kind_icon(kind: DeviceKind) -> IconName {
 /// Badge text of a connection state.
 pub fn conn_label(state: &ConnState) -> &'static str {
     match state {
-        ConnState::Disconnected => "Nincs kapcsolat",
-        ConnState::Connecting => "Kapcsolódás…",
-        ConnState::Connected => "Csatlakoztatva",
-        ConnState::Failed(_) => "Sikertelen",
+        ConnState::Disconnected => t("ui_dialogs.helpers.nincs_kapcsolat"),
+        ConnState::Connecting => t("ui_dialogs.devices.kapcsolodas"),
+        ConnState::Connected => t("ui_dialogs.helpers.csatlakoztatva"),
+        ConnState::Failed(_) => t("ui_dialogs.helpers.sikertelen"),
     }
 }
 
@@ -184,7 +191,8 @@ pub fn conn_tone(state: &ConnState) -> &'static str {
 /// Kit chip classes for the state badge.
 pub fn conn_chip_class(state: &ConnState) -> &'static str {
     match state {
-        ConnState::Disconnected => "chip",
+        // a state is a pill (kit.css); the square `chip` read as a button nobody could press
+        ConnState::Disconnected => "badge",
         ConnState::Connecting => "chip chip--warn",
         ConnState::Connected => "chip chip--ok",
         ConnState::Failed(_) => "chip chip--crit",
@@ -252,10 +260,10 @@ fn rssi_rank(dev: &DeviceInfo) -> i16 {
 /// Signal-quality label; every colour-coded value also has this text.
 pub fn rssi_label(rssi: Option<i16>) -> &'static str {
     match rssi {
-        Some(r) if r >= -60 => "Erős jel",
-        Some(r) if r >= -75 => "Közepes jel",
-        Some(_) => "Gyenge jel",
-        None => "Nincs jel",
+        Some(r) if r >= -60 => t("ui_dialogs.helpers.eros_jel"),
+        Some(r) if r >= -75 => t("ui_dialogs.helpers.kozepes_jel"),
+        Some(_) => t("ui_dialogs.helpers.gyenge_jel"),
+        None => t("ui_dialogs.helpers.nincs_jel"),
     }
 }
 
@@ -342,12 +350,18 @@ pub const VIRTUAL_RIDER_MAX_W: f64 = 1000.0;
 pub const VIRTUAL_RIDER_STEP_W: f64 = 5.0;
 
 /// Quick power presets of the floating panel: `(label, watts, hint)`.
-pub const VIRTUAL_QUICK: [(&str, f64, &str); 4] = [
-    ("Z2", 150.0, "Z2 – állóképesség, 150 W"),
-    ("Z4", 250.0, "Z4 – küszöb, 250 W"),
-    ("Sprint", 700.0, "Sprint, 700 W"),
-    ("Szabad", 0.0, "Gurulás, 0 W"),
-];
+pub fn virtual_quick() -> [(&'static str, f64, &'static str); 4] {
+    [
+        ("Z2", 150.0, t("ui_dialogs.helpers.z2_allokepesseg_150_w")),
+        ("Z4", 250.0, t("ui_dialogs.helpers.z4_kuszob_250_w")),
+        (t("ui_dialogs.helpers.sprint"), 700.0, "Sprint, 700 W"),
+        (
+            t("ui_dialogs.helpers.szabad"),
+            0.0,
+            t("ui_dialogs.helpers.gurulas_0_w"),
+        ),
+    ]
+}
 
 /// Clamps to `0..=1000 W` and snaps to the 5 W grid; NaN becomes 0.
 pub fn clamp_virtual_power(watts: f64) -> f64 {
@@ -476,49 +490,68 @@ pub fn ghost_hint(status: GhostStatus, mode: GhostMode) -> String {
         .filter(|t| t.is_finite() && *t > 0.0)
         .map(format::fmt_duration);
     if mode == GhostMode::Off {
-        return "A szellem ki van kapcsolva. A szegmensek PR-idői ettől még látszanak.".into();
+        return t("ui_dialogs.helpers.a_szellem_ki_van_kapcsolva_a_szegmensek_pr_idoi_etto")
+            .to_string();
     }
     if !status.loaded {
-        return "Tölts be egy útvonalat: a szellem az adott útvonal korábbi meneteiből jön.".into();
+        return t("ui_dialogs.helpers.tolts_be_egy_utvonalat_a_szellem_az_adott_utvonal_ko")
+            .to_string();
     }
     if mode == GhostMode::Route {
         return match route_time {
-            Some(time) => format!(
-                "A GPX-be írt menet ideje {time}. Ez a szellem a fájl időbélyegeiből jön, saját mentett menet nélkül is."
+            Some(time) => tf(
+                "ui_dialogs.helpers.a_gpx_be_irt_menet_ideje_time_ez_a_szellem_a_fajl_id",
+                &[("time", &time)],
             ),
-            None => "Ebben a GPX-ben nincsenek időbélyegek (nincs <time>), ezért az útvonal saját ideje nem játszható vissza.".into(),
+            None => t("ui_dialogs.helpers.ebben_a_gpx_ben_nincsenek_idobelyegek_nincs_time_eze")
+                .to_string(),
         };
     }
     if status.rides == 0 {
         return match route_time {
-            Some(time) => format!(
-                "Ehhez az útvonalhoz még nincs mentett menet. A GPX saját ideje {time}: válaszd az „Az útvonal ideje” módot, és már most van szellem."
+            Some(time) => tf(
+                "ui_dialogs.helpers.ehhez_az_utvonalhoz_meg_nincs_mentett_menet_a_gpx_sa",
+                &[("time", &time)],
             ),
-            None => "Ehhez az útvonalhoz még nincs mentett menet. Az első befejezett menet (legalább 1 perc és 200 m) után a szellem már a rajtvonalon vár.".into(),
+            None => t("ui_dialogs.helpers.ehhez_az_utvonalhoz_meg_nincs_mentett_menet_az_elso_")
+                .to_string(),
         };
     }
-    let rides = format!("{} korábbi menet", status.rides);
+    let rides = tn(
+        "ui_dialogs.helpers.korabbi_menet",
+        status.rides as i64,
+        &[("count", &status.rides.to_string())],
+    );
     if status.replayable {
         if status.partial {
-            return format!(
-                "{rides}, de egyik sem ért célba: a szellem a legtovább jutott menetet játssza vissza, és annak a végénél megáll."
+            return tf(
+                "ui_dialogs.helpers.rides_de_egyik_sem_ert_celba_a_szellem_a_legtovabb_j",
+                &[("rides", &rides)],
             );
         }
         if status.simulated > 0 {
-            return format!(
-                "{rides} (ebből {} szimulált). A szellem a következő tekerésnél a rajtvonalon vár.",
-                status.simulated
+            return tf(
+                "ui_dialogs.helpers.rides_ebbol_szimulalt_a_szellem_a_kovetkezo_tekeresn",
+                &[
+                    ("rides", &rides),
+                    ("simulated", &status.simulated.to_string()),
+                ],
             );
         }
-        return format!("{rides}. A szellem a következő tekerésnél a rajtvonalon vár.");
-    }
-    if status.simulated == status.rides {
-        return format!(
-            "{rides}, de mind szimulált. A „Legjobb” szellem csak valódi menet lehet: válaszd a „Legutóbbi menet” módot."
+        return tf(
+            "ui_dialogs.helpers.rides_a_szellem_a_kovetkezo_tekeresnel_a_rajtvonalon",
+            &[("rides", &rides)],
         );
     }
-    format!(
-        "{rides}, de egyik sem indult a rajtból, ezért nem lehet belőle szellem. Indíts egy menetet a rajtvonaltól, vagy válaszd az „Az útvonal ideje” módot."
+    if status.simulated == status.rides {
+        return tf(
+            "ui_dialogs.helpers.rides_de_mind_szimulalt_a_legjobb_szellem_csak_valod",
+            &[("rides", &rides)],
+        );
+    }
+    tf(
+        "ui_dialogs.helpers.rides_de_egyik_sem_indult_a_rajtbol_ezert_nem_lehet_",
+        &[("rides", &rides)],
     )
 }
 
@@ -550,7 +583,10 @@ pub fn segment_rows(comparison: &RideComparison, route: Option<&Route>) -> Vec<S
             let climb = route.and_then(|route| route.climbs.get(segment.climb));
             SegmentRow {
                 climb: segment.climb,
-                name: format!("{}. emelkedő", segment.climb + 1),
+                name: tf(
+                    "ui_dialogs.helpers.emelkedo",
+                    &[("index", &(segment.climb + 1).to_string())],
+                ),
                 range: climb.map_or_else(String::new, |climb| {
                     format!(
                         "{}–{} km",
@@ -695,10 +731,18 @@ pub fn check_api_key(key: &str) -> ApiKeyCheck {
 /// The Hungarian hint line for a key check.
 pub fn api_key_hint(check: ApiKeyCheck) -> &'static str {
     match check {
-        ApiKeyCheck::Empty => "Illeszd be a saját Google Maps API-kulcsodat. Kulcs nélkül nem jelenik meg utcakép.",
-        ApiKeyCheck::Plausible => "A kulcs alakja rendben van. Hogy valóban működik-e, az az első kérésnél derül ki.",
-        ApiKeyCheck::Unusual => "Szokatlan kulcs: a Google API-kulcsok általában „AIza” kezdetűek és 39 karakter hosszúak.",
-        ApiKeyCheck::Invalid => "A kulcs csak betűt, számot, kötőjelet és aláhúzást tartalmazhat.",
+        ApiKeyCheck::Empty => {
+            t("ui_dialogs.helpers.illeszd_be_a_sajat_google_maps_api_kulcsodat_kulcs_n")
+        }
+        ApiKeyCheck::Plausible => {
+            t("ui_dialogs.helpers.a_kulcs_alakja_rendben_van_hogy_valoban_mukodik_e_az")
+        }
+        ApiKeyCheck::Unusual => {
+            t("ui_dialogs.helpers.szokatlan_kulcs_a_google_api_kulcsok_altalaban_aiza_")
+        }
+        ApiKeyCheck::Invalid => {
+            t("ui_dialogs.helpers.a_kulcs_csak_betut_szamot_kotojelet_es_alahuzast_tar")
+        }
     }
 }
 
@@ -925,6 +969,8 @@ mod tests {
         assert_eq!(conn_label(&ConnState::Connected), "Csatlakoztatva");
         assert_eq!(conn_label(&ConnState::Failed(String::new())), "Sikertelen");
         assert_eq!(conn_chip_class(&ConnState::Connected), "chip chip--ok");
+        // every state is a pill, the idle one too (a square label looked like a button)
+        assert_eq!(conn_chip_class(&ConnState::Disconnected), "badge");
         assert_eq!(
             conn_chip_class(&ConnState::Failed("x".into())),
             "chip chip--crit"
@@ -1021,7 +1067,7 @@ mod tests {
         assert_eq!(clamp_virtual_power(-10.0), 0.0);
         assert_eq!(clamp_virtual_power(5_000.0), VIRTUAL_RIDER_MAX_W);
         assert_eq!(clamp_virtual_power(f64::NAN), 0.0);
-        for (label, watts, hint) in VIRTUAL_QUICK {
+        for (label, watts, hint) in virtual_quick() {
             assert!(!label.is_empty() && !hint.is_empty());
             assert_eq!(clamp_virtual_power(watts), watts, "{label}");
         }

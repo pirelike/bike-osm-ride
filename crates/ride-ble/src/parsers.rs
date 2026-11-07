@@ -13,6 +13,7 @@ use ftms::measurement::{
     MeasurementResistanceFormat, RawMeasurement,
 };
 use ftms::{decode_control_response, decode_features, decode_range, RangeKind, RangeOptions};
+use ride_i18n::t;
 
 use crate::merge::Field;
 use crate::vendor::cycling_ble as cble;
@@ -26,15 +27,26 @@ pub const MIN_HR_BPM: f64 = 30.0;
 pub const MAX_HR_BPM: f64 = 250.0;
 pub const MAX_SPEED_MS: f64 = 40.0;
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
-    #[error("rövid csomag")]
     Truncated,
-    #[error("felesleges bájtok a csomag végén")]
     Trailing,
-    #[error("érvénytelen csomag: {0}")]
     Invalid(&'static str),
 }
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::Truncated => f.write_str(t("ble.parsers.rovid_csomag")),
+            ParseError::Trailing => f.write_str(t("ble.parsers.felesleges_bajtok_a_csomag_vegen")),
+            ParseError::Invalid(reason) => {
+                write!(f, "{}: {reason}", t("ble.parsers.ervenytelen_csomag_0"))
+            }
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
 
 impl From<cble::ParseError> for ParseError {
     fn from(_: cble::ParseError) -> Self {

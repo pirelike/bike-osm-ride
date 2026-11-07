@@ -20,6 +20,7 @@ use ride_ui_kit::{Toast, ToastKind};
 use crate::dock::{Availability, Divider, Dock, DropTarget, PanelId, Workspace};
 use crate::guard::guarded;
 use crate::hooks::Hooks;
+use ride_i18n::t;
 
 /// At most this many toasts are visible at once; the oldest one is dropped.
 const MAX_TOASTS: usize = 4;
@@ -60,6 +61,9 @@ impl Boot {
         let hooks = Hooks::from_env();
         let mut settings =
             guarded("store::load_settings", ride_route::store::load_settings).unwrap_or_default();
+        // The language has to be in force before the first label is rendered. `RIDE_LANG` wins
+        // over the stored setting (the CDP/screenshot scripts use it).
+        ride_i18n::init(&settings.ui.language);
         let mut hook_ui: Option<HookUi> = None;
         if hooks.theme.is_some() || hooks.workout.is_some() {
             let mut h = HookUi {
@@ -422,10 +426,10 @@ pub fn apply_slot(
 pub fn kind_label(kind: DeviceKind) -> &'static str {
     match kind {
         DeviceKind::Trainer => "Trainer",
-        DeviceKind::HeartRate => "Pulzusmérő",
-        DeviceKind::PowerMeter => "Teljesítménymérő",
-        DeviceKind::Cadence => "Cadence-szenzor",
-        DeviceKind::Shifter => "Váltó",
+        DeviceKind::HeartRate => t("app.state.pulzusmero"),
+        DeviceKind::PowerMeter => t("app.state.teljesitmenymero"),
+        DeviceKind::Cadence => t("app.state.kadenciaszenzor"),
+        DeviceKind::Shifter => t("app.dock.valto"),
     }
 }
 
@@ -572,7 +576,7 @@ mod tests {
     #[test]
     fn kind_labels_are_hungarian() {
         assert_eq!(kind_label(DeviceKind::HeartRate), "Pulzusmérő");
-        assert_eq!(kind_label(DeviceKind::Cadence), "Cadence-szenzor");
+        assert_eq!(kind_label(DeviceKind::Cadence), "Kadenciaszenzor");
         assert_eq!(kind_label(DeviceKind::Shifter), "Váltó");
     }
 }

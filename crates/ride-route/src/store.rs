@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ride_i18n::t;
 use ride_model::{RecentRoute, Route, Settings, Workout};
 
 const APP_DIR: &str = "bike-osm-ride";
@@ -116,7 +117,7 @@ pub(crate) fn valid_id(id: &str) -> bool {
 pub(crate) fn invalid_id() -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidInput,
-        "Érvénytelen útvonal-azonosító.",
+        t("route.store.ervenytelen_utvonal_azonosito"),
     )
 }
 

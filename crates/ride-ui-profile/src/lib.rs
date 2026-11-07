@@ -27,6 +27,7 @@ use ride_model::{
 use ride_ui_kit::color::ink_on;
 use ride_ui_kit::format::{fmt_delta_s, fmt_grade, fmt_km, fmt_m};
 
+use ride_i18n::{t, tf};
 use ride_ui_kit::palette;
 use ride_ui_kit::{Icon, IconName, Segmented};
 
@@ -201,14 +202,14 @@ fn ViewSwitch(view: ProfileView, on_view: EventHandler<ProfileView>) -> Element 
     rsx! {
         Segmented {
             options: vec![
-                ("elevation".to_string(), "Magasság".to_string()),
-                ("workout".to_string(), "Edzés".to_string()),
+                ("elevation".to_string(), t("ui_profile.magassag").to_string()),
+                ("workout".to_string(), t("ui_profile.edzes").to_string()),
             ],
             value: if view == ProfileView::Workout { "workout".to_string() } else { "elevation".to_string() },
             on_change: move |value: String| {
                 on_view.call(if value == "workout" { ProfileView::Workout } else { ProfileView::Elevation });
             },
-            aria_label: "A panel tartalma".to_string(),
+            aria_label: t("ui_profile.a_panel_tartalma").to_string(),
             small: true,
         }
     }
@@ -323,14 +324,14 @@ pub fn ElevationProfile(
 
     let Some(route_ref) = route_v else {
         return profile_placeholder(
-            "Nincs betöltött útvonal",
-            "Nyiss meg egy GPX-fájlt vagy illessz be egy bikerouter-linket.",
+            t("ui_profile.nincs_betoltott_utvonal"),
+            t("ui_profile.nyiss_meg_egy_gpx_fajlt_vagy_illessz_be_egy_bikerout"),
         );
     };
     if route_ref.points.len() < 2 {
         return profile_placeholder(
-            "Nincs mit kirajzolni",
-            "Az útvonal nem tartalmaz elég pontot a magassági profilhoz.",
+            t("ui_profile.nincs_mit_kirajzolni"),
+            t("ui_profile.az_utvonal_nem_tartalmaz_eleg_pontot_a_magassagi_pro"),
         );
     }
 
@@ -441,11 +442,13 @@ pub fn ElevationProfile(
             .map(|seg| seg.name.clone())
     });
 
-    let summary = format!(
-        "Magassági profil: {} km, {} m szintemelkedés, {} emelkedő.",
-        fmt_km(total),
-        fmt_m(route_ref.ascent),
-        route_ref.climbs.len()
+    let summary = tf(
+        "ui_profile.magassagi_profil_km_m_szintemelkedes_emelkedo",
+        &[
+            ("km", &fmt_km(total)),
+            ("gain", &fmt_m(route_ref.ascent)),
+            ("climbs", &route_ref.climbs.len().to_string()),
+        ],
     );
     let no_elevation = !route_ref.has_elevation;
 
@@ -460,17 +463,17 @@ pub fn ElevationProfile(
             div { class: if pages.is_some() { "profile-head profile-head--pages" } else { "profile-head" },
                 div { class: "profile-readout",
                     if let Some((_, d, ele, grade)) = hover_info {
-                        Pair { label: "Táv".to_string(), value: fmt_km(d), unit: "km".to_string() }
-                        Pair { label: "Magasság".to_string(), value: fmt_m(ele), unit: "m".to_string() }
-                        Pair { label: "Meredekség".to_string(), value: fmt_grade(grade), unit: "%".to_string() }
+                        Pair { label: t("ui_profile.tav").to_string(), value: fmt_km(d), unit: "km".to_string() }
+                        Pair { label: t("ui_profile.magassag").to_string(), value: fmt_m(ele), unit: "m".to_string() }
+                        Pair { label: t("ui_profile.meredekseg").to_string(), value: fmt_grade(grade), unit: "%".to_string() }
                     } else {
                         Pair {
-                            label: "Táv".to_string(),
+                            label: t("ui_profile.tav").to_string(),
                             value: format!("{} / {}", fmt_km(dist), fmt_km(total)),
                             unit: "km".to_string(),
                         }
                         Pair {
-                            label: "Szint".to_string(),
+                            label: t("ui_profile.szint").to_string(),
                             value: if show_rider {
                                 format!("+{} / {}", fmt_m(snap.ascent_done.max(0.0)), fmt_m(route_ref.ascent))
                             } else {
@@ -479,25 +482,25 @@ pub fn ElevationProfile(
                             unit: "m".to_string(),
                         }
                         if mode_v == ProfileMode::Lookahead {
-                            Pair { label: "Ablak".to_string(), value: fmt_km(d1 - d0), unit: "km".to_string() }
+                            Pair { label: t("ui_profile.ablak").to_string(), value: fmt_km(d1 - d0), unit: "km".to_string() }
                         }
                         if let Some((name, left)) = live_segment.clone() {
                             Pair {
                                 label: format!("Szegmens: {name}"),
                                 value: fmt_km(left.max(0.0)),
-                                unit: "km hátra".to_string(),
+                                unit: t("ui_profile.km_hatra").to_string(),
                             }
                         }
                         if let Some(delta) = ghost_delta {
                             Pair {
-                                label: "Szellem".to_string(),
+                                label: t("ui_profile.szellem").to_string(),
                                 value: fmt_delta_s(delta),
                                 unit: "s".to_string(),
                                 tone: delta_tone(delta).to_string(),
                             }
                         }
                         if no_elevation {
-                            span { class: "tag profile-readout-note", "Nincs magassági adat" }
+                            span { class: "tag profile-readout-note", {t("ui_profile.nincs_magassagi_adat")} }
                         }
                     }
                 }
@@ -507,14 +510,14 @@ pub fn ElevationProfile(
                     div { class: "profile-switches",
                         Segmented {
                             options: vec![
-                                ("full".to_string(), "Teljes".to_string()),
-                                ("lookahead".to_string(), "Előretekintés".to_string()),
+                                ("full".to_string(), t("ui_profile.teljes").to_string()),
+                                ("lookahead".to_string(), t("ui_profile.eloretekintes").to_string()),
                             ],
                             value: if mode_v == ProfileMode::Full { "full".to_string() } else { "lookahead".to_string() },
                             on_change: move |value: String| {
                                 on_mode.call(if value == "full" { ProfileMode::Full } else { ProfileMode::Lookahead });
                             },
-                            aria_label: "Profil nézet".to_string(),
+                            aria_label: t("ui_profile.profil_nezet").to_string(),
                             small: true,
                         }
                         if let Some(on_view) = on_view {
@@ -525,7 +528,7 @@ pub fn ElevationProfile(
             }
             div { class: "profile-plot", role: "img", "aria-label": "{summary}",
                 if segments == 0 {
-                    div { class: "profile-plot-note", "Nincs kirajzolható szakasz." }
+                    div { class: "profile-plot-note", {t("ui_profile.nincs_kirajzolhato_szakasz")} }
                 }
                 svg {
                     class: "profile-svg",
@@ -595,9 +598,9 @@ pub fn ElevationProfile(
                     div {
                         class: "profile-ghost",
                         style: "left: clamp(5px, {pct_text(scale.pct(ghost.dist))}, calc(100% - 5px)); top: clamp(5px, {pct_text(y_pct(route_ref.locate(ghost.dist).ele))}, calc(100% - 5px))",
-                        title: "Szellem",
+                        title: t("ui_profile.szellem").to_string(),
                         role: "img",
-                        "aria-label": "Szellem",
+                        "aria-label": t("ui_profile.szellem"),
                     }
                 }
                 if let Some((frac, d, ele, grade)) = hover_info {
@@ -609,20 +612,20 @@ pub fn ElevationProfile(
                         class: if frac > TIP_FLIP_FRAC { "tip profile-tip profile-tip--flip" } else { "tip profile-tip" },
                         style: "left: {pct_text(frac * 100.0)}",
                         div { class: "profile-tip-row",
-                            span { class: "profile-tip-label", "Táv" }
+                            span { class: "profile-tip-label", {t("ui_profile.tav")} }
                             span { class: "profile-tip-value", "{fmt_km(d)} km" }
                         }
                         div { class: "profile-tip-row",
-                            span { class: "profile-tip-label", "Magasság" }
+                            span { class: "profile-tip-label", {t("ui_profile.magassag")} }
                             span { class: "profile-tip-value", "{fmt_m(ele)} m" }
                         }
                         div { class: "profile-tip-row",
-                            span { class: "profile-tip-label", "Meredekség" }
+                            span { class: "profile-tip-label", {t("ui_profile.meredekseg")} }
                             span { class: "profile-tip-value", "{fmt_grade(grade)} %" }
                         }
                         if let Some(name) = &hover_segment {
                             div { class: "profile-tip-row profile-tip-row--seg",
-                                span { class: "profile-tip-label", "Szegmens" }
+                                span { class: "profile-tip-label", {t("ui_profile.szegmens")} }
                                 span { class: "profile-tip-seg", "{name}" }
                             }
                         }
@@ -713,7 +716,7 @@ pub fn ElevationProfile(
 /// Neutral placeholder of an unavailable profile.
 fn profile_placeholder(title: &'static str, hint: &'static str) -> Element {
     rsx! {
-        div { class: "profile profile--empty", "aria-label": "Magassági profil",
+        div { class: "profile profile--empty", "aria-label": t("ui_profile.magassagi_profil"),
             div { class: "profile-empty",
                 Icon { name: IconName::Mountain, size: 24 }
                 span { class: "profile-empty-title", "{title}" }
@@ -777,7 +780,7 @@ pub fn LiveChart(
                         span { class: "profile-chart-unit", "{metric.unit()}" }
                     }
                 }
-                div { class: "profile-chart-empty", "Még nincs adat a grafikonon." }
+                div { class: "profile-chart-empty", {t("ui_profile.meg_nincs_adat_a_grafikonon")} }
             }
         };
     }
@@ -816,15 +819,21 @@ pub fn LiveChart(
         (frac, text)
     });
 
-    let summary = format!(
-        "{} grafikon, az utolsó {} – {}.",
-        metric.title(),
-        series::window_caption(window),
-        if geo.is_empty() {
-            "még nincs elég adat".to_string()
-        } else {
-            format!("jelenleg {} {}", metric.value_text(last), metric.unit())
-        }
+    let now_text = if geo.is_empty() {
+        t("ui_profile.meg_nincs_eleg_adat").to_string()
+    } else {
+        tf(
+            "ui_profile.jelenleg",
+            &[("value", &metric.value_text(last)), ("unit", metric.unit())],
+        )
+    };
+    let summary = tf(
+        "ui_profile.grafikon_az_utolso",
+        &[
+            ("metric", metric.title()),
+            ("window", &series::window_caption(window)),
+            ("now", &now_text),
+        ],
     );
 
     rsx! {
@@ -885,7 +894,7 @@ pub fn LiveChart(
                     }
                 }
                 if geo.is_empty() {
-                    div { class: "profile-chart-note", "Gyűlnek az adatok…" }
+                    div { class: "profile-chart-note", {t("ui_profile.gyulnek_az_adatok")} }
                 }
                 if let Some((frac, _)) = &hover_info {
                     div {

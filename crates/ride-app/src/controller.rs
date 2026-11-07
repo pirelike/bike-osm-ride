@@ -38,6 +38,7 @@ use crate::paths;
 use crate::ride_core::{step_dt, FinishedRide, Output, RideCore};
 use crate::state::{apply_slot, boot, kind_label, AppState, DialogKind};
 use crate::wake;
+use ride_i18n::{t, tf};
 use ride_route::rides as ride_log;
 use ride_sim::ghost::GhostSet;
 
@@ -113,21 +114,33 @@ pub fn state_change_toast(
         ConnState::Connected if *prev != ConnState::Connected => Some((
             ToastKind::Success,
             match name {
-                Some(n) if !n.is_empty() => format!("{label} csatlakoztatva: {n}"),
-                _ => format!("{label} csatlakoztatva"),
+                Some(n) if !n.is_empty() => tf(
+                    "app.controller.label_csatlakoztatva_name",
+                    &[("label", label), ("name", n)],
+                ),
+                _ => tf("app.controller.label_csatlakoztatva", &[("label", label)]),
             },
         )),
         ConnState::Failed(reason) if prev != new => Some((
             ToastKind::Error,
             if reason.trim().is_empty() {
-                format!("{label}: a kapcsolódás nem sikerült")
+                tf(
+                    "app.controller.label_a_kapcsolodas_nem_sikerult",
+                    &[("label", label)],
+                )
             } else {
-                format!("{label}: a kapcsolódás nem sikerült ({reason})")
+                tf(
+                    "app.controller.label_a_kapcsolodas_nem_sikerult_reason",
+                    &[("label", label), ("reason", reason)],
+                )
             },
         )),
         ConnState::Disconnected if *prev == ConnState::Connected && !expected_disconnect => Some((
             ToastKind::Warning,
-            format!("{label}: megszakadt a kapcsolat"),
+            tf(
+                "app.controller.label_megszakadt_a_kapcsolat",
+                &[("label", label)],
+            ),
         )),
         _ => None,
     }
@@ -135,11 +148,13 @@ pub fn state_change_toast(
 
 /// "Útvonal betöltve: Name – 24.10 km, 312 m emelkedő"
 pub fn route_loaded_text(route: &Route) -> String {
-    format!(
-        "Útvonal betöltve: {} – {} km, {} m emelkedő",
-        route.name,
-        fmt_km(route.total_dist),
-        fmt_m(route.ascent)
+    tf(
+        "app.controller.utvonal_betoltve_km_m_emelkedo",
+        &[
+            ("name", &route.name),
+            ("km", &fmt_km(route.total_dist)),
+            ("gain", &fmt_m(route.ascent)),
+        ],
     )
 }
 
@@ -301,7 +316,10 @@ impl Controller {
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         if let Some(update) = crate::updater::check().await {
             let mut slot = self.st.update;
-            let text = format!("Elérhető az új verzió: {}.", update.version);
+            let text = tf(
+                "app.controller.elerheto_az_uj_verzio",
+                &[("version", &update.version)],
+            );
             slot.set(Some(update));
             self.st.toast(ToastKind::Info, text);
         }
@@ -332,7 +350,10 @@ impl Controller {
             }
             self.st.toast(
                 ToastKind::Info,
-                format!("Töltsd le és telepítsd az új APK-t: {url}"),
+                tf(
+                    "app.controller.toltsd_le_es_telepitsd_az_uj_apk_t_url",
+                    &[("url", &url)],
+                ),
             );
         }
         #[cfg(not(target_os = "android"))]
@@ -361,7 +382,10 @@ impl Controller {
             updating.set(true);
             self.st.toast(
                 ToastKind::Info,
-                format!("A {} letöltése folyamatban…", update.version),
+                tf(
+                    "app.controller.a_letoltese_folyamatban",
+                    &[("version", &update.version)],
+                ),
             );
             spawn(async move {
                 match crate::updater::install(&update, platform).await {
@@ -371,14 +395,19 @@ impl Controller {
                             Ok(_) => std::process::exit(0),
                             Err(_) => self.st.toast(
                                 ToastKind::Success,
-                                "A frissítés telepítve; indítsd újra az alkalmazást.",
+                                t("app.controller.a_frissites_telepitve_inditsd_ujra_az_alkalmazast"),
                             ),
                         }
                     }
                     Err(err) => {
                         updating.set(false);
-                        self.st
-                            .toast(ToastKind::Error, format!("A frissítés nem sikerült: {err}"));
+                        self.st.toast(
+                            ToastKind::Error,
+                            tf(
+                                "app.controller.a_frissites_nem_sikerult_err",
+                                &[("err", &err.to_string())],
+                            ),
+                        );
                     }
                 }
             });
@@ -468,7 +497,10 @@ impl Controller {
         if let Err(err) = crate::android_picker::pick_gpx() {
             self.st.toast(
                 ToastKind::Error,
-                format!("A fájlválasztó nem nyílt meg: {err}"),
+                tf(
+                    "app.controller.a_fajlvalaszto_nem_nyilt_meg_err",
+                    &[("err", &err.to_string())],
+                ),
             );
         }
     }
@@ -486,9 +518,9 @@ impl Controller {
         };
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
-                .set_title("GPX-útvonal megnyitása")
-                .add_filter("GPX-útvonal", &["gpx"])
-                .add_filter("Minden fájl", &["*"])
+                .set_title(t("app.controller.gpx_utvonal_megnyitasa"))
+                .add_filter(t("app.controller.gpx_utvonal"), &["gpx"])
+                .add_filter(t("app.controller.backup.minden_fajl"), &["*"])
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
@@ -522,9 +554,12 @@ impl Controller {
         };
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
-                .set_title("Edzés importálása")
-                .add_filter("MyWhoosh / Zwift edzés", &["xml", "zwo", "json"])
-                .add_filter("Minden fájl", &["*"])
+                .set_title(t("app.controller.edzes_importalasa"))
+                .add_filter(
+                    t("app.controller.mywhoosh_zwift_edzes"),
+                    &["xml", "zwo", "json"],
+                )
+                .add_filter(t("app.controller.backup.minden_fajl"), &["*"])
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
@@ -538,18 +573,18 @@ impl Controller {
     /// Android has no native file dialog (see [`Controller::pick_file`]).
     #[cfg(target_os = "android")]
     pub fn import_workout(self) {
-        self.st.toast(
-            ToastKind::Info,
-            "Androidon az edzésimport még nem elérhető.",
-        );
+        self.st.toast(ToastKind::Info, {
+            t("app.controller.review.androidon_az_edzesimport_meg_nem_elerheto")
+        });
     }
 
     /// Imports a bikerouter.de link (or raw BRouter URL).
     pub fn load_link(self, link: String) {
         let link = link.trim().to_string();
         if link.is_empty() {
-            self.st
-                .welcome_error_set(Some("Illessz be egy bikerouter-linket.".to_string()));
+            self.st.welcome_error_set(Some(
+                t("app.controller.illessz_be_egy_bikerouter_linket").to_string(),
+            ));
             return;
         }
         spawn(async move {
@@ -565,7 +600,9 @@ impl Controller {
             }
             match guarded("demo_route", ride_route::demo_route) {
                 Ok(route) => i.install_route(route),
-                Err(_) => i.fail_load("A bemutató útvonal most nem érhető el.".to_string()),
+                Err(_) => i.fail_load(
+                    t("app.controller.a_bemutato_utvonal_most_nem_erheto_el").to_string(),
+                ),
             }
         });
     }
@@ -579,12 +616,14 @@ impl Controller {
                 Ok(Some(route)) => i.install_route(route),
                 Ok(None) => {
                     i.fail_load(
-                        "Ez az útvonal már nem érhető el, ezért eltávolítottuk a listából."
+                        t("app.controller.ez_az_utvonal_mar_nem_erheto_el_ezert_eltavolitottuk")
                             .to_string(),
                     );
                     i.delete_recent(&id);
                 }
-                Err(_) => i.fail_load("A legutóbbi útvonal betöltése nem sikerült.".to_string()),
+                Err(_) => i.fail_load(
+                    t("app.controller.a_legutobbi_utvonal_betoltese_nem_sikerult").to_string(),
+                ),
             }
         });
     }
@@ -617,7 +656,7 @@ impl Controller {
             if *i.st.busy.peek() {
                 i.toast(
                     ToastKind::Info,
-                    "Egy útvonal betöltése már folyamatban van.",
+                    t("app.controller.egy_utvonal_betoltese_mar_folyamatban_van"),
                 );
                 return false;
             }
@@ -630,7 +669,8 @@ impl Controller {
         busy.set(true);
         error.set(None);
         if self.st.route.peek().is_some() {
-            self.st.toast(ToastKind::Info, "Útvonal betöltése…");
+            self.st
+                .toast(ToastKind::Info, t("app.controller.utvonal_betoltese"));
         }
         // The route pipeline may take a while on big files: run it on a worker thread.
         let joined = tokio::spawn(fut).await;
@@ -640,9 +680,9 @@ impl Controller {
             Ok(Err(err)) => self.with(|i| i.fail_load(err.to_string())),
             Err(join) => {
                 let text = if join.is_panic() {
-                    "Az útvonal feldolgozása közben belső hiba történt."
+                    t("app.controller.az_utvonal_feldolgozasa_kozben_belso_hiba_tortent")
                 } else {
-                    "Az útvonal betöltése megszakadt."
+                    t("app.controller.az_utvonal_betoltese_megszakadt")
                 };
                 self.with(|i| i.fail_load(text.to_string()));
             }
@@ -704,14 +744,14 @@ impl Controller {
         let Some(exe) = browser::firefox_path() else {
             BROWSER.lock().expect("lock").starting = false;
             note.set(Some(
-                "A Firefox nincs telepítve. Telepítsd a mozilla.org/firefox oldalról, majd nyisd meg újra ezt a panelt."
+                t("app.controller.a_firefox_nincs_telepitve_telepitsd_a_mozilla_org_fi")
                     .to_string(),
             ));
             return;
         };
         let parent = self.with(|i| parent_window(&i.win));
         let profile = paths::data_dir().join("firefox-profile");
-        note.set(Some("A Firefox indul…".to_string()));
+        note.set(Some(t("app.controller.a_firefox_indul").to_string()));
         spawn(async move {
             let before = browser::firefox_windows();
             if let Err(err) = browser::launch(&exe, &profile) {
@@ -742,7 +782,9 @@ impl Controller {
                 }
             }
             BROWSER.lock().expect("lock").starting = false;
-            note.set(Some("A Firefox ablaka nem jelent meg.".to_string()));
+            note.set(Some(
+                t("app.controller.a_firefox_ablaka_nem_jelent_meg").to_string(),
+            ));
         });
     }
 
@@ -846,7 +888,7 @@ impl Controller {
             self.update_settings(|s| s.ui.virtual_gears = true);
             self.st.toast(
                 ToastKind::Success,
-                "Zwift váltó csatlakoztatva, a virtuális váltót bekapcsoltuk.",
+                t("app.controller.zwift_valto_csatlakoztatva_a_virtualis_valtot_bekapc"),
             );
         }
         self.shift_gear(delta);
@@ -962,7 +1004,7 @@ impl Controller {
             if i.core.state() == RideState::Riding {
                 i.toast(
                     ToastKind::Warning,
-                    "Tekerés közben nem lehet edzést váltani. Előbb tarts szünetet.",
+                    t("app.controller.tekeres_kozben_nem_lehet_edzest_valtani_elobb_tarts_"),
                 );
                 return false;
             }
@@ -973,7 +1015,10 @@ impl Controller {
                     match library.get(id) {
                         Some(w) => Some(Arc::new(w.clone())),
                         None => {
-                            i.toast(ToastKind::Error, "Ez az edzés nem található.");
+                            i.toast(
+                                ToastKind::Error,
+                                t("app.controller.ez_az_edzes_nem_talalhato"),
+                            );
                             return false;
                         }
                     }
@@ -1059,7 +1104,8 @@ impl Controller {
     /// "Mentés TCX-ként": native save dialog, then the file is written.
     pub fn save_tcx(self) {
         let Some(finished) = self.with(|i| i.finished.clone()) else {
-            self.st.toast(ToastKind::Warning, "Nincs mentendő túra.");
+            self.st
+                .toast(ToastKind::Warning, t("app.controller.nincs_mentendo_tura"));
             return;
         };
         if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
@@ -1079,13 +1125,15 @@ impl Controller {
             });
             let Ok((xml, suggested)) = rendered else {
                 self.with(|i| i.file_dialog_open = false);
-                self.st
-                    .toast(ToastKind::Error, "A TCX-fájl előállítása nem sikerült.");
+                self.st.toast(
+                    ToastKind::Error,
+                    t("app.controller.a_tcx_fajl_eloallitasa_nem_sikerult"),
+                );
                 return;
             };
             #[cfg(not(target_os = "android"))]
             let picked = rfd::AsyncFileDialog::new()
-                .set_title("Túra mentése TCX-fájlként")
+                .set_title(t("app.controller.tura_mentese_tcx_fajlkent"))
                 .set_file_name(suggested)
                 .add_filter("TCX (Garmin)", &["tcx"])
                 .set_parent(&*win.window)
@@ -1106,8 +1154,13 @@ impl Controller {
                     Err(err) => Err(err),
                 };
                 if let Err(err) = written {
-                    self.st
-                        .toast(ToastKind::Error, format!("A mentés nem sikerült: {err}"));
+                    self.st.toast(
+                        ToastKind::Error,
+                        tf(
+                            "app.controller.a_mentes_nem_sikerult_err",
+                            &[("err", &err.to_string())],
+                        ),
+                    );
                     return;
                 }
                 if let Err(err) = crate::android_picker::save_file(
@@ -1118,7 +1171,10 @@ impl Controller {
                     let _ = tokio::fs::remove_file(&path).await;
                     self.st.toast(
                         ToastKind::Error,
-                        format!("A fájlválasztó nem nyílt meg: {err}"),
+                        tf(
+                            "app.controller.a_fajlvalaszto_nem_nyilt_meg_err",
+                            &[("err", &err.to_string())],
+                        ),
                     );
                 }
             }
@@ -1135,11 +1191,18 @@ impl Controller {
                             .file_name()
                             .map(|n| n.to_string_lossy().into_owned())
                             .unwrap_or_default();
-                        self.st.toast(ToastKind::Success, format!("Mentve: {name}"));
+                        self.st.toast(
+                            ToastKind::Success,
+                            tf("app.controller.mentve_name", &[("name", &name)]),
+                        );
                     }
-                    Err(err) => self
-                        .st
-                        .toast(ToastKind::Error, format!("A mentés nem sikerült: {err}")),
+                    Err(err) => self.st.toast(
+                        ToastKind::Error,
+                        tf(
+                            "app.controller.a_mentes_nem_sikerult_err",
+                            &[("err", &err.to_string())],
+                        ),
+                    ),
                 }
             }
         });
@@ -1172,12 +1235,15 @@ impl Inner {
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "edzés".to_string());
+            .unwrap_or_else(|| t("app.controller.review.edzes").to_string());
         let bytes = match std::fs::read(&path) {
             Ok(bytes) => bytes,
             Err(err) => {
                 eprintln!("[ride-app] workout import: {err}");
-                self.toast(ToastKind::Error, "A fájlt nem sikerült megnyitni.");
+                self.toast(
+                    ToastKind::Error,
+                    t("app.controller.review.a_fajlt_nem_sikerult_megnyitni"),
+                );
                 return;
             }
         };
@@ -1190,7 +1256,10 @@ impl Inner {
         };
         if let Err(err) = ride_route::store::Store::default_location().save_workout(&workout) {
             eprintln!("[ride-app] save_workout: {err}");
-            self.toast(ToastKind::Error, "Az edzést nem sikerült elmenteni.");
+            self.toast(
+                ToastKind::Error,
+                t("app.controller.az_edzest_nem_sikerult_elmenteni"),
+            );
             return;
         }
         let mut imported = self.st.imported_workouts.peek().clone();
@@ -1201,12 +1270,15 @@ impl Inner {
         signal.set(imported);
         self.toast(
             ToastKind::Success,
-            format!(
-                "„{}” importálva: {} blokk, {} perc.",
-                workout.name,
-                workout.steps.len(),
-                workout.total_seconds() / 60
-            ),
+            tf(
+                "app.controller.importalva_blokk_perc",
+                &[
+                    ("name", &workout.name),
+                    ("blocks", &workout.steps.len().to_string()),
+                    ("minutes", &(workout.total_seconds() / 60).to_string()),
+                ],
+            )
+            .to_string(),
         );
     }
 
@@ -1236,7 +1308,7 @@ impl Inner {
             Err(_) => {
                 self.toast(
                     ToastKind::Error,
-                    "A Bluetooth-szolgáltatás nem indult el, ezért eszközök most nem csatlakoztathatók.",
+                    t("app.controller.a_bluetooth_szolgaltatas_nem_indult_el_ezert_eszkozo"),
                 );
                 None
             }
@@ -1248,7 +1320,7 @@ impl Inner {
         if !std::mem::replace(&mut self.hub_lost_notified, true) {
             self.toast(
                 ToastKind::Error,
-                "A szenzorkezelő leállt. Indítsd újra az alkalmazást az eszközök használatához.",
+                t("app.controller.a_szenzorkezelo_leallt_inditsd_ujra_az_alkalmazast_a"),
             );
         }
     }
@@ -1294,7 +1366,7 @@ impl Inner {
             scanning.set(false);
             self.toast(
                 ToastKind::Warning,
-                "A Bluetooth-szolgáltatás nem érhető el.",
+                t("app.controller.a_bluetooth_szolgaltatas_nem_erheto_el"),
             );
             return None;
         }
@@ -1410,7 +1482,7 @@ impl Inner {
                 if self.core.workout().is_some() && !self.trainer_controllable() {
                     self.toast(
                         ToastKind::Warning,
-                        "Az edzés célwattját nincs mire küldeni: nincs Trainer szerepben csatlakoztatott okos trainer. Az Eszközök ablakban a trainert Trainer szerepben csatlakoztasd (a teljesítménymérő szerep csak adatot olvas).",
+                        t("app.controller.az_edzes_celwattjat_nincs_mire_kuldeni_nincs_trainer"),
                     );
                 }
                 let out = self.core.start(unix_now(), Instant::now());
@@ -1426,7 +1498,10 @@ impl Inner {
                 let mut dialog = self.st.dialog;
                 dialog.set(Some(DialogKind::Summary));
             }
-            RideState::Empty => self.toast(ToastKind::Info, "Először válassz egy útvonalat."),
+            RideState::Empty => self.toast(
+                ToastKind::Info,
+                t("app.controller.eloszor_valassz_egy_utvonalat"),
+            ),
         }
     }
 
@@ -1482,7 +1557,7 @@ impl Inner {
         if failure.is_some() {
             self.toast(
                 ToastKind::Error,
-                "A szimuláció belső hiba miatt leállt. Töltsd be újra az útvonalat.",
+                t("app.controller.a_szimulacio_belso_hiba_miatt_leallt_toltsd_be_ujra_"),
             );
             self.drop_route_signals();
         }
@@ -1509,7 +1584,7 @@ impl Inner {
         if workout_finished {
             self.toast(
                 ToastKind::Success,
-                "Az edzés véget ért, a trainer ismét a terepet követi.",
+                t("app.controller.az_edzes_veget_ert_a_trainer_ismet_a_terepet_koveti"),
             );
         }
         if let Some(finished) = finished {
@@ -1531,9 +1606,9 @@ impl Inner {
         self.toast(
             ToastKind::Success,
             if reached_end {
-                "Célba értél! Nézd meg az összegzést."
+                t("app.controller.celba_ertel_nezd_meg_az_osszegzest")
             } else {
-                "A túra véget ért. Nézd meg az összegzést."
+                t("app.controller.a_tura_veget_ert_nezd_meg_az_osszegzest")
             },
         );
         self.store_finished_ride(finished);
@@ -1587,28 +1662,28 @@ impl Inner {
                         Ok(Some(meta)) => ctl.st.toast(
                             ToastKind::Success,
                             if meta.simulated {
-                                "Menet elmentve a tekerés-naplóba. Szimulált menet: nem lesz PR és nem lehet Legjobb szellem."
+                                t("app.controller.menet_elmentve_a_tekeres_naploba_szimulalt_menet_nem")
                             } else {
-                                "Menet elmentve a tekerés-naplóba: a következő menetnél már szellemként megy előtted."
+                                t("app.controller.menet_elmentve_a_tekeres_naploba_a_kovetkezo_menetne")
                             },
                         ),
                         // Too short to keep: say so, otherwise the missing ghost looks broken.
                         Ok(None) => ctl.st.toast(
                             ToastKind::Info,
-                            "A menet rövid volt a naplózáshoz (legalább 1 perc és 200 m kell), ezért nem lesz belőle szellem.",
+                            t("app.controller.a_menet_rovid_volt_a_naplozashoz_legalabb_1_perc_es_"),
                         ),
                         Err(err) => {
                             eprintln!("[ride-app] save_ride: {err}");
                             ctl.st.toast(
                                 ToastKind::Warning,
-                                "A menetet nem sikerült a tekerés-naplóba menteni.",
+                                t("app.controller.a_menetet_nem_sikerult_a_tekeres_naploba_menteni"),
                             );
                         }
                     }
                 }
                 Err(_) => ctl.st.toast(
                     ToastKind::Warning,
-                    "A menetet nem sikerült a tekerés-naplóba menteni.",
+                    t("app.controller.a_menetet_nem_sikerult_a_tekeres_naploba_menteni"),
                 ),
             }
             // The next ride should see the PRs and the ghost of the ride that just ended.
@@ -1683,7 +1758,7 @@ impl Inner {
         if matches!(self.core.state(), RideState::Riding | RideState::Paused) {
             self.toast(
                 ToastKind::Warning,
-                "Tekerés közben nem lehet útvonalat váltani. Előbb fejezd be a túrát.",
+                t("app.controller.tekeres_kozben_nem_lehet_utvonalat_valtani_elobb_fej"),
             );
             return false;
         }
@@ -1737,12 +1812,13 @@ impl Inner {
                 if !route.has_elevation {
                     self.toast(
                         ToastKind::Warning,
-                        "Ehhez az útvonalhoz nincs magassági adat, ezért a profil lapos.",
+                        t("app.controller.ehhez_az_utvonalhoz_nincs_magassagi_adat_ezert_a_pro"),
                     );
                 }
             }
             Err(_) => self.fail_load(
-                "Ezzel az útvonallal nem sikerült elindítani a szimulációt.".to_string(),
+                t("app.controller.ezzel_az_utvonallal_nem_sikerult_elinditani_a_szimul")
+                    .to_string(),
             ),
         }
     }
@@ -1792,7 +1868,7 @@ impl Inner {
                 eprintln!("[ride-app] save_recent: {err}");
                 self.toast(
                     ToastKind::Warning,
-                    "Az útvonalat nem sikerült a legutóbbiak közé menteni.",
+                    t("app.controller.az_utvonalat_nem_sikerult_a_legutobbiak_koze_menteni"),
                 );
             }
             Err(_) => {}
@@ -1816,7 +1892,7 @@ impl Inner {
                 eprintln!("[ride-app] delete_recent: {err}");
                 self.toast(
                     ToastKind::Warning,
-                    "Az útvonalat nem sikerült törölni a listából.",
+                    t("app.controller.az_utvonalat_nem_sikerult_torolni_a_listabol"),
                 );
             }
             Err(_) => {}
@@ -1886,9 +1962,15 @@ impl Inner {
             Ok(Ok(())) => self.saved = disk,
             Ok(Err(err)) => {
                 eprintln!("[ride-app] save_settings: {err}");
-                self.toast(ToastKind::Error, "A beállításokat nem sikerült elmenteni.");
+                self.toast(
+                    ToastKind::Error,
+                    t("app.controller.a_beallitasokat_nem_sikerult_elmenteni"),
+                );
             }
-            Err(_) => self.toast(ToastKind::Error, "A beállításokat nem sikerült elmenteni."),
+            Err(_) => self.toast(
+                ToastKind::Error,
+                t("app.controller.a_beallitasokat_nem_sikerult_elmenteni"),
+            ),
         }
     }
 

@@ -6,9 +6,9 @@ license.workspace = true
 description = "Cycling physics, ride engine, statistics, recorder and TCX export"
 
 [dependencies]
+ride-i18n = { workspace = true }
 ride-model = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
 # Workout import (MyWhoosh / Zwift files): an XML schema and a JSON export.
 quick-xml = "0.42"
 serde_json = { workspace = true }

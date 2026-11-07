@@ -14,7 +14,7 @@
   <img alt="Licenc: MIT vagy Apache-2.0" src="https://img.shields.io/badge/licenc-MIT%20OR%20Apache--2.0-blue">
   <img alt="Platformok" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-informational">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-2021-orange?logo=rust&logoColor=white">
-  <img alt="Felület: magyar" src="https://img.shields.io/badge/felület-magyar-brightgreen">
+  <img alt="Felület: magyar, angol, spanyol, portugál, német, olasz és kínai" src="https://img.shields.io/badge/felület-magyar%20%7C%20angol%20%7C%20spanyol%20%7C%20portug%C3%A1l%20%7C%20n%C3%A9met%20%7C%20olasz%20%7C%20k%C3%ADnai-brightgreen">
 </p>
 
 <p align="center">
@@ -24,7 +24,41 @@
 > **In English:** bike-osm-ride is a free, open-source (MIT OR Apache-2.0) virtual-cycling app written in Rust. Load any
 > GPX file or a [bikerouter.de](https://bikerouter.de) link, ride it on a 2D map with an elevation profile while a
 > Bluetooth LE smart trainer follows the hills (or a built-in simulated rider pedals), run structured ERG workouts,
-> race your own ghost and export TCX. Windows, Linux, macOS and Android. **The interface is Hungarian only** (for now).
+> race your own ghost and export TCX. Windows, Linux, macOS and Android. **The interface speaks Hungarian, English,
+> Spanish, Portuguese, German, Italian and Chinese.**
+>
+> [English README](docs/i18n/en/README.md) · [user guide](docs/i18n/en/USER_GUIDE.md) ·
+> [privacy](docs/i18n/en/PRIVACY.md) · *Settings → Appearance → Language*.
+>
+> **En español:** la aplicación está traducida al español: [README en español](docs/i18n/es/README.md) ·
+> [manual del usuario](docs/i18n/es/USER_GUIDE.md) · [privacidad](docs/i18n/es/PRIVACY.md) ·
+> *Ajustes → Apariencia → Idioma*.
+>
+> **Em português:** a aplicação está traduzida para português: [README em português](docs/i18n/pt/README.md) ·
+> [manual do utilizador](docs/i18n/pt/USER_GUIDE.md) · [privacidade](docs/i18n/pt/PRIVACY.md) ·
+> *Definições → Aspeto → Idioma*.
+>
+> **Auf Deutsch:** Die App ist auf Deutsch übersetzt: [README auf Deutsch](docs/i18n/de/README.md) ·
+> [Benutzerhandbuch](docs/i18n/de/USER_GUIDE.md) · [Datenschutz](docs/i18n/de/PRIVACY.md) ·
+> *Einstellungen → Erscheinungsbild → Sprache*.
+>
+> **In italiano:** L'app è tradotta in italiano: [README in italiano](docs/i18n/it/README.md) ·
+> [guida dell'utente](docs/i18n/it/USER_GUIDE.md) · [privacy](docs/i18n/it/PRIVACY.md) ·
+> *Impostazioni → Aspetto → Lingua*.
+>
+> **中文：** 本应用已翻译成简体中文：[中文 README](docs/i18n/zh/README.md) ·
+> [用户指南](docs/i18n/zh/USER_GUIDE.md) · [隐私与网络流量](docs/i18n/zh/PRIVACY.md) ·
+> *设置 → 外观 → 语言*。
+
+**Nyelv / Language / Idioma:** magyar · [English](docs/i18n/en/README.md) · [Español](docs/i18n/es/README.md) ·
+[Português](docs/i18n/pt/README.md) · [Deutsch](docs/i18n/de/README.md) · [Italiano](docs/i18n/it/README.md) ·
+[中文](docs/i18n/zh/README.md) —
+[Kézikönyv](docs/USER_GUIDE.md) / [User guide](docs/i18n/en/USER_GUIDE.md) / [Manual](docs/i18n/es/USER_GUIDE.md) /
+[Manual (pt)](docs/i18n/pt/USER_GUIDE.md) / [Handbuch](docs/i18n/de/USER_GUIDE.md) /
+[Guida](docs/i18n/it/USER_GUIDE.md) / [用户指南](docs/i18n/zh/USER_GUIDE.md) ·
+[Adatvédelem](docs/PRIVACY.md) / [Privacy](docs/i18n/en/PRIVACY.md) / [Privacidad](docs/i18n/es/PRIVACY.md) /
+[Privacidade](docs/i18n/pt/PRIVACY.md) / [Datenschutz](docs/i18n/de/PRIVACY.md) /
+[Privacy (it)](docs/i18n/it/PRIVACY.md) / [隐私](docs/i18n/zh/PRIVACY.md)
 
 **Ugrás:** [Letöltés](#letöltés) · [Gyors kezdés](#gyors-kezdés) · [Mit tud](#mit-tud) · [Képek](#képek) ·
 [Eszközök](#eszközök-és-állapot) · [Dokumentáció](#dokumentáció) · [Fejlesztés](#fejlesztés) · [Licenc](#licenc)
@@ -104,7 +138,9 @@ A teljes leírás: **[Felhasználói kézikönyv](docs/USER_GUIDE.md)**.
 **Felület**
 - **Tiling elrendezés**: a panelek úgy működnek, mint egy tiling ablakkezelőben (nincs átfedés, nincs lyuk); húzással
   méretezhetők, mozgathatók, bezárhatók; külön elrendezés edzéssel és anélkül.
-- Sötét és világos téma (mindkettő teljes értékű), szövegméret 80–160 %, magyar felület, beágyazott betűtípusok.
+- Sötét és világos téma (mindkettő teljes értékű), szövegméret 80–160 %, **magyar, angol, spanyol, portugál, német,
+  olasz és kínai felület**
+  (*Beállítások → Megjelenés → Nyelv*, vagy automatikusan a rendszer nyelvét követve), beágyazott betűtípusok.
 - **Telefon és tablet**: füles nézet, a „Tekerés” fülön minden, ami tekerés közben kell.
 - Opcionális **Street View** (saját Google-kulccsal, hálózat nélküli letöltéssel) és egy **Böngésző panel** (Windows, a
   telepített Firefoxot építi be).
@@ -165,8 +201,8 @@ vagy nem kompatibilis eszközt szívesen fogadunk az Issues-ban (érdemes csatol
 
 | Kinek | Mit |
 |---|---|
-| **Felhasználóknak** | [Felhasználói kézikönyv](docs/USER_GUIDE.md) · [Adatvédelem és hálózati forgalom](docs/PRIVACY.md) · [Változásnapló](CHANGELOG.md) |
-| **Fejlesztőknek** | [Architektúra](docs/ARCHITECTURE.md) · [Fejlesztői útmutató](docs/DEVELOPMENT.md) · [Tesztelés](docs/TESTING.md) · [Kiadás](docs/RELEASING.md) · [Döntésnapló](docs/DECISIONS.md) |
+| **Felhasználóknak** | [Felhasználói kézikönyv](docs/USER_GUIDE.md) · [Adatvédelem és hálózati forgalom](docs/PRIVACY.md) · [Változásnapló](CHANGELOG.md) · [English](docs/i18n/en/README.md) · [Español](docs/i18n/es/README.md) · [Português](docs/i18n/pt/README.md) · [Deutsch](docs/i18n/de/README.md) · [Italiano](docs/i18n/it/README.md) · [中文](docs/i18n/zh/README.md) |
+| **Fejlesztőknek** | [Architektúra](docs/ARCHITECTURE.md) · [Fejlesztői útmutató](docs/DEVELOPMENT.md) · [Tesztelés](docs/TESTING.md) · [Kiadás](docs/RELEASING.md) · [Döntésnapló](docs/DECISIONS.md) · [Fordítás (i18n)](docs/I18N.md) |
 | **Témák** | [Bluetooth](docs/BLUETOOTH.md) · [Szimuláció és fizika](docs/SIMULATION.md) · [Útvonalak és adatformátumok](docs/ROUTES_AND_DATA.md) · [Felület](docs/UI.md) · [Design rendszer](docs/DESIGN.md) · [Android](docs/ANDROID.md) · [Street View](docs/STREETVIEW.md) · [Előzmények, felhasznált kód](docs/PRIOR_ART.md) |
 
 A teljes jegyzék: [`docs/README.md`](docs/README.md).
@@ -175,7 +211,7 @@ A teljes jegyzék: [`docs/README.md`](docs/README.md).
 
 ```powershell
 cargo run -p ride-app                      # debug build és indítás (Windows, Linux, macOS)
-cargo test --workspace                     # a teljes tesztkészlet (2026-11-05: 948 teszt)
+cargo test --workspace                     # a teljes tesztkészlet (2026-11-06: 1076 teszt)
 node scripts/readme_shots.mjs              # a képernyőképek újragenerálása
 ```
 
@@ -200,8 +236,10 @@ A kód Dioxus 0.7-re (webview-alapú felület) és `btleplug`-ra épül. Windows
 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). A Claude Code-nak szóló projektleírás: [`CLAUDE.md`](CLAUDE.md).
 
 **Közreműködés.** Örülünk a hibajelentésnek, a mérési naplónak és a javításnak. A szabályok röviden: csak megengedő
-licencű kód vihető át (lásd lent), a felhasználói szöveg magyar, külső adatra nem panikolunk, új funkcióhoz teszt
-és dokumentáció tartozik. A beküldött kód a projekt licencén (MIT vagy Apache-2.0) kerül be, hacsak másképp nem jelzed.
+licencű kód vihető át (lásd lent), a felhasználói szöveg forrása a magyar (a felület minden szövege kulcs a
+`crates/ride-i18n/locales/hu.json`-ban, a fordítások mellette; lásd [`docs/I18N.md`](docs/I18N.md)), külső adatra nem
+panikolunk, új funkcióhoz teszt és dokumentáció tartozik. A beküldött kód a projekt licencén (MIT vagy Apache-2.0) kerül
+be, hacsak másképp nem jelzed.
 
 ## Licenc
 

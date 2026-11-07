@@ -4346,7 +4346,7 @@ checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
 name = "ride-app"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "core-foundation",
  "dbus",
@@ -4357,6 +4357,7 @@ dependencies = [
  "reqwest",
  "rfd",
  "ride-ble",
+ "ride-i18n",
  "ride-model",
  "ride-route",
  "ride-sim",
@@ -4377,7 +4378,7 @@ dependencies = [
 
 [[package]]
 name = "ride-ble"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "aes",
  "btleplug",
@@ -4389,27 +4390,38 @@ dependencies = [
  "ndk-context",
  "p256",
  "rand_core 0.6.4",
+ "ride-i18n",
  "ride-model",
  "sha2",
- "thiserror 2.0.21",
  "tokio",
  "uuid",
 ]
 
 [[package]]
-name = "ride-model"
-version = "0.4.0"
+name = "ride-i18n"
+version = "0.5.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "sys-locale",
+]
+
+[[package]]
+name = "ride-model"
+version = "0.5.0"
+dependencies = [
+ "ride-i18n",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "ride-route"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "quick-xml",
  "reqwest",
+ "ride-i18n",
  "ride-model",
  "ride-sim",
  "rustls",
@@ -4424,21 +4436,22 @@ dependencies = [
 
 [[package]]
 name = "ride-sim"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "quick-xml",
+ "ride-i18n",
  "ride-model",
  "serde",
  "serde_json",
- "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "ride-ui-dialogs"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "ride-i18n",
  "ride-model",
  "ride-ui-kit",
  "ride-ui-streetview",
@@ -4446,50 +4459,55 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-hud"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "ride-i18n",
  "ride-model",
  "ride-ui-kit",
 ]
 
 [[package]]
 name = "ride-ui-kit"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "ride-i18n",
  "ride-model",
  "tokio",
 ]
 
 [[package]]
 name = "ride-ui-map"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "ride-i18n",
  "ride-model",
  "ride-ui-kit",
 ]
 
 [[package]]
 name = "ride-ui-profile"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "ride-i18n",
  "ride-model",
  "ride-ui-kit",
 ]
 
 [[package]]
 name = "ride-ui-review"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "ride-i18n",
  "ride-model",
  "ride-sim",
  "ride-ui-kit",
@@ -4499,18 +4517,18 @@ dependencies = [
 
 [[package]]
 name = "ride-ui-streetview"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
  "reqwest",
+ "ride-i18n",
  "ride-model",
  "ride-route",
  "ride-ui-kit",
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 2.0.21",
  "tokio",
 ]
 
@@ -5163,6 +5181,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "sys-locale"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

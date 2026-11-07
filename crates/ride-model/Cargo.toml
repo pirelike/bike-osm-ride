@@ -6,5 +6,6 @@ license.workspace = true
 description = "Shared data model (route, settings, sensors, ride state) for bike-osm-ride"
 
 [dependencies]
+ride-i18n = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

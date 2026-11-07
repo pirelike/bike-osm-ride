@@ -20,6 +20,7 @@ use std::sync::Mutex;
 
 use jni::objects::{JObject, JString, JValue};
 use jni::{JNIEnv, JavaVM};
+use ride_i18n::t;
 
 /// The file the picker returned, until the shell takes it.
 static PICKED: Mutex<Option<PathBuf>> = Mutex::new(None);
@@ -142,7 +143,9 @@ fn call_activity_with(method: &str, signature: &str, args: &[Arg]) -> Result<(),
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         call_activity_unguarded(method, signature, args)
     }))
-    .unwrap_or_else(|_| Err("az Android-környezet már nem érhető el".to_string()))
+    .unwrap_or_else(|_| {
+        Err(t("app.android_picker.az_android_kornyezet_mar_nem_erheto_el").to_string())
+    })
 }
 
 fn call_activity_unguarded(method: &str, signature: &str, args: &[Arg]) -> Result<(), String> {
@@ -167,9 +170,9 @@ fn call_activity_unguarded(method: &str, signature: &str, args: &[Arg]) -> Resul
         match arg {
             Arg::Bool(on) => values.push(JValue::Bool(u8::from(*on))),
             Arg::Str(_) => {
-                let string = next_string
-                    .next()
-                    .ok_or_else(|| "belső hiba: hiányzó szöveges argumentum".to_string())?;
+                let string = next_string.next().ok_or_else(|| {
+                    t("app.android_picker.belso_hiba_hianyzo_szoveges_argumentum").to_string()
+                })?;
                 values.push(JValue::Object(string));
             }
         }

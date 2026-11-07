@@ -41,6 +41,7 @@ use crate::sensor::Decoder;
 use crate::trainer::TrainerCmd;
 use crate::transport::{short_id, GattChar, GattPeripheral, Notification};
 use crate::zwift::{self, ControllerEvent, ControllerKind, ControllerSession};
+use ride_i18n::{t, tf};
 
 const FTMS: u16 = 0x1826;
 const CPS: u16 = 0x1818;
@@ -65,7 +66,10 @@ fn missing_reason(kind: DeviceKind) -> String {
         DeviceKind::HeartRate => "Heart Rate (0x180D)",
         DeviceKind::Shifter => "Zwift (00000001-19CA-4651-86E5-FA29DCDD09D1)",
     };
-    format!("nincs {service} szolgáltatás")
+    tf(
+        "ble.multi.nincs_service_szolgaltatas",
+        &[("service", service)],
+    )
 }
 
 /// Decoders and timing state of one connection.
@@ -138,8 +142,8 @@ impl MultiSession {
         for out in outs {
             match out {
                 Out::Notice(text) => ctx.notice(text),
-                Out::ControlGranted => ctx.log.comment("FTMS vezérlés megszerezve"),
-                Out::ControlLost => ctx.log.comment("FTMS vezérlés elveszett"),
+                Out::ControlGranted => ctx.log.comment(t("ble.multi.ftms_vezerles_megszerezve")),
+                Out::ControlLost => ctx.log.comment(t("ble.multi.ftms_vezerles_elveszett")),
                 Out::StatusIgnored(what) => ctx.log.comment(what),
                 Out::Write(_) => {}
             }
@@ -160,14 +164,17 @@ impl MultiSession {
                 Out::Write(bytes) => {
                     ctx.log.record(Dir::Write, &cp.uuid, &bytes);
                     if let Err(e) = bounded(
-                        "vezérlőparancs",
+                        t("ble.multi.vezerloparancs"),
                         ctx.cfg.io_timeout,
                         p.write(cp, &bytes, true),
                     )
                     .await
                     {
                         self.control.on_write_failed(Instant::now());
-                        ctx.log.comment(&format!("vezérlőparancs sikertelen: {e}"));
+                        ctx.log.comment(&tf(
+                            "ble.multi.vezerloparancs_sikertelen_e",
+                            &[("e", &e.to_string())],
+                        ));
                         if e.is_link_lost() {
                             return Err(e);
                         }
@@ -195,9 +202,10 @@ impl MultiSession {
                         }
                         ctx.data(Source::Trainer, fields);
                     }
-                    Err(e) => ctx
-                        .log
-                        .comment(&format!("Indoor Bike Data értelmezhetetlen ({e})")),
+                    Err(e) => ctx.log.comment(&tf(
+                        "ble.multi.indoor_bike_data_ertelmezhetetlen_e",
+                        &[("e", &e.to_string())],
+                    )),
                 }
             }
             Some(CONTROL_POINT) => {
@@ -287,13 +295,13 @@ impl MultiSession {
                     rx.haptic_due = true;
                 }
                 ControllerEvent::Ready { encrypted } => ctx.log.comment(if encrypted {
-                    "Zwift kontroller: titkosított kapcsolat"
+                    t("ble.multi.zwift_kontroller_titkositott_kapcsolat")
                 } else {
-                    "Zwift kontroller: titkosítatlan kapcsolat"
+                    t("ble.multi.zwift_kontroller_titkositatlan_kapcsolat")
                 }),
                 ControllerEvent::HandshakeFailed => ctx
                     .log
-                    .comment("Zwift kontroller: a párosítás nem sikerült"),
+                    .comment(t("ble.multi.zwift_kontroller_a_parositas_nem_sikerult")),
             }
         }
     }
@@ -317,14 +325,15 @@ impl MultiSession {
         };
         ctx.log.record(Dir::Write, &ctl.uuid, &packet);
         if let Err(e) = bounded(
-            "visszajelzés",
+            t("ble.multi.visszajelzes"),
             ctx.cfg.io_timeout,
             p.write(ctl, &packet, true),
         )
         .await
         {
-            ctx.log.comment(&format!(
-                "Zwift kontroller: a rezgéses visszajelzés nem sikerült: {e}"
+            ctx.log.comment(&tf(
+                "ble.multi.zwift_kontroller_a_rezgeses_visszajelzes_nem_sikerul",
+                &[("e", &e.to_string())],
             ));
             if e.is_link_lost() {
                 return Err(e);
@@ -339,7 +348,7 @@ impl MultiSession {
         ch: Option<&GattChar>,
     ) -> Option<Vec<u8>> {
         let ch = ch.filter(|c| c.props.read)?;
-        let value = bounded("olvasás", ctx.cfg.read_timeout, p.read(ch))
+        let value = bounded(t("ble.multi.olvasas"), ctx.cfg.read_timeout, p.read(ch))
             .await
             .ok()?;
         ctx.log.record(Dir::Read, &ch.uuid, &value);
@@ -384,9 +393,9 @@ impl MultiSession {
         stop: &mut watch::Receiver<bool>,
     ) -> Result<SessionEnd, BleError> {
         let cfg = ctx.cfg.clone();
-        bounded("kapcsolódás", cfg.connect_timeout, p.connect()).await?;
+        bounded(t("ble.multi.kapcsolodas"), cfg.connect_timeout, p.connect()).await?;
         bounded(
-            "szolgáltatások felderítése",
+            t("ble.multi.szolgaltatasok_felderitese"),
             cfg.io_timeout,
             p.discover_services(),
         )
@@ -476,27 +485,38 @@ impl MultiSession {
 
         // Stream first, then subscribe; the Control Point indication must be enabled before
         // the first write or the trainer answers with "CCCD improperly configured".
-        let mut stream = bounded("értesítések", cfg.io_timeout, p.notifications()).await?;
+        let mut stream = bounded(
+            t("ble.multi.ertesitesek"),
+            cfg.io_timeout,
+            p.notifications(),
+        )
+        .await?;
         let mut cp = cp;
         if let Some(c) = &cp {
-            if let Err(e) = bounded("feliratkozás", cfg.io_timeout, p.subscribe(c)).await {
+            if let Err(e) =
+                bounded(t("ble.multi.feliratkozas"), cfg.io_timeout, p.subscribe(c)).await
+            {
                 if e.is_link_lost() {
                     return Err(e);
                 }
-                ctx.log
-                    .comment(&format!("Control Point feliratkozás sikertelen: {e}"));
+                ctx.log.comment(&tf(
+                    "ble.multi.control_point_feliratkozas_sikertelen_e",
+                    &[("e", &e.to_string())],
+                ));
                 cp = None;
             }
         }
         if let Some(s) = &status {
-            if let Err(e) = bounded("feliratkozás", cfg.io_timeout, p.subscribe(s)).await {
+            if let Err(e) =
+                bounded(t("ble.multi.feliratkozas"), cfg.io_timeout, p.subscribe(s)).await
+            {
                 if e.is_link_lost() {
                     return Err(e);
                 }
             }
         }
         if let Some(c) = &ibd {
-            bounded("feliratkozás", cfg.io_timeout, p.subscribe(c)).await?;
+            bounded(t("ble.multi.feliratkozas"), cfg.io_timeout, p.subscribe(c)).await?;
         }
         for c in [
             cps.as_ref(),
@@ -508,13 +528,15 @@ impl MultiSession {
         .into_iter()
         .flatten()
         {
-            if let Err(e) = bounded("feliratkozás", cfg.io_timeout, p.subscribe(c)).await {
+            if let Err(e) =
+                bounded(t("ble.multi.feliratkozas"), cfg.io_timeout, p.subscribe(c)).await
+            {
                 if e.is_link_lost() {
                     return Err(e);
                 }
-                ctx.notice(format!(
-                    "{}: egy szolgáltatásra nem sikerült feliratkozni ({e})",
-                    ctx.name
+                ctx.notice(tf(
+                    "ble.multi.egy_szolgaltatasra_nem_sikerult_feliratkozni_e",
+                    &[("label", &ctx.name), ("e", &e.to_string())],
                 ));
             }
         }
@@ -536,13 +558,20 @@ impl MultiSession {
             let hello = controller.start();
             rx.controller = Some(controller);
             ctx.log.record(Dir::Write, &ctl.uuid, &hello);
-            if let Err(e) = bounded("kézfogás", cfg.io_timeout, p.write(ctl, &hello, true)).await
+            if let Err(e) = bounded(
+                t("ble.multi.kezfogas"),
+                cfg.io_timeout,
+                p.write(ctl, &hello, true),
+            )
+            .await
             {
                 if e.is_link_lost() {
                     return Err(e);
                 }
-                ctx.log
-                    .comment(&format!("Zwift kontroller: a párosítás nem sikerült: {e}"));
+                ctx.log.comment(&tf(
+                    "ble.multi.zwift_kontroller_a_parositas_nem_sikerult_e",
+                    &[("e", &e.to_string())],
+                ));
             }
         }
         let mut ctl_rx = self.ctl_rx.take();
@@ -574,7 +603,7 @@ impl MultiSession {
                         .into_iter()
                         .flatten()
                     {
-                        let _ = bounded("leiratkozás", cfg.io_timeout, p.unsubscribe(c)).await;
+                        let _ = bounded(t("ble.multi.leiratkozas"), cfg.io_timeout, p.unsubscribe(c)).await;
                     }
                     self.ctl_rx = ctl_rx;
                     return Ok(SessionEnd::Stopped);
@@ -592,7 +621,7 @@ impl MultiSession {
                         last_rx = Instant::now();
                         self.on_notification(ctx, &n, &mut rx);
                     }
-                    None => return Ok(SessionEnd::LinkLost("az értesítések folyama megszűnt".into())),
+                    None => return Ok(SessionEnd::LinkLost(t("ble.multi.az_ertesitesek_folyama_megszunt").into())),
                 },
                 _ = idle.tick() => {
                     if ctx.serves(DeviceKind::Cadence) {
@@ -606,14 +635,14 @@ impl MultiSession {
                 }
                 _ = tokio::time::sleep_until(wake) => {}
                 _ = health.tick() => {
-                    match bounded("kapcsolat-ellenőrzés", cfg.io_timeout, p.is_connected()).await {
+                    match bounded(t("ble.multi.kapcsolat_ellenorzes"), cfg.io_timeout, p.is_connected()).await {
                         Ok(true) => {}
                         Ok(false) | Err(_) => return Ok(SessionEnd::LinkLost("a kapcsolat megszakadt".into())),
                     }
                     if !controller_only {
                         let window = if trainer_like { cfg.trainer_watchdog } else { cfg.sensor_watchdog };
                         if last_rx.elapsed() > window {
-                            return Ok(SessionEnd::LinkLost("nem érkezik adat az eszközről".into()));
+                            return Ok(SessionEnd::LinkLost(t("ble.multi.nem_erkezik_adat_az_eszkozrol").into()));
                         }
                     }
                 }

@@ -15,10 +15,34 @@ use ride_ui_kit::IconName;
 
 use crate::geom;
 use crate::ChartMetric;
+use ride_i18n::{t, tf};
 
 /// Two samples further apart than this belong to different runs (a sensor gap is not
-/// bridged by a straight line), seconds.
+/// bridged by a straight line), seconds. It is the limit for the engine's 1 Hz recording; a
+/// recording that is sparser on the whole uses [`gap_limit`].
 const GAP_S: f64 = 1.6;
+
+/// The usual spacing of the samples in `t`: the median step, `1.0` when there is none.
+fn typical_step(t: &[f64]) -> f64 {
+    let mut steps: Vec<f64> = t
+        .windows(2)
+        .map(|w| w[1] - w[0])
+        .filter(|d| d.is_finite() && *d > 0.0)
+        .collect();
+    if steps.is_empty() {
+        return 1.0;
+    }
+    steps.sort_by(f64::total_cmp);
+    steps[steps.len() / 2]
+}
+
+/// Largest step that still joins two samples. A history recorded more sparsely than 1 Hz (a
+/// slow device whose ride loop ticks less often, or the `RIDE_TIMESCALE` hook) would otherwise
+/// fall apart into single points and draw no line at all; a gap stays a gap relative to the
+/// recording's own rhythm.
+fn gap_limit(t: &[f64]) -> f64 {
+    GAP_S.max(typical_step(t) * GAP_S)
+}
 
 /// Radius of the moving average applied before drawing, in samples.
 const SMOOTH_RADIUS: usize = 1;
@@ -29,10 +53,10 @@ impl ChartMetric {
     /// Hungarian title of the chart.
     pub fn title(self) -> &'static str {
         match self {
-            ChartMetric::Power => "Teljesítmény",
-            ChartMetric::HeartRate => "Pulzus",
-            ChartMetric::Cadence => "Kadencia",
-            ChartMetric::Speed => "Sebesség",
+            ChartMetric::Power => t("ui_profile.series.teljesitmeny"),
+            ChartMetric::HeartRate => t("ui_profile.series.pulzus"),
+            ChartMetric::Cadence => t("ui_profile.series.kadencia"),
+            ChartMetric::Speed => t("ui_profile.series.sebesseg"),
         }
     }
 
@@ -406,6 +430,8 @@ pub fn zone_strip(
     }
     // (zone, start, end) in seconds
     let mut cells: Vec<(u8, f64, f64)> = Vec::new();
+    let half = typical_step(&series.t) / 2.0;
+    let gap = gap_limit(&series.t) - 2.0 * half;
     for (i, t) in series.t.iter().enumerate() {
         if !t.is_finite() {
             continue;
@@ -419,9 +445,9 @@ pub fn zone_strip(
         else {
             continue;
         };
-        let (start, end) = (t - 0.5, t + 0.5);
+        let (start, end) = (t - half, t + half);
         match cells.last_mut() {
-            Some(last) if last.0 == zone && start - last.2 <= GAP_S => last.2 = end,
+            Some(last) if last.0 == zone && start - last.2 <= gap => last.2 = end,
             _ => cells.push((zone, start, end)),
         }
     }
@@ -468,6 +494,7 @@ pub fn chart_geometry(
     let floor = y0 - (y1 - y0).max(1e-6);
 
     let mut markup = String::with_capacity(series.t.len() * 48 + 128);
+    let gap = gap_limit(&series.t);
     let mut i = 0usize;
     while i < series.t.len() {
         if series.v.get(i).copied().flatten().is_none() {
@@ -482,7 +509,7 @@ pub fn chart_geometry(
                 .t
                 .get(next)
                 .zip(series.t.get(end))
-                .is_some_and(|(a, b)| a - b <= GAP_S);
+                .is_some_and(|(a, b)| a - b <= gap);
             if !contiguous || series.v.get(next).copied().flatten().is_none() {
                 break;
             }
@@ -571,14 +598,17 @@ pub fn window_labels(window_s: f64) -> [String; 3] {
     ]
 }
 
-/// Caption under the chart title: "utolsó 5 p".
+/// Caption under the chart title: "utolsó 5 p" / "últimos 5 min".
 pub fn window_caption(window_s: f64) -> String {
     let window_s = if window_s.is_finite() && window_s > 0.0 {
         window_s
     } else {
         300.0
     };
-    format!("utolsó {}", ride_ui_kit::format::fmt_hm_text(window_s))
+    tf(
+        "ui_profile.series.utolso",
+        &[("window", &ride_ui_kit::format::fmt_hm_text(window_s))],
+    )
 }
 
 /// Value of the time axis after the hover: "−2:31 · 238 W".
@@ -818,6 +848,36 @@ mod tests {
     }
 
     // ── geometry ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn a_sparser_recording_still_draws_a_line_and_keeps_its_gaps() {
+        // Regression: a history recorded every 2 s (a slow ride loop, or RIDE_TIMESCALE) fell
+        // apart into single points against the fixed 1.6 s limit, and the charts stayed empty.
+        let rider = rider();
+        let mut sparse: Vec<RecordPoint> = (0..150)
+            .map(|i| point(i as f64 * 2.0, Some(180.0), Some(130.0)))
+            .collect();
+        let series = series_for(&sparse, ChartMetric::Power, 300.0);
+        let geometry = chart_geometry(&series, ChartMetric::Power, &rider, Theme::Dark, 300.0);
+        assert_eq!(
+            geometry.markup.matches("<polyline").count(),
+            1,
+            "one unbroken line: {}",
+            geometry.markup.len()
+        );
+        assert!(!geometry.strip.is_empty(), "the zone strip is drawn too");
+        // a real gap (20 s without a sample) still breaks the line
+        sparse.retain(|p| !(100.0..120.0).contains(&p.t));
+        let series = series_for(&sparse, ChartMetric::Power, 300.0);
+        let geometry = chart_geometry(&series, ChartMetric::Power, &rider, Theme::Dark, 300.0);
+        assert_eq!(geometry.markup.matches("<polyline").count(), 2);
+        assert_eq!(gap_limit(&[]), GAP_S);
+        assert_eq!(
+            gap_limit(&[0.0, 1.0, 2.0, 3.0]),
+            GAP_S,
+            "1 Hz keeps the old limit"
+        );
+    }
 
     #[test]
     fn chart_geometry_draws_runs_with_gaps_and_colours() {

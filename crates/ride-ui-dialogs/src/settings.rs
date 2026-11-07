@@ -2,6 +2,7 @@
 //! settings, applied immediately.
 
 use dioxus::prelude::*;
+use ride_i18n::{t, tf, tn};
 use ride_model::{GhostStatus, Settings};
 use ride_ui_kit::{Dialog, NumberField, Segmented, Slider, Switch};
 
@@ -69,6 +70,9 @@ pub fn SettingsDialog(
     let set_text_scale = setter(&current, on_change, |s: &mut Settings, v: f64| {
         s.ui.text_scale = text_scale_from_percent(v);
     });
+    let set_language = setter(&current, on_change, |s: &mut Settings, v: String| {
+        s.ui.language = v;
+    });
     let set_gears = setter(&current, on_change, |s: &mut Settings, v: bool| {
         s.ui.virtual_gears = v;
     });
@@ -103,35 +107,35 @@ pub fn SettingsDialog(
     rsx! {
         Dialog {
             open: true,
-            title: "Beállítások".to_string(),
+            title: t("ui_dialogs.settings.beallitasok").to_string(),
             on_close,
             wide: true,
             foot: rsx! {
-                span { class: "dlg-foot__note", "Minden módosítás azonnal érvénybe lép." }
+                span { class: "dlg-foot__note", {t("ui_dialogs.settings.minden_modositas_azonnal_ervenybe_lep")} }
             },
             div { class: "dlg-settings",
                 Group {
-                    title: "Kerékpáros".to_string(),
-                    note: "A fizikai modell, a sebességszámítás és a zónák alapja.".to_string(),
+                    title: t("ui_dialogs.settings.kerekparos").to_string(),
+                    note: t("ui_dialogs.settings.a_fizikai_modell_a_sebessegszamitas_es_a_zonak_alapj").to_string(),
                     div { class: "dlg-grid2",
                         NumberField {
-                            label: "Testsúly".to_string(),
+                            label: t("ui_dialogs.settings.testsuly").to_string(),
                             value: rider.rider_kg,
                             min: 30.0,
                             max: 200.0,
                             step: 0.5,
                             unit: "kg".to_string(),
-                            hint: "A saját testsúlyod.".to_string(),
+                            hint: t("ui_dialogs.settings.a_sajat_testsulyod").to_string(),
                             on_change: set_kg,
                         }
                         NumberField {
-                            label: "Kerékpár".to_string(),
+                            label: t("ui_dialogs.settings.kerekpar").to_string(),
                             value: rider.bike_kg,
                             min: 3.0,
                             max: 30.0,
                             step: 0.1,
                             unit: "kg".to_string(),
-                            hint: "A kerékpár tömege; a modell a testsúlyoddal együtt számol vele.".to_string(),
+                            hint: t("ui_dialogs.settings.a_kerekpar_tomege_a_modell_a_testsulyoddal_egyutt_sz").to_string(),
                             on_change: set_bike,
                         }
                         NumberField {
@@ -141,17 +145,17 @@ pub fn SettingsDialog(
                             max: 600.0,
                             step: 5.0,
                             unit: "W".to_string(),
-                            hint: "Küszöbteljesítmény a zónákhoz és a TSS-hez.".to_string(),
+                            hint: t("ui_dialogs.settings.kuszobteljesitmeny_a_zonakhoz_es_a_tss_hez").to_string(),
                             on_change: set_ftp,
                         }
                         NumberField {
-                            label: "Max. pulzus".to_string(),
+                            label: t("ui_dialogs.settings.max_pulzus").to_string(),
                             value: rider.max_hr,
                             min: 120.0,
                             max: 230.0,
                             step: 1.0,
                             unit: "bpm".to_string(),
-                            hint: "A pulzuszónák felső határa.".to_string(),
+                            hint: t("ui_dialogs.settings.a_pulzuszonak_felso_hatara").to_string(),
                             on_change: set_max_hr,
                         }
                         NumberField {
@@ -161,7 +165,7 @@ pub fn SettingsDialog(
                             max: 1.0,
                             step: 0.01,
                             unit: "m²".to_string(),
-                            hint: "Légellenállási felület (CdA): versenypozícióban kb. 0,32, egyenes háttal kb. 0,40.".to_string(),
+                            hint: t("ui_dialogs.settings.legellenallasi_felulet_cda_versenypozicioban_kb_0_32").to_string(),
                             on_change: set_cda,
                         }
                         NumberField {
@@ -171,78 +175,92 @@ pub fn SettingsDialog(
                             max: 0.02,
                             step: 0.001,
                             unit: "".to_string(),
-                            hint: "Gördülési ellenállási együttható (Crr): jó aszfalton kb. 0,004.".to_string(),
+                            hint: t("ui_dialogs.settings.gordulesi_ellenallasi_egyutthato_crr_jo_aszfalton_kb").to_string(),
                             on_change: set_crr,
                         }
                     }
                 }
 
                 Group {
-                    title: "Trainer".to_string(),
-                    note: "Mennyire érződjenek a valódi emelkedők a traineren.".to_string(),
+                    title: t("ui_dialogs.settings.trainer_csoport").to_string(),
+                    note: t("ui_dialogs.settings.mennyire_erzodjenek_a_valodi_emelkedok_a_traineren").to_string(),
                     Slider {
-                        label: "Meredekség erőssége".to_string(),
+                        label: t("ui_dialogs.settings.meredekseg_erossege").to_string(),
                         value: trainer_scale_percent(rider.trainer_grade_scale),
                         min: 0.0,
                         max: 150.0,
                         step: 5.0,
                         unit: "%".to_string(),
-                        hint: "A valódi meredekség ennyi százalékát kapja a trainer (0 % = mindig sík).".to_string(),
+                        hint: t("ui_dialogs.settings.a_valodi_meredekseg_ennyi_szazalekat_kapja_a_trainer").to_string(),
                         on_change: set_grade_scale,
                     }
                     Switch {
                         checked: rider.use_trainer_speed,
                         on_change: set_speed_source,
-                        label: "A trainer sebességének használata".to_string(),
-                        hint: "A fizikai modell helyett a trainer által jelentett sebességet mutatjuk.".to_string(),
+                        label: t("ui_dialogs.settings.a_trainer_sebessegenek_hasznalata").to_string(),
+                        hint: t("ui_dialogs.settings.a_fizikai_modell_helyett_a_trainer_altal_jelentett_s").to_string(),
                         row: true,
                     }
                     Switch {
                         checked: ui.virtual_gears,
                         on_change: set_gears,
-                        label: "Virtuális váltó".to_string(),
-                        hint: "A ← és → billentyűvel vagy a Váltó panelen válthatsz; a fokozat kb. ±5 %-kal módosítja a trainer ellenállását.".to_string(),
+                        label: t("ui_dialogs.settings.virtualis_valto").to_string(),
+                        hint: t("ui_dialogs.settings.a_es_billentyuvel_vagy_a_valto_panelen_valthatsz_a_f").to_string(),
                         row: true,
                     }
                 }
 
-                Group { title: "Megjelenés".to_string(),
+                Group { title: t("ui_dialogs.settings.megjelenes").to_string(),
                     Slider {
-                        label: "Szövegméret".to_string(),
+                        label: t("ui_dialogs.settings.szovegmeret").to_string(),
                         value: text_scale_percent(ui.text_scale()),
                         min: 80.0,
                         max: 160.0,
                         step: 5.0,
                         unit: "%".to_string(),
-                        hint: "Minden szöveg és szám mérete, kis vagy nagy kijelzőn érdemes állítani (100 % az alapméret). A panelek méretét az elrendezés adja, nagyobb szöveghez szükség lehet egy nagyobb panelre.".to_string(),
+                        hint: t("ui_dialogs.settings.minden_szoveg_es_szam_merete_kis_vagy_nagy_kijelzon_").to_string(),
                         on_change: set_text_scale,
+                    }
+                    div { class: "dlg-control",
+                        span { class: "label", {t("ui_dialogs.settings.nyelv")} }
+                        div { class: "dlg-segrow",
+                            Segmented {
+                                options: language_options(),
+                                value: ui.language.clone(),
+                                aria_label: t("ui_dialogs.settings.nyelv").to_string(),
+                                small: true,
+                                wrap: true,
+                                on_change: set_language,
+                            }
+                        }
+                        span { class: "dlg-note", {t("ui_dialogs.settings.az_automatikus_a_keszulek_nyelvet_hasznalja_ha_az_ta")} }
                     }
                     div { class: "dlg-row2",
                         div { class: "dlg-control",
-                            span { class: "label", "Téma" }
+                            span { class: "label", {t("ui_dialogs.settings.tema")} }
                             div { class: "dlg-segrow",
                                 Segmented {
                                     options: vec![
-                                        ("dark".to_string(), "Sötét".to_string()),
-                                        ("light".to_string(), "Világos".to_string()),
+                                        ("dark".to_string(), t("ui_dialogs.settings.sotet").to_string()),
+                                        ("light".to_string(), t("ui_dialogs.settings.vilagos").to_string()),
                                     ],
                                     value: theme_value(ui.theme),
-                                    aria_label: "Téma".to_string(),
+                                    aria_label: t("ui_dialogs.settings.tema").to_string(),
                                     on_change: set_theme,
                                 }
                             }
                         }
                         div { class: "dlg-control",
-                            span { class: "label", "Térképstílus" }
+                            span { class: "label", {t("ui_dialogs.settings.terkepstilus")} }
                             div { class: "dlg-segrow",
                                 Segmented {
                                     options: vec![
-                                        ("dark".to_string(), "Sötét".to_string()),
-                                        ("light".to_string(), "Világos".to_string()),
+                                        ("dark".to_string(), t("ui_dialogs.settings.sotet").to_string()),
+                                        ("light".to_string(), t("ui_dialogs.settings.vilagos").to_string()),
                                         ("osm".to_string(), "OSM".to_string()),
                                     ],
                                     value: map_style_value(ui.map_style),
-                                    aria_label: "Térképstílus".to_string(),
+                                    aria_label: t("ui_dialogs.settings.terkepstilus").to_string(),
                                     on_change: set_map_style,
                                 }
                             }
@@ -250,72 +268,73 @@ pub fn SettingsDialog(
                     }
                 }
 
-                Group { title: "Térkép és profil".to_string(),
+                Group { title: t("ui_dialogs.settings.terkep_es_profil").to_string(),
                     Switch {
                         checked: ui.follow_rider,
                         on_change: set_follow,
-                        label: "A térkép kövesse a kerékpárost".to_string(),
-                        hint: "Kikapcsolva szabadon mozgatható a térkép (M).".to_string(),
+                        label: t("ui_dialogs.settings.a_terkep_kovesse_a_kerekparost").to_string(),
+                        hint: t("ui_dialogs.settings.kikapcsolva_szabadon_mozgathato_a_terkep_m").to_string(),
                         row: true,
                     }
                     div { class: "dlg-row2",
                         div { class: "dlg-control",
-                            span { class: "label", "Profilnézet" }
+                            span { class: "label", {t("ui_dialogs.settings.profilnezet")} }
                             div { class: "dlg-segrow",
                                 Segmented {
                                     options: vec![
-                                        ("ahead".to_string(), "Előretekintés".to_string()),
-                                        ("full".to_string(), "Teljes".to_string()),
+                                        ("ahead".to_string(), t("ui_dialogs.settings.eloretekintes").to_string()),
+                                        ("full".to_string(), t("ui_dialogs.settings.teljes").to_string()),
                                     ],
                                     value: profile_mode_value(ui.active_profile_mode()),
-                                    aria_label: "Profilnézet".to_string(),
+                                    aria_label: t("ui_dialogs.settings.profilnezet").to_string(),
                                     small: true,
                                     on_change: set_profile_mode,
                                 }
                             }
                         }
                         Slider {
-                            label: "Előretekintés hossza".to_string(),
+                            label: t("ui_dialogs.settings.eloretekintes_hossza").to_string(),
                             value: ui.lookahead_m,
                             min: 500.0,
                             max: 10_000.0,
                             step: 100.0,
                             unit: "m".to_string(),
-                            hint: "Csak előretekintő nézetben számít.".to_string(),
+                            hint: t("ui_dialogs.settings.csak_eloretekinto_nezetben_szamit").to_string(),
                             on_change: set_lookahead,
                         }
                     }
                     div { class: "dlg-control",
-                        span { class: "label", "Szellem" }
+                        span { class: "label", {t("ui_dialogs.settings.szellem")} }
                         div { class: "dlg-segrow",
                             Segmented {
                                 options: vec![
-                                    ("off".to_string(), "Ki".to_string()),
-                                    ("route".to_string(), "Az útvonal ideje".to_string()),
-                                    ("last".to_string(), "Legutóbbi menet".to_string()),
-                                    ("best".to_string(), "Legjobb (PR)".to_string()),
+                                    ("off".to_string(), t("ui_dialogs.settings.ki").to_string()),
+                                    ("route".to_string(), t("ui_dialogs.settings.az_utvonal_ideje").to_string()),
+                                    ("last".to_string(), t("ui_dialogs.settings.legutobbi_menet").to_string()),
+                                    ("best".to_string(), t("ui_dialogs.settings.legjobb_pr").to_string()),
                                 ],
                                 value: ghost_mode_value(ui.ghost),
-                                aria_label: "Szellem".to_string(),
+                                aria_label: t("ui_dialogs.settings.szellem").to_string(),
                                 small: true,
                                 on_change: set_ghost,
                             }
                         }
                         span { class: "dlg-note dlg-note--ghost", "{ghost_hint}" }
-                        span { class: "dlg-note", "A korábbi, ugyanezen az útvonalon tekert menet visszajátszása a térképen és a profilon, másodpercben mért előnnyel vagy hátránnyal. A „Legjobb” a legkisebb idejű teljes menet; a szimulált menetek nem PR-ok. Az „Az útvonal ideje” a betöltött GPX saját időbélyegeit játssza vissza, mentett menet nélkül is." }
+                        span { class: "dlg-note", {t("ui_dialogs.settings.a_korabbi_ugyanezen_az_utvonalon_tekert_menet_vissza")} }
                     }
                 }
 
                 Group {
-                    title: "Elrendezés".to_string(),
-                    note: "A paneleket a fejlécüknél fogva húzhatod: egy másik panel szélére ejtve megosztoznak a helyén, a közepére ejtve helyet cserélnek. Az elválasztókat húzva átméretezheted őket, és mindig kitöltik a felületet. A bezárt panelek a felső sávban várnak. Az elrendezést külön jegyzi az app arra az esetre, amikor edzés van kiválasztva, és amikor nincs: amíg edzésen belül nem alakítod át, az edzéses elrendezés a szabadét követi.".to_string(),
+                    title: t("ui_dialogs.settings.elrendezes").to_string(),
+                    variant: "layout".to_string(),
+                    note: t("ui_dialogs.settings.a_paneleket_a_fejlecuknel_fogva_huzhatod_egy_masik_p").to_string(),
                     div { class: "dlg-control",
-                        span { class: "label", "Alaphelyzet" }
+                        span { class: "label", {t("ui_dialogs.settings.alaphelyzet")} }
                         button {
                             class: "btn",
                             r#type: "button",
                             onclick: reset_layout,
-                            "Elrendezés visszaállítása"
+                            {t("ui_dialogs.settings.elrendezes_visszaallitasa")}
                         }
                     }
                 }
@@ -335,14 +354,14 @@ fn BackupGroup(on_backup: EventHandler<()>, on_restore: EventHandler<()>) -> Ele
     let mut confirming = use_signal(|| false);
     rsx! {
         Group {
-            title: "Biztonsági mentés".to_string(),
-            note: "Az útvonalak, a mentett túrák, az importált edzések és a beállítások egyetlen zip-fájlba kerülnek, ezen a gépen: semmi nem megy ki a hálózatra. A Street View kulcs, a térképcsempék és a letöltött képek nincsenek benne.".to_string(),
+            title: t("ui_dialogs.settings.biztonsagi_mentes").to_string(),
+            note: t("ui_dialogs.settings.az_utvonalak_a_mentett_turak_az_importalt_edzesek_es").to_string(),
             div { class: "dlg-backup",
                 button {
                     class: "btn",
                     r#type: "button",
                     onclick: move |_| on_backup.call(()),
-                    "Mentés fájlba"
+                    {t("ui_dialogs.settings.mentes_fajlba")}
                 }
                 if confirming() {
                     button {
@@ -352,26 +371,26 @@ fn BackupGroup(on_backup: EventHandler<()>, on_restore: EventHandler<()>) -> Ele
                             confirming.set(false);
                             on_restore.call(());
                         },
-                        "Igen, visszaállítom"
+                        {t("ui_dialogs.settings.igen_visszaallitom")}
                     }
                     button {
                         class: "btn btn--ghost",
                         r#type: "button",
                         onclick: move |_| confirming.set(false),
-                        "Mégse"
+                        {t("ui_dialogs.settings.megse")}
                     }
                 } else {
                     button {
                         class: "btn",
                         r#type: "button",
                         onclick: move |_| confirming.set(true),
-                        "Visszaállítás fájlból"
+                        {t("ui_dialogs.settings.visszaallitas_fajlbol")}
                     }
                 }
             }
             if confirming() {
                 span { class: "dlg-note",
-                    "A mentésben lévő útvonalak, túrák és edzések hozzáadódnak a meglévőkhöz: semmi nem törlődik és semmi nem íródik felül. A beállításaid viszont a mentésből valók lesznek (a Street View kulcsod megmarad). Tekerés közben nem lehet visszaállítani."
+                    {t("ui_dialogs.settings.a_mentesben_levo_utvonalak_turak_es_edzesek_hozzaado")}
                 }
             }
         }
@@ -383,10 +402,18 @@ fn BackupGroup(on_backup: EventHandler<()>, on_restore: EventHandler<()>) -> Ele
 pub(crate) fn Group(
     title: String,
     #[props(default = String::new())] note: String,
+    /// A hook for the shell (`dlg-group--layout`: the tiling has no meaning on a phone).
+    #[props(default = String::new())]
+    variant: String,
     children: Element,
 ) -> Element {
+    let class = if variant.is_empty() {
+        "dlg-group".to_string()
+    } else {
+        format!("dlg-group dlg-group--{variant}")
+    };
     rsx! {
-        section { class: "dlg-group",
+        section { class: "{class}",
             header { class: "dlg-group__head",
                 h3 { class: "dlg-group__title", "{title}" }
                 if !note.is_empty() {
@@ -432,13 +459,25 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
     let mut storage = use_signal(ride_ui_streetview::imagestore::overview_default);
     let stored = storage();
     let stored_text = if stored.images == 0 {
-        "Még nincs letöltött kép.".to_string()
+        t("ui_dialogs.settings.meg_nincs_letoltott_kep").to_string()
     } else {
-        format!(
-            "{} kép ({}), {} útvonalhoz.",
-            stored.images,
-            format_bytes(stored.bytes),
-            stored.routes
+        let images = tn(
+            "ui_dialogs.settings.kep_count",
+            stored.images as i64,
+            &[("count", &stored.images.to_string())],
+        );
+        let routes = tn(
+            "ui_dialogs.settings.utvonal_count",
+            stored.routes as i64,
+            &[("count", &stored.routes.to_string())],
+        );
+        tf(
+            "ui_dialogs.settings.kep_utvonalhoz",
+            &[
+                ("images", &images),
+                ("size", &format_bytes(stored.bytes)),
+                ("routes", &routes),
+            ],
         )
     };
     let clear_storage = move |_| {
@@ -450,17 +489,17 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
     rsx! {
         Group {
             title: "Street View".to_string(),
-            note: "Google utcakép ott, ahol éppen tekersz, a saját API-kulcsoddal. Kulcs nélkül nem jelenik meg kép; a kérések a te Google-kvótádat terhelik.".to_string(),
+            note: t("ui_dialogs.settings.google_utcakep_ott_ahol_eppen_tekersz_a_sajat_api_ku").to_string(),
             Switch {
                 checked: ui.streetview_enabled,
                 on_change: set_enabled,
-                label: "Street View megjelenítése a térképen".to_string(),
-                hint: "Kis ablak a térkép jobb alsó sarkában, a címsor gombjával vagy a V billentyűvel is kapcsolható; az X felcseréli a kettőt.".to_string(),
+                label: t("ui_dialogs.settings.street_view_megjelenitese_a_terkepen").to_string(),
+                hint: t("ui_dialogs.settings.kis_ablak_a_terkep_jobb_also_sarkaban_a_cimsor_gombj").to_string(),
                 row: true,
             }
 
             div { class: key_class,
-                label { class: "dlg-key__label", r#for: "dlg-gmaps-key", "Google Maps API-kulcs" }
+                label { class: "dlg-key__label", r#for: "dlg-gmaps-key", {t("ui_dialogs.settings.google_maps_api_kulcs")} }
                 div { class: "dlg-key__control",
                     input {
                         id: "dlg-gmaps-key",
@@ -477,12 +516,12 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
                         class: "dlg-key__toggle",
                         r#type: "button",
                         "aria-pressed": if shown { "true" } else { "false" },
-                        "aria-label": if shown { "A kulcs elrejtése" } else { "A kulcs megjelenítése" },
+                        "aria-label": if shown { t("ui_dialogs.settings.a_kulcs_elrejtese") } else { t("ui_dialogs.settings.a_kulcs_megjelenitese") },
                         onclick: move |_| revealed.set(!shown),
                         if shown {
-                            "Elrejt"
+                            {t("ui_dialogs.settings.elrejt")}
                         } else {
-                            "Mutat"
+                            {t("ui_dialogs.settings.mutat")}
                         }
                     }
                 }
@@ -495,34 +534,34 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
 
             ol { class: "dlg-howto",
                 li {
-                    "Nyiss meg egy projektet a "
+                    {t("ui_dialogs.settings.nyiss_meg_egy_projektet_a")}
                     strong { "Google Cloud Console" }
-                    "-ban, és kapcsold be a számlázást (a Google havi ingyenes keretet ad, a díjszabást az oldalukon nézd meg)."
+                    {t("ui_dialogs.settings.ban_es_kapcsold_be_a_szamlazast_a_google_havi_ingyen")}
                 }
                 li {
-                    "Az API Library oldalon engedélyezd a két szolgáltatást: "
+                    {t("ui_dialogs.settings.az_api_library_oldalon_engedelyezd_a_ket_szolgaltata")}
                     strong { "Maps Embed API" }
-                    " és "
+                    {t("ui_dialogs.settings.es")}
                     strong { "Street View Static API" }
                     "."
                 }
-                li { "A Hitelesítő adatok oldalon hozz létre API-kulcsot, és korlátozd erre a két API-ra." }
-                li { "Másold ide a kulcsot. Csak ezen a gépen, a beállításfájlban van, és csak a Google felé megy el." }
+                li { {t("ui_dialogs.settings.a_hitelesito_adatok_oldalon_hozz_letre_api_kulcsot_e")} }
+                li { {t("ui_dialogs.settings.masold_ide_a_kulcsot_csak_ezen_a_gepen_a_beallitasfa")} }
             }
 
             Switch {
                 checked: ui.streetview_cache_panos,
                 on_change: set_cache,
-                label: "Panoráma-azonosítók mentése az útvonalhoz".to_string(),
-                hint: "Ismételt tekerésnél kevesebb keresés kell, így kevesebb kvótát használsz.".to_string(),
+                label: t("ui_dialogs.settings.panorama_azonositok_mentese_az_utvonalhoz").to_string(),
+                hint: t("ui_dialogs.settings.ismetelt_tekeresnel_kevesebb_kereses_kell_igy_kevese").to_string(),
                 row: true,
             }
 
             Switch {
                 checked: ui.streetview_offline,
                 on_change: set_offline,
-                label: "Street View képek letöltése (hálózat nélküli tekeréshez)".to_string(),
-                hint: "A panel Letöltés gombja elmenti az útvonal képeit, így legközelebb API-kulcs és hálózat nélkül is látszanak.".to_string(),
+                label: t("ui_dialogs.settings.street_view_kepek_letoltese_halozat_nelkuli_tekeresh").to_string(),
+                hint: t("ui_dialogs.settings.a_panel_letoltes_gombja_elmenti_az_utvonal_kepeit_ig").to_string(),
                 row: true,
             }
             div { class: "dlg-storage",
@@ -532,25 +571,39 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
                     r#type: "button",
                     disabled: stored.images == 0,
                     onclick: clear_storage,
-                    "Törlés"
+                    {t("ui_dialogs.settings.torles")}
                 }
             }
             p { class: "dlg-note",
-                strong { "A letöltött képek legfeljebb 30 napig maradnak a gépen. " }
-                "Csak a bekapcsolt offline opció használja őket, és csak kulcs nélkül vagy ha az éles nézet nem tölthető be: a Google legfeljebb 640 × 640 pixeles képet ad, ezért élőben a teljes felbontású beágyazott nézet látszik. A Street View képek tartós tárolását a Google feltételei korlátozzák: a letöltés a te döntésed, és a saját Google-fiókod kvótáját használja."
+                strong { {t("ui_dialogs.settings.a_letoltott_kepek_legfeljebb_30_napig_maradnak_a_gep")} }
+                {t("ui_dialogs.settings.csak_a_bekapcsolt_offline_opcio_hasznalja_oket_es_cs")}
             }
         }
     }
 }
 
-/// `1 234 567` bytes as `1.2 MB` (or `345 kB`), Hungarian decimal comma.
+/// `1 234 567` bytes as `1.2 MB` (or `345 kB`), with the language's decimal separator.
 fn format_bytes(bytes: u64) -> String {
     let mb = bytes as f64 / 1_048_576.0;
     if mb >= 1.0 {
-        format!("{mb:.1} MB").replace('.', ",")
+        format!("{} MB", ride_i18n::decimal(mb, 1))
     } else {
         format!("{:.0} kB", bytes as f64 / 1000.0)
     }
+}
+
+/// `Automatic` plus every language with a finished catalog, in the registry's order. The
+/// language's own name is never translated (a rider looking for their language recognizes it as
+/// written there).
+fn language_options() -> Vec<(String, String)> {
+    let mut options = vec![(
+        "auto".to_string(),
+        t("ui_dialogs.settings.automatikus").to_string(),
+    )];
+    for lang in ride_i18n::Lang::complete() {
+        options.push((lang.code().to_string(), lang.self_name().to_string()));
+    }
+    options
 }
 
 /// Builds an event handler that emits `base` with one field patched. The dialog never keeps a
@@ -710,14 +763,14 @@ mod tests {
         // the default is "Best": the segmented control marks exactly one option per group
         assert_eq!(
             html.matches(r#"aria-checked="true""#).count(),
-            4,
-            "theme, map style, profile mode and ghost each have one selected option"
+            5,
+            "theme, map style, language, profile mode and ghost each have one selected option"
         );
         // choosing "Ki" moves the selection to that option
         let mut off = Settings::default();
         off.ui.ghost = ride_model::GhostMode::Off;
         let html = render(off);
-        assert_eq!(html.matches(r#"aria-checked="true""#).count(), 4);
+        assert_eq!(html.matches(r#"aria-checked="true""#).count(), 5);
         // inside the ghost group the selected option is the first one ("Ki")
         let group = html.find("Szellem</span>").expect("the ghost group label");
         let after = &html[group..];

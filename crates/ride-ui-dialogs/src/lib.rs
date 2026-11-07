@@ -32,8 +32,8 @@ mod welcome;
 mod workouts;
 
 pub use about::{
-    third_party_licenses_text, AboutDialog, APP_NAME, APP_VERSION, BUNDLED_FONTS, DATA_SOURCES,
-    PROJECT_LICENSE, THIRD_PARTY_CODE,
+    bundled_fonts, data_sources, third_party_code, third_party_licenses_text, AboutDialog,
+    APP_NAME, APP_VERSION, PROJECT_LICENSE,
 };
 pub use devices::DevicesDialog;
 pub use helpers::*;

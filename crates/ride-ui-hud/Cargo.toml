@@ -6,6 +6,7 @@ license.workspace = true
 description = "Ride HUD: metric tiles, stats panel, next-climb card, transport controls"
 
 [dependencies]
+ride-i18n = { workspace = true }
 ride-model = { workspace = true }
 ride-ui-kit = { workspace = true }
 dioxus = { workspace = true }

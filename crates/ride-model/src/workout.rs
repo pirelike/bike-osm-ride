@@ -10,9 +10,15 @@
 //! The runner itself lives in `ride-sim`; this module owns the data model and the pure
 //! target arithmetic, so the UI, the engine and the tests all agree on what a step means.
 
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
+use ride_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
+
+mod generated {
+    include!(concat!(env!("OUT_DIR"), "/workout_catalogs.rs"));
+}
 
 /// What a workout is for (the picker groups by this).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -51,36 +57,36 @@ impl WorkoutCategory {
     /// Hungarian name for the picker's group headers.
     pub fn label(self) -> &'static str {
         match self {
-            WorkoutCategory::Recovery => "Regeneráció",
-            WorkoutCategory::Endurance => "Állóképesség",
-            WorkoutCategory::Tempo => "Tempó",
-            WorkoutCategory::Sweetspot => "Sweet spot",
-            WorkoutCategory::Threshold => "Küszöb",
+            WorkoutCategory::Recovery => t("model.workout.regeneracio"),
+            WorkoutCategory::Endurance => t("model.workout.allokepesseg"),
+            WorkoutCategory::Tempo => t("model.workout.tempo"),
+            WorkoutCategory::Sweetspot => t("model.workout.sweet_spot"),
+            WorkoutCategory::Threshold => t("model.workout.kuszob"),
             WorkoutCategory::Vo2max => "VO2max",
-            WorkoutCategory::Anaerobic => "Anaerob",
-            WorkoutCategory::Sprint => "Sprint",
-            WorkoutCategory::Climb => "Hegymászás",
-            WorkoutCategory::Race => "Verseny",
-            WorkoutCategory::Test => "Teszt",
-            WorkoutCategory::Mixed => "Vegyes",
+            WorkoutCategory::Anaerobic => t("model.workout.anaerob"),
+            WorkoutCategory::Sprint => t("model.workout.sprint"),
+            WorkoutCategory::Climb => t("model.workout.hegymaszas"),
+            WorkoutCategory::Race => t("model.workout.verseny"),
+            WorkoutCategory::Test => t("model.workout.teszt"),
+            WorkoutCategory::Mixed => t("model.workout.vegyes"),
         }
     }
 
     /// One-line explanation under the group header.
     pub fn hint(self) -> &'static str {
         match self {
-            WorkoutCategory::Recovery => "Könnyű, regeneráló tekerés.",
-            WorkoutCategory::Endurance => "Aerob bázis, hosszú, egyenletes terhelés.",
-            WorkoutCategory::Tempo => "Tartós, mérsékelt intenzitás.",
-            WorkoutCategory::Sweetspot => "FTP alatti, hatékony küszöbmunka.",
-            WorkoutCategory::Threshold => "Küszöbintervallumok és FTP-tesztek.",
-            WorkoutCategory::Vo2max => "Rövid, nagyon intenzív ismétlések.",
-            WorkoutCategory::Anaerobic => "Tejsavas kapacitás, 30–60 másodpercek.",
-            WorkoutCategory::Sprint => "Maximális sprint és kilövés.",
-            WorkoutCategory::Climb => "Alacsony kadencia, hegymenet.",
-            WorkoutCategory::Race => "Szimulált versenyhelyzetek.",
-            WorkoutCategory::Test => "Lépcsős és időfutam-tesztek.",
-            WorkoutCategory::Mixed => "Többféle inger egy edzésben.",
+            WorkoutCategory::Recovery => t("model.workout.konnyu_regeneralo_tekeres"),
+            WorkoutCategory::Endurance => t("model.workout.aerob_bazis_hosszu_egyenletes_terheles"),
+            WorkoutCategory::Tempo => t("model.workout.tartos_mersekelt_intenzitas"),
+            WorkoutCategory::Sweetspot => t("model.workout.ftp_alatti_hatekony_kuszobmunka"),
+            WorkoutCategory::Threshold => t("model.workout.kuszobintervallumok_es_ftp_tesztek"),
+            WorkoutCategory::Vo2max => t("model.workout.rovid_nagyon_intenziv_ismetlesek"),
+            WorkoutCategory::Anaerobic => t("model.workout.tejsavas_kapacitas_30_60_masodpercek"),
+            WorkoutCategory::Sprint => t("model.workout.maximalis_sprint_es_kiloves"),
+            WorkoutCategory::Climb => t("model.workout.alacsony_kadencia_hegymenet"),
+            WorkoutCategory::Race => t("model.workout.szimulalt_versenyhelyzetek"),
+            WorkoutCategory::Test => t("model.workout.lepcsos_es_idofutam_tesztek"),
+            WorkoutCategory::Mixed => t("model.workout.tobbfele_inger_egy_edzesben"),
         }
     }
 
@@ -116,10 +122,10 @@ impl TagGroup {
 
     pub fn label(self) -> &'static str {
         match self {
-            TagGroup::Goal => "Mire jó?",
-            TagGroup::Level => "Szint",
-            TagGroup::Kind => "Jelleg",
-            TagGroup::Phase => "Időszak",
+            TagGroup::Goal => t("model.workout.mire_jo"),
+            TagGroup::Level => t("model.workout.szint"),
+            TagGroup::Kind => t("model.workout.jelleg"),
+            TagGroup::Phase => t("model.workout.idoszak"),
         }
     }
 }
@@ -221,58 +227,74 @@ impl WorkoutTag {
     /// Hungarian chip label.
     pub fn label(self) -> &'static str {
         match self {
-            WorkoutTag::AerobicBase => "Aerob alap",
-            WorkoutTag::Threshold => "FTP / küszöb",
+            WorkoutTag::AerobicBase => t("model.workout.aerob_alap"),
+            WorkoutTag::Threshold => t("model.workout.ftp_kuszob"),
             WorkoutTag::Vo2max => "VO2max",
-            WorkoutTag::Anaerobic => "Anaerob kapacitás",
-            WorkoutTag::Sprint => "Sprint",
-            WorkoutTag::Durability => "Tartósság",
-            WorkoutTag::Climbing => "Hegymenet",
-            WorkoutTag::TimeTrial => "Időfutam",
-            WorkoutTag::RaceDynamics => "Versenydinamika",
-            WorkoutTag::Technique => "Pedáltechnika",
-            WorkoutTag::Strength => "Erő, nyomaték",
-            WorkoutTag::Recovery => "Regeneráció",
-            WorkoutTag::Testing => "Felmérés",
-            WorkoutTag::Opener => "Verseny előtti aktiválás",
-            WorkoutTag::Beginner => "Kezdőknek",
-            WorkoutTag::Advanced => "Haladóknak",
-            WorkoutTag::KeySession => "Kulcsedzés",
-            WorkoutTag::EvidenceBased => "Kutatáson alapul",
-            WorkoutTag::TimeCrunched => "Kevés időre (≤45 perc)",
-            WorkoutTag::LongRide => "Hosszú (2 óra+)",
-            WorkoutTag::Base => "Alapozás",
-            WorkoutTag::Build => "Felkészítés",
-            WorkoutTag::Peak => "Versenyidőszak",
+            WorkoutTag::Anaerobic => t("model.workout.anaerob_kapacitas"),
+            WorkoutTag::Sprint => t("model.workout.sprint"),
+            WorkoutTag::Durability => t("model.workout.tartossag"),
+            WorkoutTag::Climbing => t("model.workout.hegymenet"),
+            WorkoutTag::TimeTrial => t("model.workout.idofutam"),
+            WorkoutTag::RaceDynamics => t("model.workout.versenydinamika"),
+            WorkoutTag::Technique => t("model.workout.pedaltechnika"),
+            WorkoutTag::Strength => t("model.workout.ero_nyomatek"),
+            WorkoutTag::Recovery => t("model.workout.regeneracio"),
+            WorkoutTag::Testing => t("model.workout.felmeres"),
+            WorkoutTag::Opener => t("model.workout.verseny_elotti_aktivalas"),
+            WorkoutTag::Beginner => t("model.workout.kezdoknek"),
+            WorkoutTag::Advanced => t("model.workout.haladoknak"),
+            WorkoutTag::KeySession => t("model.workout.kulcsedzes"),
+            WorkoutTag::EvidenceBased => t("model.workout.kutatason_alapul"),
+            WorkoutTag::TimeCrunched => t("model.workout.keves_idore_45_perc"),
+            WorkoutTag::LongRide => t("model.workout.hosszu_2_ora"),
+            WorkoutTag::Base => t("model.workout.alapozas"),
+            WorkoutTag::Build => t("model.workout.felkeszites"),
+            WorkoutTag::Peak => t("model.workout.versenyidoszak"),
         }
     }
 
     /// Tooltip of the chip.
     pub fn hint(self) -> &'static str {
         match self {
-            WorkoutTag::AerobicBase => "Aerob kapacitás, zsíranyagcsere, az edzésfelépítés alapja.",
-            WorkoutTag::Threshold => "A küszöbteljesítmény (FTP) emelése és tartása.",
-            WorkoutTag::Vo2max => "A maximális oxigénfelvétel és az aerob plafon emelése.",
-            WorkoutTag::Anaerobic => "30 mp – 2 perces erőfeszítések, tejsavtűrés.",
-            WorkoutTag::Sprint => "Csúcsteljesítmény és robbanékonyság.",
-            WorkoutTag::Durability => "Teljesítmény megtartása hosszú terhelés után.",
-            WorkoutTag::Climbing => "Emelkedőkre jellemző terhelés és kadencia.",
-            WorkoutTag::TimeTrial => "Egyenletes, hosszú, küszöb közeli erőfeszítés és adagolás.",
-            WorkoutTag::RaceDynamics => "Támadások, ritmusváltások, mezőnyszerű terhelés.",
-            WorkoutTag::Technique => "Kerek pedálozás, széles kadencia-tartomány.",
-            WorkoutTag::Strength => "Nagy nyomaték, alacsony kadencia.",
-            WorkoutTag::Recovery => "Könnyű, regeneráló tekerés.",
-            WorkoutTag::Testing => "FTP-, MAP-, CP- és profilmérés.",
-            WorkoutTag::Opener => "Rövid ébresztő edzés a verseny előtt.",
-            WorkoutTag::Beginner => "Strukturált edzéssel ismerkedőknek is biztonságos.",
-            WorkoutTag::Advanced => "Nagy terhelés; biztos alapok kellenek hozzá.",
-            WorkoutTag::KeySession => "Minőségi, intenzív edzés: hetente 2–3 ilyen elég.",
-            WorkoutTag::EvidenceBased => "Publikált edzéstudományi vizsgálat protokollját követi.",
-            WorkoutTag::TimeCrunched => "Legfeljebb 45 perc bemelegítéssel együtt.",
-            WorkoutTag::LongRide => "Legalább két óra.",
-            WorkoutTag::Base => "Alapozó időszak: volumen és aerob alap.",
-            WorkoutTag::Build => "Felkészítő időszak: küszöb és VO2max munka.",
-            WorkoutTag::Peak => "Versenyidőszak: specifikus, versenyszerű ingerek.",
+            WorkoutTag::AerobicBase => {
+                t("model.workout.aerob_kapacitas_zsiranyagcsere_az_edzesfelepites_ala")
+            }
+            WorkoutTag::Threshold => t("model.workout.a_kuszobteljesitmeny_ftp_emelese_es_tartasa"),
+            WorkoutTag::Vo2max => {
+                t("model.workout.a_maximalis_oxigenfelvetel_es_az_aerob_plafon_emeles")
+            }
+            WorkoutTag::Anaerobic => t("model.workout.30_mp_2_perces_erofeszitesek_tejsavtures"),
+            WorkoutTag::Sprint => t("model.workout.csucsteljesitmeny_es_robbanekonysag"),
+            WorkoutTag::Durability => {
+                t("model.workout.teljesitmeny_megtartasa_hosszu_terheles_utan")
+            }
+            WorkoutTag::Climbing => t("model.workout.emelkedokre_jellemzo_terheles_es_kadencia"),
+            WorkoutTag::TimeTrial => {
+                t("model.workout.egyenletes_hosszu_kuszob_kozeli_erofeszites_es_adago")
+            }
+            WorkoutTag::RaceDynamics => {
+                t("model.workout.tamadasok_ritmusvaltasok_mezonyszeru_terheles")
+            }
+            WorkoutTag::Technique => t("model.workout.kerek_pedalozas_szeles_kadencia_tartomany"),
+            WorkoutTag::Strength => t("model.workout.nagy_nyomatek_alacsony_kadencia"),
+            WorkoutTag::Recovery => t("model.workout.konnyu_regeneralo_tekeres"),
+            WorkoutTag::Testing => t("model.workout.ftp_map_cp_es_profilmeres"),
+            WorkoutTag::Opener => t("model.workout.rovid_ebreszto_edzes_a_verseny_elott"),
+            WorkoutTag::Beginner => {
+                t("model.workout.strukturalt_edzessel_ismerkedoknek_is_biztonsagos")
+            }
+            WorkoutTag::Advanced => t("model.workout.nagy_terheles_biztos_alapok_kellenek_hozza"),
+            WorkoutTag::KeySession => {
+                t("model.workout.minosegi_intenziv_edzes_hetente_2_3_ilyen_eleg")
+            }
+            WorkoutTag::EvidenceBased => {
+                t("model.workout.publikalt_edzestudomanyi_vizsgalat_protokolljat_kove")
+            }
+            WorkoutTag::TimeCrunched => t("model.workout.legfeljebb_45_perc_bemelegitessel_egyutt"),
+            WorkoutTag::LongRide => t("model.workout.legalabb_ket_ora"),
+            WorkoutTag::Base => t("model.workout.alapozo_idoszak_volumen_es_aerob_alap"),
+            WorkoutTag::Build => t("model.workout.felkeszito_idoszak_kuszob_es_vo2max_munka"),
+            WorkoutTag::Peak => t("model.workout.versenyidoszak_specifikus_versenyszeru_ingerek"),
         }
     }
 
@@ -312,20 +334,20 @@ pub enum StepKind {
 impl StepKind {
     pub fn label(self) -> &'static str {
         match self {
-            StepKind::Warmup => "Bemelegítés",
-            StepKind::Interval => "Intervallum",
-            StepKind::Recovery => "Pihenő",
-            StepKind::Cooldown => "Levezetés",
-            StepKind::Steady => "Egyenletes",
-            StepKind::Test => "Teszt",
-            StepKind::Sprint => "Sprint",
-            StepKind::Free => "Szabad",
-            StepKind::Climb => "Hegymenet",
-            StepKind::Work => "Munka",
-            StepKind::Surge => "Kilövés",
-            StepKind::Attack => "Támadás",
-            StepKind::Chase => "Üldözés",
-            StepKind::Regroup => "Összeállás",
+            StepKind::Warmup => t("model.workout.bemelegites"),
+            StepKind::Interval => t("model.workout.intervallum"),
+            StepKind::Recovery => t("model.workout.piheno"),
+            StepKind::Cooldown => t("model.workout.levezetes"),
+            StepKind::Steady => t("model.workout.egyenletes"),
+            StepKind::Test => t("model.workout.teszt"),
+            StepKind::Sprint => t("model.workout.sprint"),
+            StepKind::Free => t("model.workout.szabad"),
+            StepKind::Climb => t("model.workout.hegymenet"),
+            StepKind::Work => t("model.workout.munka"),
+            StepKind::Surge => t("model.workout.kiloves"),
+            StepKind::Attack => t("model.workout.tamadas"),
+            StepKind::Chase => t("model.workout.uldozes"),
+            StepKind::Regroup => t("model.workout.osszeallas"),
         }
     }
 }
@@ -472,26 +494,28 @@ impl Workout {
     /// reason to crash: the entry is skipped.
     pub fn validate(&self) -> Result<(), String> {
         if self.id.is_empty() || self.name.trim().is_empty() {
-            return Err("hiányzó azonosító vagy név".into());
+            return Err(t("model.workout.hianyzo_azonosito_vagy_nev").into());
         }
         if self.steps.is_empty() {
-            return Err("nincs lépés".into());
+            return Err(t("model.workout.nincs_lepes").into());
         }
         if self.steps.iter().any(|s| s.duration_s < 5) {
-            return Err("túl rövid lépés".into());
+            return Err(t("model.workout.tul_rovid_lepes").into());
         }
         if self.total_seconds() != self.duration_min.saturating_mul(60) {
-            return Err(format!(
-                "{} lépés-összeg != {} perc",
-                self.total_seconds(),
-                self.duration_min
+            return Err(tf(
+                "model.workout.lepes_osszeg_perc",
+                &[
+                    ("total", &self.total_seconds().to_string()),
+                    ("minutes", &self.duration_min.to_string()),
+                ],
             ));
         }
         if self.steps.len() > 80 {
-            return Err("túl sok lépés".into());
+            return Err(t("model.workout.tul_sok_lepes").into());
         }
         if let Some(bad) = self.tags.iter().find(|t| WorkoutTag::from_id(t).is_none()) {
-            return Err(format!("ismeretlen címke: {bad}"));
+            return Err(tf("model.workout.ismeretlen_cimke_bad", &[("bad", bad)]));
         }
         Ok(())
     }
@@ -513,15 +537,12 @@ impl Workout {
         tags.iter().all(|t| self.has_tag(*t))
     }
 
-    /// Length as `1:05:00` / `45:00`.
+    /// Length as hours and minutes, `1:05` / `0:45`. Always both: a bare `45` next to `1:00` in
+    /// the workout list read as a count, not as minutes.
     pub fn duration_text(&self) -> String {
         let s = self.total_seconds();
         let (h, m) = (s / 3600, (s % 3600) / 60);
-        if h > 0 {
-            format!("{h}:{m:02}")
-        } else {
-            format!("{m}")
-        }
+        format!("{h}:{m:02}")
     }
 }
 
@@ -599,10 +620,39 @@ impl WorkoutLibrary {
         WorkoutLibrary { workouts }
     }
 
-    /// The library compiled into the binary.
+    /// The library compiled into the binary, in the current language.
+    ///
+    /// Every language with a finished translation ships as `assets/workouts.<code>.json`; a
+    /// language without one (or with an unfinished one, which the build refuses to ship) falls
+    /// back to the Hungarian source. The parse result is cached per language, so switching the
+    /// language mid-session is cheap.
     pub fn embedded() -> &'static WorkoutLibrary {
-        static LIB: OnceLock<WorkoutLibrary> = OnceLock::new();
-        LIB.get_or_init(|| WorkoutLibrary::from_json(include_str!("../assets/workouts.json")))
+        static CACHE: OnceLock<Mutex<HashMap<&'static str, &'static WorkoutLibrary>>> =
+            OnceLock::new();
+        let wanted = ride_i18n::current().code();
+        let code = if generated::WORKOUT_CATALOGS
+            .iter()
+            .any(|(code, _)| *code == wanted)
+        {
+            wanted
+        } else {
+            "hu"
+        };
+        let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut guard = cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(lib) = guard.get(code) {
+            return lib;
+        }
+        let text = generated::WORKOUT_CATALOGS
+            .iter()
+            .find(|(candidate, _)| *candidate == code)
+            .map(|(_, text)| *text)
+            .unwrap_or_default();
+        let lib: &'static WorkoutLibrary = Box::leak(Box::new(WorkoutLibrary::from_json(text)));
+        guard.insert(code, lib);
+        lib
     }
 
     /// The embedded library plus workouts imported from files (a MyWhoosh or Zwift export).
@@ -728,6 +778,59 @@ mod tests {
             serde_json::from_str(include_str!("../assets/workouts.json")).unwrap();
         let entries = raw["workouts"].as_array().unwrap().len();
         assert_eq!(WorkoutLibrary::embedded().len(), entries);
+    }
+
+    /// The Spanish library is generated from the Hungarian one through a flat string map, so the
+    /// structure must be identical: a translation may never change a duration, a target or a tag.
+    #[test]
+    fn a_translated_library_keeps_the_structure_and_loses_the_hungarian_letters() {
+        let hungarian = WorkoutLibrary::embedded();
+        let spanish = ride_i18n::with_lang(ride_i18n::Lang::ES, WorkoutLibrary::embedded);
+        assert_eq!(spanish.len(), hungarian.len(), "workout count");
+        // The library is sorted by category and then by *name*, so the two orders differ once the
+        // names are translated: pair the entries by id.
+        let by_id: std::collections::HashMap<&str, &Workout> =
+            spanish.all().iter().map(|w| (w.id.as_str(), w)).collect();
+        for hu in hungarian.all() {
+            let es = *by_id
+                .get(hu.id.as_str())
+                .unwrap_or_else(|| panic!("{} is missing from the Spanish library", hu.id));
+            assert_eq!(hu.id, es.id);
+            assert_eq!(hu.steps.len(), es.steps.len(), "{}: step count", hu.id);
+            for (a, b) in hu.steps.iter().zip(es.steps.iter()) {
+                assert_eq!(a.duration_s, b.duration_s, "{}: duration", hu.id);
+                assert_eq!(a.cadence, b.cadence, "{}: cadence", hu.id);
+                assert_eq!(
+                    a.messages.len(),
+                    b.messages.len(),
+                    "{}: message count",
+                    hu.id
+                );
+            }
+            for text in [&es.name, &es.goal, &es.description] {
+                assert!(
+                    !text.contains(['ő', 'ű', 'Ő', 'Ű']),
+                    "{}: Hungarian letters left in {text}",
+                    es.id
+                );
+            }
+            for step in &es.steps {
+                assert!(
+                    !step.name.contains(['ő', 'ű', 'Ő', 'Ű']),
+                    "{}: Hungarian letters left in {}",
+                    es.id,
+                    step.name
+                );
+                for message in &step.messages {
+                    assert!(
+                        !message.text.contains(['ő', 'ű', 'Ő', 'Ű']),
+                        "{}: Hungarian letters left in {}",
+                        es.id,
+                        message.text
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -893,6 +996,13 @@ mod tests {
         };
         assert_eq!(workout.duration_text(), "1:05");
         assert_eq!(workout.total_seconds(), 3900);
+        let mut short = workout.clone();
+        short.steps[0].duration_s = 45 * 60;
+        assert_eq!(
+            short.duration_text(),
+            "0:45",
+            "under an hour keeps the hours"
+        );
         assert!(workout.validate().is_ok());
     }
 

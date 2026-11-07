@@ -26,6 +26,7 @@ use std::sync::Arc;
 use dioxus::html::geometry::WheelDelta;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
+use ride_i18n::t;
 use ride_model::{Bounds, MapStyle, RideSnapshot, RideState, Route, RoutePosition};
 use ride_ui_kit::palette;
 use ride_ui_kit::{Icon, IconName, Segmented};
@@ -659,11 +660,11 @@ pub fn MapView(
                 class: "map map--empty",
                 "data-map-style": "{style_name}",
                 role: "region",
-                "aria-label": "Térkép",
+                "aria-label": t("ui_map.terkep"),
                 div { class: "map-empty",
                     Icon { name: IconName::Route, size: 24 }
-                    div { class: "map-empty__title", "Nincs betöltött útvonal" }
-                    div { class: "map-empty__hint", "Tölts be egy GPX-fájlt vagy illessz be egy bikerouter-linket." }
+                    div { class: "map-empty__title", {t("ui_map.nincs_betoltott_utvonal")} }
+                    div { class: "map-empty__hint", {t("ui_map.tolts_be_egy_gpx_fajlt_vagy_illessz_be_egy_bikeroute")} }
                 }
             }
         };
@@ -776,7 +777,7 @@ pub fn MapView(
             class: "{classes}",
             "data-map-style": "{style_name}",
             role: "region",
-            "aria-label": "Térkép",
+            "aria-label": t("ui_map.terkep"),
             tabindex: "0",
             onmounted: on_mount,
             onmousedown: move |event: Event<MouseData>| {
@@ -921,10 +922,10 @@ pub fn MapView(
                         div {
                             class: "map-marker map-marker--start",
                             style: "transform: translate({x:.1}px, {y:.1}px)",
-                            title: "Rajt",
+                            title: t("ui_map.rajt").to_string(),
                             div { class: "map-marker__body",
                                 span { class: "map-pin map-pin--start" }
-                                span { class: "map-marker__badge", "Rajt" }
+                                span { class: "map-marker__badge", {t("ui_map.rajt")} }
                             }
                         }
                     }
@@ -932,10 +933,10 @@ pub fn MapView(
                         div {
                             class: "map-marker map-marker--finish",
                             style: "transform: translate({x:.1}px, {y:.1}px)",
-                            title: "Cél",
+                            title: t("ui_map.cel").to_string(),
                             div { class: "map-marker__body",
                                 span { class: "map-pin map-pin--finish" }
-                                span { class: "map-marker__badge", "Cél" }
+                                span { class: "map-marker__badge", {t("ui_map.cel")} }
                             }
                         }
                     }
@@ -944,8 +945,8 @@ pub fn MapView(
                             class: "map-marker map-marker--ghost",
                             style: "transform: translate({x:.1}px, {y:.1}px)",
                             role: "img",
-                            "aria-label": "Szellem",
-                            title: "Szellem",
+                            "aria-label": t("ui_map.szellem"),
+                            title: t("ui_map.szellem").to_string(),
                             div {
                                 class: "map-ghost__wedge",
                                 style: "transform: rotate({heading:.1}deg)",
@@ -969,8 +970,8 @@ pub fn MapView(
                             class: "map-marker map-marker--rider",
                             style: "transform: translate({x:.1}px, {y:.1}px)",
                             role: "img",
-                            "aria-label": "Jelenlegi pozíció",
-                            title: "Jelenlegi pozíció",
+                            "aria-label": t("ui_map.jelenlegi_pozicio"),
+                            title: t("ui_map.jelenlegi_pozicio").to_string(),
                             div {
                                 class: "map-rider__wedge",
                                 style: "transform: rotate({heading:.1}deg)",
@@ -988,8 +989,8 @@ pub fn MapView(
                 div { class: "map-controls__style",
                     Segmented {
                         options: vec![
-                            ("dark".to_string(), "Sötét".to_string()),
-                            ("light".to_string(), "Világos".to_string()),
+                            ("dark".to_string(), t("ui_map.sotet").to_string()),
+                            ("light".to_string(), t("ui_map.vilagos").to_string()),
                             ("osm".to_string(), "OSM".to_string()),
                         ],
                         value: style_name.to_string(),
@@ -998,34 +999,34 @@ pub fn MapView(
                                 on_style.call(style);
                             }
                         },
-                        aria_label: "Térképstílus".to_string(),
+                        aria_label: t("ui_map.terkepstilus").to_string(),
                         small: true,
                     }
                 }
-                div { class: "btn-group btn-group--v map-controls__zoom", role: "group", "aria-label": "Nagyítás",
+                div { class: "btn-group btn-group--v map-controls__zoom", role: "group", "aria-label": t("ui_map.nagyitas"),
                     button {
                         class: "btn btn--icon",
                         r#type: "button",
-                        "aria-label": "Nagyítás",
-                        title: "Nagyítás",
+                        "aria-label": t("ui_map.nagyitas"),
+                        title: t("ui_map.nagyitas").to_string(),
                         onclick: move |_| apply_zoom(viewport, zoom, center, following, fit_pending, 1.0, None),
                         Icon { name: IconName::Plus, size: 18 }
                     }
                     button {
                         class: "btn btn--icon",
                         r#type: "button",
-                        "aria-label": "Kicsinyítés",
-                        title: "Kicsinyítés",
+                        "aria-label": t("ui_map.kicsinyites"),
+                        title: t("ui_map.kicsinyites").to_string(),
                         onclick: move |_| apply_zoom(viewport, zoom, center, following, fit_pending, -1.0, None),
                         Icon { name: IconName::Minus, size: 18 }
                     }
                 }
-                div { class: "btn-group btn-group--v map-controls__follow", role: "group", "aria-label": "Követés",
+                div { class: "btn-group btn-group--v map-controls__follow", role: "group", "aria-label": t("ui_map.kovetes"),
                     button {
                         class: if following { "btn btn--icon is-active" } else { "btn btn--icon" },
                         r#type: "button",
-                        "aria-label": "Követés",
-                        title: if following { "Követés kikapcsolása" } else { "Követés bekapcsolása" },
+                        "aria-label": t("ui_map.kovetes"),
+                        title: if following { t("ui_map.kovetes_kikapcsolasa") } else { t("ui_map.kovetes_bekapcsolasa") },
                         aria_pressed: if following { "true" } else { "false" },
                         onclick: move |_| {
                             if following {
@@ -1041,15 +1042,15 @@ pub fn MapView(
                     button {
                         class: "btn btn--icon",
                         r#type: "button",
-                        "aria-label": "Vissza a kerékpároshoz",
-                        title: "Vissza a kerékpároshoz",
+                        "aria-label": t("ui_map.vissza_a_kerekparoshoz"),
+                        title: t("ui_map.vissza_a_kerekparoshoz").to_string(),
                         onclick: move |_| recenter_map(route, viewport, zoom, center, free_pan, fit_pending, on_follow, rider),
                         Icon { name: IconName::Compass, size: 18 }
                     }
                 }
             }
             if let Some(bar) = scale_bar {
-                div { class: "map-scale", role: "note", "aria-label": "Méretarány",
+                div { class: "map-scale", role: "note", "aria-label": t("ui_map.meretarany"),
                     span { class: "map-scale__label", "{bar.label}" }
                     span { class: "map-scale__bar", style: "width: {bar.px:.0}px" }
                 }

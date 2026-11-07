@@ -1,4 +1,4 @@
-//! Error type of the Street View lookups, with Hungarian user-facing texts.
+//! Error type of the Street View lookups; the user-facing texts live in the catalogs.
 //!
 //! No variant carries text that came from the network or from a URL: the API key can
 //! therefore never end up in a `Debug` / `Display` of an error, a toast or a log line.
@@ -6,65 +6,57 @@
 //! anywhere in this crate: [`SvError::from_transport`] only looks at its *kind*.)
 
 /// Why a metadata lookup (or the whole feature) cannot deliver a panorama.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+use ride_i18n::t;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SvError {
     /// No API key configured.
-    #[error("Nincs megadva Google Maps API-kulcs.")]
     MissingKey,
     /// `REQUEST_DENIED` / HTTP 403: wrong key, API not enabled, billing off, restricted key.
-    #[error("A Google elutasította az API-kulcsot.")]
     KeyRejected,
     /// `INVALID_REQUEST` / HTTP 400.
-    #[error("A Google érvénytelennek találta a kérést.")]
     InvalidRequest,
     /// `OVER_QUERY_LIMIT` / HTTP 429.
-    #[error("A Google lekérdezési kvótája elfogyott.")]
     QuotaExceeded,
     /// `ZERO_RESULTS` / `NOT_FOUND`: there is no panorama near the point.
-    #[error("Itt nincs elérhető Street View.")]
     NoCoverage,
     /// Timeout, no connection, TLS problem, connection reset.
-    #[error("Nincs kapcsolat a Google szolgáltatásával.")]
     Network,
     /// HTTP 5xx or `UNKNOWN_ERROR` (usually temporary).
-    #[error("A Google szolgáltatása átmenetileg hibát jelzett.")]
     Server,
     /// A reply that is not the documented JSON, or carries an unusable panorama id.
-    #[error("A Google váratlan választ adott.")]
     BadResponse,
     /// The endpoint is not a Google (or loopback test) address; nothing was sent.
-    #[error("A cím nem a Google-é, ezért a kérést nem küldtük el.")]
     UntrustedEndpoint,
 }
 
 impl SvError {
-    /// Short headline for the panel (always Hungarian).
+    /// Short headline for the panel, in the UI language.
     pub fn title(self) -> &'static str {
         match self {
-            SvError::MissingKey => "Street View: API-kulcs szükséges",
-            SvError::KeyRejected => "A Google elutasította a kulcsot",
-            SvError::InvalidRequest => "Érvénytelen Street View-kérés",
-            SvError::QuotaExceeded => "Elfogyott a Google-kvóta",
-            SvError::NoCoverage => "Itt nincs Street View",
-            SvError::Network => "Nincs kapcsolat a Google-lel",
-            SvError::Server => "A Google átmenetileg nem válaszol",
-            SvError::BadResponse => "Váratlan válasz a Google-től",
-            SvError::UntrustedEndpoint => "Nem engedélyezett cím",
+            SvError::MissingKey => t("ui_streetview.error.street_view_api_kulcs_szukseges"),
+            SvError::KeyRejected => t("ui_streetview.error.a_google_elutasitotta_a_kulcsot"),
+            SvError::InvalidRequest => t("ui_streetview.error.ervenytelen_street_view_keres"),
+            SvError::QuotaExceeded => t("ui_streetview.error.elfogyott_a_google_kvota"),
+            SvError::NoCoverage => t("ui_streetview.error.itt_nincs_street_view"),
+            SvError::Network => t("ui_streetview.error.nincs_kapcsolat_a_google_lel"),
+            SvError::Server => t("ui_streetview.error.a_google_atmenetileg_nem_valaszol"),
+            SvError::BadResponse => t("ui_streetview.error.varatlan_valasz_a_google_tol"),
+            SvError::UntrustedEndpoint => t("ui_streetview.error.nem_engedelyezett_cim"),
         }
     }
 
     /// A few words for the small header readout.
     pub fn short(self) -> &'static str {
         match self {
-            SvError::MissingKey => "API-kulcs szükséges",
-            SvError::KeyRejected => "Kulcs elutasítva",
-            SvError::InvalidRequest => "Érvénytelen kérés",
-            SvError::QuotaExceeded => "Kvóta elfogyott",
-            SvError::NoCoverage => "Itt nincs Street View",
-            SvError::Network => "Nincs kapcsolat",
-            SvError::Server => "Google hiba",
-            SvError::BadResponse => "Váratlan válasz",
-            SvError::UntrustedEndpoint => "Nem engedélyezett cím",
+            SvError::MissingKey => t("ui_streetview.error.api_kulcs_szukseges"),
+            SvError::KeyRejected => t("ui_streetview.error.kulcs_elutasitva"),
+            SvError::InvalidRequest => t("ui_streetview.error.ervenytelen_keres"),
+            SvError::QuotaExceeded => t("ui_streetview.error.kvota_elfogyott"),
+            SvError::NoCoverage => t("ui_streetview.error.itt_nincs_street_view"),
+            SvError::Network => t("ui_streetview.error.nincs_kapcsolat"),
+            SvError::Server => t("ui_streetview.error.google_hiba"),
+            SvError::BadResponse => t("ui_streetview.error.varatlan_valasz"),
+            SvError::UntrustedEndpoint => t("ui_streetview.error.nem_engedelyezett_cim"),
         }
     }
 
@@ -72,29 +64,27 @@ impl SvError {
     pub fn hint(self) -> &'static str {
         match self {
             SvError::MissingKey => {
-                "Hozz létre API-kulcsot a Google Cloud konzolban, engedélyezd a Maps Embed API-t \
-                 és a Street View Static API-t, majd másold be a kulcsot a Beállításokban."
+                t("ui_streetview.error.hozz_letre_api_kulcsot_a_google_cloud_konzolban_enge")
             }
             SvError::KeyRejected => {
-                "Ellenőrizd, hogy a kulcs helyes-e, a Maps Embed API és a Street View Static API \
-                 engedélyezve van-e a projektben, be van-e kapcsolva a számlázás, és hogy a kulcs \
-                 korlátozásai nem tiltják-e ezeket."
+                t("ui_streetview.error.ellenorizd_hogy_a_kulcs_helyes_e_a_maps_embed_api_es")
             }
             SvError::InvalidRequest => {
-                "Valószínűleg hibás a kulcs formátuma. Másold be újra a Beállításokban."
+                t("ui_streetview.error.valoszinuleg_hibas_a_kulcs_formatuma_masold_be_ujra_")
             }
             SvError::QuotaExceeded => {
-                "Próbáld később, vagy emeld a kvótát a Google Cloud konzolban. A panoráma-\
-                 azonosítók mentésével az ismételt túrákon nincs szükség új lekérdezésre."
+                t("ui_streetview.error.probald_kesobb_vagy_emeld_a_kvotat_a_google_cloud_ko")
             }
-            SvError::NoCoverage => "Ezen a szakaszon nincs Street View-felvétel.",
+            SvError::NoCoverage => {
+                t("ui_streetview.error.ezen_a_szakaszon_nincs_street_view_felvetel")
+            }
             SvError::Network => {
-                "Ellenőrizd az internetkapcsolatot; hamarosan automatikusan újrapróbáljuk."
+                t("ui_streetview.error.ellenorizd_az_internetkapcsolatot_hamarosan_automati")
             }
-            SvError::Server => "Hamarosan automatikusan újrapróbáljuk.",
-            SvError::BadResponse => "Hamarosan automatikusan újrapróbáljuk.",
+            SvError::Server => t("ui_streetview.error.hamarosan_automatikusan_ujraprobaljuk"),
+            SvError::BadResponse => t("ui_streetview.error.hamarosan_automatikusan_ujraprobaljuk"),
             SvError::UntrustedEndpoint => {
-                "A Street View csak a Google szolgáltatásaihoz kapcsolódik."
+                t("ui_streetview.error.a_street_view_csak_a_google_szolgaltatasaihoz_kapcso")
             }
         }
     }
@@ -160,6 +150,15 @@ impl SvError {
         }
     }
 }
+
+impl std::fmt::Display for SvError {
+    /// The headline, in the UI language: `Display` is what a log line or a toast shows.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.title())
+    }
+}
+
+impl std::error::Error for SvError {}
 
 #[cfg(test)]
 mod tests {

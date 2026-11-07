@@ -10,6 +10,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use ride_i18n::{tf, tn};
 use ride_model::Route;
 use tokio::sync::{watch, Mutex};
 use tokio::task::{JoinHandle, JoinSet};
@@ -59,23 +60,39 @@ impl Progress {
         }
     }
 
-    /// Hungarian one-liner for the panel footer.
+    /// One-liner for the panel footer, in the UI language.
     pub fn note(self) -> String {
         if let Some(e) = self.stopped {
-            return format!("A letöltés leállt: {}", e.short());
+            return tf(
+                "ui_streetview.download.a_letoltes_leallt",
+                &[("reason", e.short())],
+            );
         }
         if self.running {
-            return format!(
-                "Képek letöltése: {}/{} ({:.0}%)",
-                self.done,
-                self.total,
-                self.fraction() * 100.0
+            return tf(
+                "ui_streetview.download.kepek_letoltese_0",
+                &[
+                    ("done", &self.done.to_string()),
+                    ("total", &self.total.to_string()),
+                    ("pct", &format!("{:.0}", self.fraction() * 100.0)),
+                ],
             );
         }
         if self.total > 0 && self.done >= self.total {
-            return format!("Offline Street View kész: {} kép", self.total - self.failed);
+            let count = self.total - self.failed;
+            return tn(
+                "ui_streetview.download.offline_street_view_kesz_kep",
+                count as i64,
+                &[("count", &count.to_string())],
+            );
         }
-        format!("Offline Street View: {}/{} kép", self.done, self.total)
+        tf(
+            "ui_streetview.download.offline_street_view_kep",
+            &[
+                ("done", &self.done.to_string()),
+                ("total", &self.total.to_string()),
+            ],
+        )
     }
 }
 

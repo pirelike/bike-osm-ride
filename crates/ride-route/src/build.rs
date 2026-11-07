@@ -20,6 +20,7 @@
 //!    cleaned geometry quantised to 1e-5°, so the same track gives the same id whether
 //!    it comes from a file or from BRouter).
 
+use ride_i18n::{t, tf};
 use ride_model::{Bounds, Route, RoutePoint, RouteSegment, RouteSource, Waypoint};
 
 use crate::geo;
@@ -427,7 +428,7 @@ pub fn pick_name(gpx_name: Option<&str>, hint: &str) -> String {
     }
     let h = limit(hint);
     if h.is_empty() {
-        "Névtelen útvonal".to_string()
+        t("route.build.nevtelen_utvonal").to_string()
     } else {
         h
     }
@@ -448,7 +449,7 @@ fn map_waypoints(data: &GpxData, points: &[RoutePoint]) -> Vec<Waypoint> {
             continue;
         }
         let name = if w.name.trim().is_empty() {
-            format!("Útpont {}", i + 1)
+            tf("route.build.utpont", &[("index", &(i + 1).to_string())])
         } else {
             w.name.trim().to_string()
         };
@@ -514,23 +515,33 @@ fn map_segments(data: &GpxData, points: &[RoutePoint]) -> Vec<RouteSegment> {
 /// Run the whole pipeline on parsed GPX data.
 pub fn build_route(data: &GpxData, name_hint: &str, source: RouteSource) -> Result<Route> {
     if data.points.len() < 2 {
-        return err("Az útvonalnak legalább két pontot kell tartalmaznia.");
+        return err(t(
+            "route.build.az_utvonalnak_legalabb_ket_pontot_kell_tartalmaznia",
+        ));
     }
     let mut cleaned = clean(&data.points);
     if cleaned.len() < 2 {
-        return err("Az útvonal nem tartalmaz két különböző pontot.");
+        return err(t(
+            "route.build.az_utvonal_nem_tartalmaz_ket_kulonbozo_pontot",
+        ));
     }
     let total = cleaned.last().map_or(0.0, |p| p.dist);
     if total < MIN_ROUTE_M {
-        return err(format!(
-            "Az útvonal túl rövid ({total:.0} m); legalább {MIN_ROUTE_M:.0} m kell."
+        return err(tf(
+            "route.build.az_utvonal_tul_rovid_total_0_m_legalabb_min_route_m_",
+            &[
+                ("length", &format!("{total:.0}")),
+                ("minimum", &format!("{MIN_ROUTE_M:.0}")),
+            ],
         ));
     }
     if total > MAX_ROUTE_M {
-        return err(format!(
-            "Az útvonal túl hosszú ({:.0} km); legfeljebb {:.0} km engedélyezett.",
-            total / 1000.0,
-            MAX_ROUTE_M / 1000.0
+        return err(tf(
+            "route.build.az_utvonal_tul_hosszu_0_km_legfeljebb_0_km_engedelye",
+            &[
+                ("length", &format!("{:.0}", total / 1000.0)),
+                ("maximum", &format!("{:.0}", MAX_ROUTE_M / 1000.0)),
+            ],
         ));
     }
     let id = route_id(&cleaned);

@@ -19,6 +19,10 @@ pub const FIT_MAX_ZOOM: f64 = 17.0;
 /// Padding around a fitted route in CSS pixels (also keeps the start/finish labels visible).
 pub const FIT_PADDING: f64 = 56.0;
 
+/// Extra room a fit leaves at the bottom, CSS pixels: the scale bar and the attribution sit
+/// there, and a route that ended in the corner put its start flag under them.
+pub const FIT_BOTTOM_EXTRA: f64 = 32.0;
+
 /// Size of the map surface in CSS pixels plus the device pixel ratio of the display.
 ///
 /// The default is a sane fallback for server-side rendering and for the first frame before
@@ -235,15 +239,19 @@ pub fn fit_bounds(bounds: Bounds, view: Viewport) -> Camera {
         .min(view.width * 0.2)
         .min(view.height * 0.2)
         .max(0.0);
+    let bottom = FIT_BOTTOM_EXTRA.min(view.height * 0.1).max(0.0);
     let avail_w = (view.width - 2.0 * pad).max(64.0);
-    let avail_h = (view.height - 2.0 * pad).max(64.0);
+    let avail_h = (view.height - 2.0 * pad - bottom).max(64.0);
 
     // world pixels double with every zoom level, hence log2 of the ratio
     let zoom = (avail_w / span_x).log2().min((avail_h / span_y).log2());
     let zoom = mercator::clamp_zoom(zoom.min(FIT_MAX_ZOOM));
 
+    // the bounds sit in the middle of the box above the bottom extra: the camera looks half of
+    // it further south (world y grows southwards; one screen pixel is 2^-zoom world pixels)
+    let shift = bottom / 2.0 / zoom.exp2();
     let center = GeoPoint::new(
-        y_to_lat((y0 + y1) / 2.0, 0.0),
+        y_to_lat((y0 + y1) / 2.0 + shift, 0.0),
         x_to_lon((x0 + x1) / 2.0, 0.0),
     );
     Camera { center, zoom }
@@ -501,9 +509,10 @@ mod tests {
                 x >= pad - 1.0 && x <= view().width - pad + 1.0,
                 "x {x} outside the padded box for {corner:?}"
             );
+            let bottom = FIT_BOTTOM_EXTRA.min(view().height * 0.1);
             assert!(
-                y >= pad - 1.0 && y <= view().height - pad + 1.0,
-                "y {y} outside the padded box for {corner:?}"
+                y >= pad - 1.0 && y <= view().height - pad - bottom + 1.0,
+                "y {y} outside the padded box (clear of the scale bar) for {corner:?}"
             );
         }
     }

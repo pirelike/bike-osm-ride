@@ -3,12 +3,13 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/pirelike/bike-osm-ride"
 
 [workspace.dependencies]
+ride-i18n = { path = "crates/ride-i18n" }
 ride-model = { path = "crates/ride-model" }
 ride-route = { path = "crates/ride-route" }
 ride-sim = { path = "crates/ride-sim" }
@@ -23,6 +24,7 @@ ride-ui-streetview = { path = "crates/ride-ui-streetview" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sys-locale = "0.3"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs", "io-util"] }
 dioxus = "0.7"

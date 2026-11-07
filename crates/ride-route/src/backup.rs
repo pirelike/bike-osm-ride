@@ -38,6 +38,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::rides::{valid_stem, INDEX_FILE, RIDES_DIR};
 use crate::store::{self, valid_id, Store, MAX_FILE_BYTES};
+use ride_i18n::{t, tf};
 
 /// The archive layout version this code writes and reads.
 pub const BACKUP_FORMAT: u32 = 1;
@@ -100,14 +101,17 @@ pub struct RestoreReport {
 
 /// `bike-osm-ride-mentes-2026-11-05.zip`
 pub fn suggested_filename(unix_s: f64) -> String {
-    format!(
-        "bike-osm-ride-mentes-{}.zip",
-        ride_sim::tcx::iso_date(unix_s)
+    tf(
+        "route.backup.suggested_filename",
+        &[("date", &ride_sim::tcx::iso_date(unix_s))],
     )
 }
 
 fn zip_err(err: zip::result::ZipError) -> String {
-    format!("A zip-fájl nem olvasható: {err}")
+    tf(
+        "route.backup.a_zip_fajl_nem_olvashato_err",
+        &[("err", &err.to_string())],
+    )
 }
 
 fn io_err(what: &str, err: &io::Error) -> String {
@@ -127,14 +131,23 @@ pub fn export<W: Write + Seek>(
 ) -> Result<ExportReport, String> {
     let mut settings = settings.clone();
     settings.ui.google_maps_key.clear();
-    let settings_json = serde_json::to_vec_pretty(&settings)
-        .map_err(|err| format!("A beállítások nem menthetők: {err}"))?;
+    let settings_json = serde_json::to_vec_pretty(&settings).map_err(|err| {
+        tf(
+            "route.backup.a_beallitasok_nem_menthetok_err",
+            &[("err", &err.to_string())],
+        )
+    })?;
     let manifest_json = serde_json::to_vec_pretty(&Manifest {
         format: BACKUP_FORMAT,
         app_version: app_version.to_string(),
         created_unix_s,
     })
-    .map_err(|err| format!("A mentés fejléce nem írható: {err}"))?;
+    .map_err(|err| {
+        tf(
+            "route.backup.a_mentes_fejlece_nem_irhato_err",
+            &[("err", &err.to_string())],
+        )
+    })?;
 
     let mut zip = ZipWriter::new(out);
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
@@ -197,8 +210,12 @@ pub fn export<W: Write + Seek>(
             report.workouts += 1;
         }
     }
-    zip.finish()
-        .map_err(|err| format!("A mentés lezárása nem sikerült: {err}"))?;
+    zip.finish().map_err(|err| {
+        tf(
+            "route.backup.a_mentes_lezarasa_nem_sikerult_err",
+            &[("err", &err.to_string())],
+        )
+    })?;
     Ok(report)
 }
 
@@ -208,10 +225,21 @@ fn add<W: Write + Seek>(
     name: &str,
     bytes: &[u8],
 ) -> Result<(), String> {
-    zip.start_file(name, options)
-        .map_err(|err| format!("A mentésbe nem írható be a(z) {name}: {err}"))?;
-    zip.write_all(bytes)
-        .map_err(|err| io_err(&format!("A mentésbe nem írható be a(z) {name}"), &err))
+    zip.start_file(name, options).map_err(|err| {
+        tf(
+            "route.backup.a_mentesbe_nem_irhato_be_a_z_name_err",
+            &[("name", name), ("err", &err.to_string())],
+        )
+    })?;
+    zip.write_all(bytes).map_err(|err| {
+        io_err(
+            &tf(
+                "route.backup.a_mentesbe_nem_irhato_be_a_z_name",
+                &[("name", name)],
+            ),
+            &err,
+        )
+    })
 }
 
 /// `(file stem, path)` of the `*.json` files directly in `dir`, by name. A missing folder is empty.
@@ -317,9 +345,11 @@ pub fn restore_with<R: Read + Seek>(
     limits: &Limits,
 ) -> Result<RestoreReport, String> {
     let mut archive = ZipArchive::new(input)
-        .map_err(|_| "Ez a fájl nem érvényes zip, vagy sérült.".to_string())?;
+        .map_err(|_| t("route.backup.ez_a_fajl_nem_ervenyes_zip_vagy_serult").to_string())?;
     if archive.len() > limits.max_entries {
-        return Err("A mentés gyanúsan sok fájlt tartalmaz, nem állítom vissza.".to_string());
+        return Err(
+            t("route.backup.a_mentes_gyanusan_sok_fajlt_tartalmaz_nem_allitom_vi").to_string(),
+        );
     }
 
     let mut report = RestoreReport::default();
@@ -344,10 +374,12 @@ fn validate<R: Read + Seek>(
             (entry.name().to_string(), entry.is_dir(), entry.is_symlink())
         };
         let kind = classify(&name).map_err(|()| {
-            "A mentés érvénytelen fájlnevet tartalmaz, nem állítom vissza.".to_string()
+            t("route.backup.a_mentes_ervenytelen_fajlnevet_tartalmaz_nem_allitom").to_string()
         })?;
         if !seen.insert(name.clone()) {
-            return Err("A mentésben egy fájl kétszer szerepel, nem állítom vissza.".to_string());
+            return Err(
+                t("route.backup.a_mentesben_egy_fajl_ketszer_szerepel_nem_allitom_vi").to_string(),
+            );
         }
         if is_dir {
             continue;
@@ -359,13 +391,14 @@ fn validate<R: Read + Seek>(
         let bytes = read_entry(archive, index, limits, &mut total)?;
         match kind {
             Kind::Manifest => {
-                let manifest: Manifest = serde_json::from_slice(&bytes)
-                    .map_err(|_| "A mentés fejléce (backup.json) olvashatatlan.".to_string())?;
+                let manifest: Manifest = serde_json::from_slice(&bytes).map_err(|_| {
+                    t("route.backup.a_mentes_fejlece_backup_json_olvashatatlan").to_string()
+                })?;
                 if manifest.format > BACKUP_FORMAT {
-                    return Err(
-                        "Ez a mentés az alkalmazás újabb verziójából való; frissíts, és próbáld újra."
-                            .to_string(),
-                    );
+                    return Err(t(
+                        "route.backup.ez_a_mentes_az_alkalmazas_ujabb_verziojabol_valo_fri",
+                    )
+                    .to_string());
                 }
                 manifest_seen = true;
             }
@@ -410,7 +443,9 @@ fn validate<R: Read + Seek>(
         }
     }
     if !manifest_seen {
-        return Err("Ez nem bike-osm-ride mentés (hiányzik belőle a backup.json).".to_string());
+        return Err(
+            t("route.backup.ez_nem_bike_osm_ride_mentes_hianyzik_belole_a_backup").to_string(),
+        );
     }
     report.settings = plan.settings.take();
     Ok(plan)
@@ -433,14 +468,18 @@ fn read_entry<R: Read + Seek>(
     entry
         .take(limits.max_entry_bytes.saturating_add(1))
         .read_to_end(&mut bytes)
-        .map_err(|err| io_err("A mentés egyik fájlja sérült", &err))?;
+        .map_err(|err| io_err(t("route.backup.a_mentes_egyik_fajlja_serult"), &err))?;
     let len = bytes.len() as u64;
     if len > limits.max_entry_bytes {
-        return Err("A mentés egyik fájlja túl nagy, nem állítom vissza.".to_string());
+        return Err(
+            t("route.backup.a_mentes_egyik_fajlja_tul_nagy_nem_allitom_vissza").to_string(),
+        );
     }
     *total = total.saturating_add(len);
     if *total > limits.max_total_bytes {
-        return Err("A mentés kicsomagolva túl nagy, nem állítom vissza.".to_string());
+        return Err(
+            t("route.backup.a_mentes_kicsomagolva_tul_nagy_nem_allitom_vissza").to_string(),
+        );
     }
     Ok(bytes)
 }
@@ -454,7 +493,7 @@ fn write_plan<R: Read + Seek>(
 ) -> Result<(), String> {
     let write_err = |err: io::Error| {
         io_err(
-            "A visszaállítás közben hiba történt (amit addig visszaállt, az megmaradt)",
+            t("route.backup.a_visszaallitas_kozben_hiba_tortent_amit_addig_vissz"),
             &err,
         )
     };

@@ -14,6 +14,7 @@ use crate::error::{bounded, BleError};
 use crate::transport::{
     AdapterEvent, Advertisement, BleAdapter, CharProps, GattChar, GattPeripheral, Notification,
 };
+use ride_i18n::t;
 
 /// How long creating the platform manager and listing adapters may take.
 const INIT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -32,11 +33,13 @@ impl BtleAdapter {
         if let Some(reason) = crate::android_ble::backend_error() {
             return Err(BleError::Unavailable(reason));
         }
-        let manager = bounded("a Bluetooth-kezelő indítása", INIT_TIMEOUT, async {
-            Manager::new().await.map_err(BleError::from)
-        })
+        let manager = bounded(
+            t("ble.btle.a_bluetooth_kezelo_inditasa"),
+            INIT_TIMEOUT,
+            async { Manager::new().await.map_err(BleError::from) },
+        )
         .await?;
-        let adapters = bounded("az adapterek listázása", INIT_TIMEOUT, async {
+        let adapters = bounded(t("ble.btle.az_adapterek_listazasa"), INIT_TIMEOUT, async {
             manager.adapters().await.map_err(BleError::from)
         })
         .await?;
@@ -44,7 +47,9 @@ impl BtleAdapter {
             .into_iter()
             .next()
             .map(|inner| Self { inner })
-            .ok_or_else(|| BleError::Unavailable("nincs Bluetooth-adapter a gépen".into()))
+            .ok_or_else(|| {
+                BleError::Unavailable(t("ble.btle.nincs_bluetooth_adapter_a_gepen").into())
+            })
     }
 }
 

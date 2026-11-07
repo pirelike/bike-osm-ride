@@ -6,6 +6,7 @@ license.workspace = true
 description = "Pure-Rust slippy map (tiles via the app's tile proxy), route layer, rider marker"
 
 [dependencies]
+ride-i18n = { workspace = true }
 ride-model = { workspace = true }
 ride-ui-kit = { workspace = true }
 dioxus = { workspace = true }

@@ -17,6 +17,7 @@
 
 use std::path::{Path, PathBuf};
 
+use ride_i18n::{t, tf};
 use ride_model::{Route, RouteSource};
 
 pub mod activity;
@@ -61,7 +62,7 @@ where
     if tokio::runtime::Handle::try_current().is_ok() {
         match tokio::task::spawn_blocking(f).await {
             Ok(r) => r,
-            Err(_) => err("Az útvonal feldolgozása megszakadt."),
+            Err(_) => err(t("route.az_utvonal_feldolgozasa_megszakadt")),
         }
     } else {
         f()
@@ -71,11 +72,18 @@ where
 fn file_error(path: &Path, e: &std::io::Error) -> RouteError {
     let shown = path.display();
     let msg = match e.kind() {
-        std::io::ErrorKind::NotFound => format!("A fájl nem található: {shown}"),
-        std::io::ErrorKind::PermissionDenied => {
-            format!("Nincs jogosultság a fájl olvasásához: {shown}")
-        }
-        _ => format!("A fájl nem olvasható ({e}): {shown}"),
+        std::io::ErrorKind::NotFound => tf(
+            "route.a_fajl_nem_talalhato_shown",
+            &[("shown", &shown.to_string())],
+        ),
+        std::io::ErrorKind::PermissionDenied => tf(
+            "route.nincs_jogosultsag_a_fajl_olvasasahoz_shown",
+            &[("shown", &shown.to_string())],
+        ),
+        _ => tf(
+            "route.a_fajl_nem_olvashato_e_shown",
+            &[("e", &e.to_string()), ("shown", &shown.to_string())],
+        ),
     };
     RouteError::Message(msg)
 }
@@ -118,12 +126,12 @@ pub async fn load_route_from_path(path: PathBuf, fetch_missing_elevation: bool) 
         .await
         .map_err(|e| file_error(&path, &e))?;
     if !meta.is_file() {
-        return err("A kiválasztott elem nem fájl.");
+        return err(t("route.a_kivalasztott_elem_nem_fajl"));
     }
     if meta.len() > MAX_GPX_BYTES {
-        return err(format!(
-            "A fájl túl nagy (legfeljebb {} MB engedélyezett).",
-            MAX_GPX_BYTES / (1024 * 1024)
+        return err(tf(
+            "route.a_fajl_tul_nagy_legfeljebb_mb_engedelyezett",
+            &[("mb", &(MAX_GPX_BYTES / (1024 * 1024)).to_string())],
         ));
     }
     let bytes = tokio::fs::read(&path)
@@ -146,9 +154,9 @@ pub async fn load_route_from_bytes(
     fetch_missing_elevation: bool,
 ) -> Result<Route> {
     if bytes.len() as u64 > MAX_GPX_BYTES {
-        return err(format!(
-            "A fájl túl nagy (legfeljebb {} MB engedélyezett).",
-            MAX_GPX_BYTES / (1024 * 1024)
+        return err(tf(
+            "route.a_fajl_tul_nagy_legfeljebb_mb_engedelyezett",
+            &[("mb", &(MAX_GPX_BYTES / (1024 * 1024)).to_string())],
         ));
     }
     let api = fetch_missing_elevation.then_some(elevation::OPEN_METEO_URL);
@@ -171,9 +179,9 @@ pub async fn load_route_from_text(
     .await
 }
 
-/// `29,4` style kilometres for names.
+/// `29,4` style kilometres for names (the language's decimal separator).
 fn km_hu(metres: f64) -> String {
-    format!("{:.1}", metres / 1000.0).replace('.', ",")
+    ride_i18n::decimal(metres / 1000.0, 1)
 }
 
 /// Accepts a bikerouter.de / brouter-web share link (or a raw BRouter API URL),
@@ -181,18 +189,21 @@ fn km_hu(metres: f64) -> String {
 ///
 /// See [`bikerouter`] for the exact link formats.
 pub async fn load_route_from_bikerouter(link: &str) -> Result<Route> {
-    const NAME: &str = "Bikerouter útvonal";
+    let name = t("route.bikerouter_utvonal");
     let request = bikerouter::parse_link(link)?;
     let gpx_text = bikerouter::fetch_gpx(&request).await?;
     let mut route = build_from_bytes(
         gpx_text.into_bytes(),
-        NAME.to_string(),
+        name.to_string(),
         RouteSource::Bikerouter,
         Some(elevation::OPEN_METEO_URL),
     )
     .await?;
-    if route.name == NAME {
-        route.name = format!("{NAME} – {} km", km_hu(route.total_dist));
+    if route.name == name {
+        route.name = tf(
+            "route.bikerouter.name_with_km",
+            &[("name", name), ("km", &km_hu(route.total_dist))],
+        );
     }
     Ok(route)
 }

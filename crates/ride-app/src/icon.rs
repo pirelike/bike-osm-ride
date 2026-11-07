@@ -15,6 +15,8 @@ const RIDGE: [(f32, f32); 5] = [
     (0.86, 0.74),
 ];
 const BASE_V: f32 = 0.74;
+/// Corner radius of the rounded square, as a share of the side.
+const RADIUS: f32 = 0.22;
 
 pub fn window_icon() -> Option<Icon> {
     const SIZE: u32 = 64;
@@ -37,7 +39,7 @@ pub fn render_rgba(size: u32) -> Vec<u8> {
             let (u, v) = ((x as f32 + 0.5) / s, (y as f32 + 0.5) / s);
 
             // Rounded-square coverage (signed distance, 1 px anti-aliasing).
-            let radius = 0.22;
+            let radius = RADIUS;
             let (dx, dy) = (
                 (u - 0.5).abs() - (0.5 - radius),
                 (v - 0.5).abs() - (0.5 - radius),
@@ -67,6 +69,31 @@ pub fn render_rgba(size: u32) -> Vec<u8> {
     out
 }
 
+/// The same icon as an inline SVG in a 100 x 100 view box, for the logo of the top bar: drawn
+/// from the constants above, so the bar, the window, the packages and the APK show one picture.
+pub fn svg_markup() -> String {
+    let rgb = |c: [f32; 3]| format!("rgb({},{},{})", c[0], c[1], c[2]);
+    // a tenth of a unit is plenty, and it keeps f32 noise (14.000001) out of the markup
+    let unit = |share: f32| (share * 1000.0).round() / 10.0;
+    let ridge: Vec<String> = RIDGE
+        .iter()
+        .map(|(u, v)| format!("{},{}", unit(*u), unit(*v)))
+        .collect();
+    format!(
+        "<svg viewBox=\"0 0 100 100\" width=\"100%\" height=\"100%\" aria-hidden=\"true\" focusable=\"false\">\
+         <defs><linearGradient id=\"app-mark-bg\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">\
+         <stop offset=\"0\" stop-color=\"{top}\"/><stop offset=\"1\" stop-color=\"{bottom}\"/>\
+         </linearGradient></defs>\
+         <rect width=\"100\" height=\"100\" rx=\"{r}\" fill=\"url(#app-mark-bg)\"/>\
+         <polygon points=\"{ridge}\" fill=\"{accent}\"/></svg>",
+        top = rgb(BG_TOP),
+        bottom = rgb(BG_BOTTOM),
+        r = unit(RADIUS),
+        ridge = ridge.join(" "),
+        accent = rgb(ACCENT),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,6 +115,21 @@ mod tests {
             px[i + 1] > 150 && px[i] < 120,
             "expected a teal pixel, got {:?}",
             &px[i..i + 3]
+        );
+    }
+
+    #[test]
+    fn svg_mark_draws_the_window_icon_art() {
+        let svg = svg_markup();
+        assert!(svg.starts_with("<svg") && svg.ends_with("</svg>"));
+        assert!(svg.contains("rx=\"22\""), "same corner radius: {svg}");
+        assert!(
+            svg.contains("fill=\"rgb(77,224,192)\""),
+            "accent ridge: {svg}"
+        );
+        assert!(
+            svg.contains("points=\"14,74 38,34 52,54 64,40 86,74\""),
+            "same ridge: {svg}"
         );
     }
 

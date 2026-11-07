@@ -5,6 +5,7 @@
 //! calls (a bug, or a not-yet-implemented stub) is turned into an error value that the
 //! caller reports as a toast and then carries on.
 
+use ride_i18n::t;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Runs `f` and converts a panic into `Err(message)`. `what` names the call site in the log.
@@ -27,7 +28,7 @@ pub fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     } else if let Some(s) = payload.downcast_ref::<String>() {
         s.clone()
     } else {
-        "ismeretlen belső hiba".to_string()
+        t("app.guard.ismeretlen_belso_hiba").to_string()
     }
 }
 

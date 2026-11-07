@@ -12,6 +12,7 @@ name = "bike-osm-ride"
 path = "src/main.rs"
 
 [dependencies]
+ride-i18n = { workspace = true }
 ride-model = { workspace = true }
 ride-route = { workspace = true }
 ride-sim = { workspace = true }

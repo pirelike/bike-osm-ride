@@ -6,6 +6,7 @@
 use std::time::Duration;
 
 use crate::{err, Result};
+use ride_i18n::{t, tf};
 
 pub(crate) const USER_AGENT: &str = "bike-osm-ride/0.1 (desktop app)";
 /// Largest response body we accept (a 1000 km BRouter GPX is far below this).
@@ -17,7 +18,12 @@ pub(crate) fn client(timeout: Duration) -> Result<reqwest::Client> {
         .timeout(timeout)
         .connect_timeout(Duration::from_secs(10))
         .build()
-        .or_else(|e| err(format!("A hálózati kapcsolat nem hozható létre: {e}")))
+        .or_else(|e| {
+            err(tf(
+                "route.http.a_halozati_kapcsolat_nem_hozhato_letre_e",
+                &[("e", &e.to_string())],
+            ))
+        })
 }
 
 /// A `reqwest` client builder that also works on Android; every HTTP client of the app starts
@@ -56,14 +62,14 @@ pub fn client_builder() -> reqwest::ClientBuilder {
 
 fn describe(e: reqwest::Error) -> String {
     if e.is_timeout() {
-        "időtúllépés: a szerver nem válaszolt időben".to_string()
+        t("route.http.idotullepes_a_szerver_nem_valaszolt_idoben").to_string()
     } else if e.is_connect() {
-        "nem sikerült kapcsolódni (nincs internet, vagy a szerver nem érhető el)".to_string()
+        t("route.http.nem_sikerult_kapcsolodni_nincs_internet_vagy_a_szerv").to_string()
     } else if e.is_decode() || e.is_body() {
-        "a válasz nem olvasható".to_string()
+        t("route.http.a_valasz_nem_olvashato").to_string()
     } else {
         // The library's own text is English and may contain the (long) URL: keep it out.
-        "hálózati hiba".to_string()
+        t("route.http.halozati_hiba").to_string()
     }
 }
 
@@ -84,19 +90,24 @@ pub(crate) async fn get_text(client: &reqwest::Client, url: &str, what: &str) ->
         .content_length()
         .is_some_and(|l| l > MAX_BODY_BYTES as u64)
     {
-        return err(format!("{what}: a válasz túl nagy."));
+        return err(tf("route.http.what_a_valasz_tul_nagy", &[("what", what)]));
     }
     let mut body: Vec<u8> = Vec::new();
     loop {
         match resp.chunk().await {
             Ok(Some(chunk)) => {
                 if body.len() + chunk.len() > MAX_BODY_BYTES {
-                    return err(format!("{what}: a válasz túl nagy."));
+                    return err(tf("route.http.what_a_valasz_tul_nagy", &[("what", what)]));
                 }
                 body.extend_from_slice(&chunk);
             }
             Ok(None) => break,
-            Err(e) => return err(format!("{what}: a letöltés megszakadt ({}).", describe(e))),
+            Err(e) => {
+                return err(tf(
+                    "route.http.what_a_letoltes_megszakadt",
+                    &[("what", what), ("e", &describe(e))],
+                ))
+            }
         }
     }
     Ok(Fetched {

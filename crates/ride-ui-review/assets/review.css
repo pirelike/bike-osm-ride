@@ -1,6 +1,7 @@
 /* Review page: the stored rides of one route side by side.
    Tokens only, flat surfaces, hairline rules; every class is prefixed `rv-`. The shell places the
-   page below the top bar, so it fills its box. */
+   page below the top bar, so it fills its box. The sections are panels with the same 24 px title
+   strip as the ride screen's dock, so the two pages read as one instrument. */
 
 .rv-page {
   display: flex;
@@ -21,6 +22,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
+  background: var(--bg-1);
   border-bottom: 1px solid var(--rule);
 }
 .rv-title {
@@ -29,7 +31,8 @@
   margin: 0;
   font: 600 var(--t-20) / 1.15 var(--font-display);
 }
-.rv-tabs { flex: none; padding: 8px 16px; border-bottom: 1px solid var(--rule); }
+.rv-head-views { flex: 1; min-width: 0; }
+.rv-tabs { flex: none; padding: 8px 16px; border-bottom: 1px solid var(--rule); background: var(--bg-1); }
 
 .rv-notes {
   flex: none;
@@ -63,6 +66,52 @@
 .rv-empty-title { font: 600 var(--t-20) / 1.15 var(--font-display); color: var(--text); }
 .rv-empty-hint { max-width: 480px; font: 400 var(--t-13) / 1.5 var(--font-ui); }
 
+/* ───────────────────────────── panels ───────────────────────────── */
+
+.rv-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--rule-strong);
+}
+.rv-panel-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding-left: 8px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--rule);
+}
+.rv-panel-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--t-11) / 1 var(--font-ui);
+  color: var(--text-dim);
+}
+.rv-panel-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.rv-panel-close:hover { background: var(--hover); color: var(--text); }
+.rv-panel-close:focus-visible { outline-offset: -2px; }
+.rv-panel-body { display: grid; gap: 12px; min-width: 0; padding: 12px; }
+
 /* ───────────────────────────── layout ───────────────────────────── */
 
 .rv-body {
@@ -76,9 +125,8 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  border-right: 1px solid var(--rule);
+  gap: 12px;
+  padding: 12px 0 12px 12px;
 }
 .rv-main {
   min-width: 0;
@@ -86,16 +134,15 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  padding: 12px;
 }
+.rv-main > .rv-panel { flex: none; }
 .rv-map {
   position: relative;
-  flex: none;
   height: clamp(240px, 38vh, 420px);
-  border-bottom: 1px solid var(--rule);
 }
 .rv-map > * { position: absolute; inset: 0; }
-.rv-charts { flex: none; display: grid; gap: 12px; padding: 16px; border-bottom: 1px solid var(--rule); }
-.rv-stats { flex: none; padding: 16px; display: grid; gap: 8px; }
 
 .rv-note {
   padding: 12px;
@@ -113,7 +160,8 @@
   text-align: center;
 }
 
-/* ───────────────────────────── ride list ───────────────────────────── */
+/* ───────────────────────────── ride list ─────────────────────────────
+   Rows under hairline rules inside the panel, like a printed results list. */
 
 .rv-side-routes { display: grid; gap: 4px; }
 .rv-select {
@@ -121,25 +169,24 @@
   padding: 0 8px;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-1);
+  background: var(--bg);
   color: var(--text);
   font: 500 var(--t-13) / 1.2 var(--font-ui);
 }
-.rv-rides { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rv-rides { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--rule); }
 .rv-ride {
   display: flex;
   align-items: flex-start;
-  border: 1px solid var(--rule);
-  background: var(--bg-1);
+  border-bottom: 1px solid var(--rule);
 }
-.rv-ride.is-on { border-color: var(--rule-ink); }
+.rv-ride.is-on { background: var(--bg-2); }
 .rv-ride-main {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px;
+  padding: 12px 8px;
   border: 0;
   background: none;
   color: inherit;
@@ -147,12 +194,13 @@
   text-align: left;
   cursor: pointer;
 }
+.rv-ride-main:hover { background: var(--hover); }
 .rv-ride-main:disabled { cursor: not-allowed; color: var(--text-faint); }
 .rv-ride-text { display: grid; gap: 4px; min-width: 0; }
-.rv-ride-date { font: 600 var(--t-13) / 1.2 var(--font-num); }
-.rv-ride-meta { font: 400 var(--t-11) / 1.4 var(--font-ui); color: var(--text-dim); }
+.rv-ride-date { font: 600 var(--t-15) / 1.2 var(--font-num); font-variant-numeric: tabular-nums; }
+.rv-ride-meta { font: 400 var(--t-11) / 1.4 var(--font-ui); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .rv-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.rv-ride-actions { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 8px 0 0; }
+.rv-ride-actions { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 4px 0 0; }
 
 .rv-swatch {
   flex: none;
@@ -162,7 +210,7 @@
   width: 24px;
   height: 24px;
   border: 1px solid var(--rule-strong);
-  background: var(--c, var(--bg-2));
+  background: var(--c, transparent);
   color: var(--bg-1);
   font: 600 var(--t-11) / 1 var(--font-ui);
 }
@@ -170,14 +218,8 @@
 
 /* ───────────────────────────── estimate ───────────────────────────── */
 
-.rv-estimate {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--rule-strong);
-  background: var(--bg-1);
-}
-.rv-estimate-head { display: flex; align-items: center; justify-content: space-between; }
+.rv-estimate { flex: none; margin-right: 0; }
+.rv-estimate-body { gap: 12px; }
 .rv-estimate-lede,
 .rv-estimate-now {
   margin: 0;
@@ -197,7 +239,7 @@
   padding: 0 8px;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-1);
+  background: transparent;
   color: var(--text);
   font: 500 var(--t-13) / 1 var(--font-ui);
   cursor: pointer;
@@ -208,14 +250,15 @@
 
 /* ───────────────────────────── plots ───────────────────────────── */
 
+.rv-charts-body { gap: 12px; }
 .rv-overview-plot,
 .rv-plot {
   position: relative;
   border: 1px solid var(--rule);
-  background: var(--bg-1);
+  background: var(--bg);
 }
 .rv-overview-plot { height: 96px; }
-.rv-plot { height: 232px; }
+.rv-plot { height: 240px; }
 .rv-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .rv-grid {
   position: absolute;
@@ -232,6 +275,7 @@
   transform: translateY(-100%);
   font: 500 var(--t-11) / 1 var(--font-num);
   color: var(--text-dim);
+  white-space: nowrap;
   pointer-events: none;
 }
 .rv-cursor {
@@ -252,11 +296,13 @@
   border-right: 1px solid var(--accent);
   pointer-events: none;
 }
+/* A finger keeps vertical scrolling (the plots fill most of a phone screen); sideways movement
+   is the layer's: a drag selects a section, a tap sets the cursor. */
 .rv-hit {
   position: absolute;
   inset: 0;
   cursor: crosshair;
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
 }
 
@@ -280,17 +326,23 @@
 }
 .rv-tick-label { top: 12px; }
 .rv-xtick { top: 4px; }
+/* numerals at the plot's edges are pulled inside instead of being cut in half */
+.rv-tick-label.is-start,
+.rv-xtick.is-start { transform: none; }
+.rv-tick-label.is-end,
+.rv-xtick.is-end { transform: translateX(-100%); }
 
 .rv-chart-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .rv-unit { font: 500 var(--t-13) / 1 var(--font-ui); color: var(--text-dim); }
 .rv-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; min-height: 24px; }
 .rv-legend-item { display: inline-flex; align-items: center; gap: 4px; font: 400 var(--t-13) / 1.2 var(--font-ui); }
 .rv-legend-date { color: var(--text-dim); }
-.rv-legend-value { font-weight: 600; min-width: 80px; }
+.rv-legend-value { font-weight: 600; min-width: 80px; font-variant-numeric: tabular-nums; }
 .rv-legend-hint { font: 400 var(--t-13) / 1.4 var(--font-ui); color: var(--text-dim); }
 
 /* ───────────────────────────── table ───────────────────────────── */
 
+.rv-stats-body { gap: 8px; }
 .rv-table-wrap { overflow-x: auto; }
 .rv-table { width: 100%; border-collapse: collapse; font: 400 var(--t-13) / 1.3 var(--font-ui); }
 .rv-table th,
@@ -301,54 +353,70 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.rv-table td { font: 600 var(--t-15) / 1.2 var(--font-num); }
+.rv-table td.rv-dim { font: 400 var(--t-13) / 1.3 var(--font-ui); }
 .rv-table thead th { font: 500 var(--t-11) / 1.2 var(--font-ui); color: var(--text-dim); }
 .rv-table th[scope="row"],
 .rv-table thead th:first-child { text-align: left; }
 .rv-table .rv-dim { text-align: left; color: var(--text-dim); }
+/* the phone's table: numbers down, rides across */
+.rv-table--by-metric th[scope="row"] { font: 500 var(--t-13) / 1.2 var(--font-ui); color: var(--text-dim); white-space: normal; }
+.rv-table--by-metric thead th:not(:first-child) { text-align: right; }
+.rv-table--by-metric .rv-swatch--sm { margin-right: 0; }
 .rv-footnote { margin: 0; font: 400 var(--t-11) / 1.4 var(--font-ui); color: var(--text-dim); }
 .rv-dim { color: var(--text-dim); }
 
-/* ───────────────────────────── phone ───────────────────────────── */
+/* ───────────────────────────── phone ─────────────────────────────
+   One section per tab; the tab names it, so the panels lose their frame and title strip and
+   the content uses the full width. */
 
+.rv-page--compact .rv-head { gap: 8px; padding: 6px 8px; }
+.rv-page--compact .rv-tabs { padding: 8px 12px; }
 .rv-page--compact .rv-body { grid-template-columns: minmax(0, 1fr); }
-.rv-page--compact .rv-side { border-right: 0; }
 .rv-page--compact .rv-side,
-.rv-page--compact .rv-main { display: none; }
+.rv-page--compact .rv-main { display: none; padding: 0; gap: 0; }
 .rv-page--compact.rv-tab-rides .rv-side { display: flex; }
 .rv-page--compact.rv-tab-map .rv-main,
 .rv-page--compact.rv-tab-chart .rv-main,
 .rv-page--compact.rv-tab-table .rv-main { display: flex; }
-.rv-page--compact .rv-map,
+.rv-page--compact .rv-panel { border: 0; background: transparent; }
+.rv-page--compact .rv-estimate { border-top: 1px solid var(--rule-strong); }
+.rv-page--compact .rv-map-panel,
 .rv-page--compact .rv-charts,
 .rv-page--compact .rv-stats { display: none; }
-.rv-page--compact.rv-tab-map .rv-map { display: block; flex: 1; height: auto; border-bottom: 0; }
-.rv-page--compact.rv-tab-chart .rv-charts { display: grid; }
-.rv-page--compact.rv-tab-table .rv-stats { display: grid; }
-.rv-page--compact .rv-plot { height: 200px; }
-.rv-page--compact .rv-head { padding: 8px 12px; }
-.rv-page--compact .rv-title { font-size: var(--t-15); }
+.rv-page--compact.rv-tab-map .rv-map-panel { display: flex; flex: 1; }
+.rv-page--compact.rv-tab-map .rv-map { flex: 1; height: auto; }
+.rv-page--compact.rv-tab-chart .rv-charts { display: flex; }
+.rv-page--compact.rv-tab-table .rv-stats { display: flex; }
+.rv-page--compact .rv-charts + .rv-charts { border-top: 1px solid var(--rule); }
+.rv-page--compact .rv-plot { height: 220px; }
+.rv-page--compact .rv-range-text { flex-basis: 100%; }
+.rv-page--compact .rv-chart-head { flex-direction: column; align-items: stretch; gap: 8px; }
+.rv-page--compact .rv-chart-head .rv-unit { font: 600 var(--t-15) / 1.2 var(--font-display); color: var(--text); }
+.rv-page--compact .rv-legend { flex-direction: column; gap: 6px; }
+.rv-page--compact .rv-legend-value { margin-left: auto; text-align: right; }
+.rv-page--compact .rv-legend-item { display: flex; }
 
 /* ───────────────────────────── power view ─────────────────────────────
-   Cards on the page background, hairline rules, one accent colour for the bars. */
+   Panels on the page background, hairline rules, one accent colour for the bars. */
 
-.rv-views { flex: none; padding: 8px 16px; border-bottom: 1px solid var(--rule); }
+.rv-views { flex: none; padding: 8px 16px; border-bottom: 1px solid var(--rule); background: var(--bg-1); }
 .rv-power {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  gap: 16px;
+  gap: 12px;
   align-content: start;
-  padding: 16px;
+  padding: 12px;
 }
 .rv-card {
   display: grid;
   gap: 12px;
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
-  background: var(--bg-2);
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-1);
 }
 .rv-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .rv-card-title { margin: 0; font: 600 var(--t-15) / 1.2 var(--font-display); }
@@ -364,6 +432,7 @@
   border: 1px solid var(--rule);
 }
 .rv-bar > i { display: block; height: 100%; background: var(--accent); }
+.rv-when-route::before { content: " · "; }
 
 .rv-ftp-action { justify-self: start; }
 .rv-ftp-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -403,6 +472,13 @@
   white-space: nowrap;
 }
 
-.rv-page--compact .rv-views { padding: 8px 12px; }
-.rv-page--compact .rv-power { padding: 12px; }
-.rv-page--compact .rv-card { padding: 12px; }
+.rv-page--compact .rv-power { padding: 0; gap: 0; }
+.rv-page--compact .rv-card { padding: 12px; border-width: 0 0 1px; background: transparent; }
+/* the date and the route of a best effort stack; the bar column gives its width to the ticked
+   rides' numbers, which matter more on a phone */
+.rv-page--compact .rv-when { white-space: normal; }
+.rv-when-date { white-space: nowrap; }
+.rv-page--compact .rv-when-route { display: block; }
+.rv-page--compact .rv-when-route::before { content: none; }
+.rv-page--compact .rv-bar-cell,
+.rv-page--compact .rv-curve .rv-bar-head { display: none; }

@@ -219,3 +219,4 @@ Both buttons are refused while a ride runs or is paused. On Android the system "
 | `ghost` | `Best` | `Off`, `Route`, `Last`, `Best` |
 | `tiles`, `tiles_workout` | none | the tiling layout without / with a workout (a binary tree of panel keys); none = the default layout |
 | `text_scale` | 1.0 | text size factor, 0.8 to 1.6 |
+| `language` | `"auto"` | the UI language: a code from `crates/ride-i18n/languages.tsv` (`hu`, `en`, `es`, `pt`) or `"auto"` for the operating system's language. A settings file written before the field existed loads as `"hu"`; a fresh install starts at `"auto"` (`docs/I18N.md`) |

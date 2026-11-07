@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cache::{now_unix, valid_route_id};
 use crate::url::valid_pano_id;
+use ride_i18n::t;
 
 /// Subdirectory of `<data>/streetview/` that holds the image store.
 pub const IMAGE_DIR: &str = "img";
@@ -327,7 +328,7 @@ impl ImageStore {
         if !valid_pano_id(pano) || bucket > MAX_IMAGES as u32 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "érvénytelen panoráma-azonosító vagy sáv",
+                t("ui_streetview.imagestore.ervenytelen_panorama_azonosito_vagy_sav"),
             ));
         }
         let path = self.dir.join(format!("{bucket}.jpg"));

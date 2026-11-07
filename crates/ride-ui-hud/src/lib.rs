@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use dioxus::prelude::*;
+use ride_i18n::{t, tf};
 use ride_model::{Climb, ClimbCategory, RideSnapshot, RideState, RiderSettings, Route, Theme};
 use ride_ui_kit::color::ink_on;
 use ride_ui_kit::format::{
@@ -48,11 +49,11 @@ pub fn clamp01(v: f64) -> f64 {
 /// Hungarian name of a ride state (also used for the toolbar's accessible name).
 pub fn state_label(state: RideState) -> &'static str {
     match state {
-        RideState::Empty => "Nincs útvonal",
-        RideState::Ready => "Indulásra kész",
-        RideState::Riding => "Tekerés",
-        RideState::Paused => "Szüneteltetve",
-        RideState::Finished => "Befejezve",
+        RideState::Empty => t("ui_hud.nincs_utvonal"),
+        RideState::Ready => t("ui_hud.indulasra_kesz"),
+        RideState::Riding => t("ui_hud.tekeres"),
+        RideState::Paused => t("ui_hud.szuneteltetve"),
+        RideState::Finished => t("ui_hud.befejezve"),
     }
 }
 
@@ -191,11 +192,11 @@ pub fn live_grade(state: RideState, grade: f64) -> Option<f64> {
 /// Text of a grade's direction; the grade cell carries both the colour and this label.
 pub fn grade_label(grade: f64) -> &'static str {
     if grade > 0.5 {
-        "Emelkedő"
+        t("ui_hud.emelkedo")
     } else if grade < -0.5 {
-        "Lejtő"
+        t("ui_hud.lejto")
     } else {
-        "Sík"
+        t("ui_hud.sik")
     }
 }
 
@@ -302,77 +303,77 @@ pub struct StatRow {
 pub fn stat_rows(snapshot: &RideSnapshot) -> Vec<StatRow> {
     vec![
         StatRow {
-            label: "Megtett táv",
+            label: t("ui_hud.megtett_tav"),
             value: fmt_km(snapshot.dist),
             unit: "km",
         },
         StatRow {
-            label: "Hátralévő táv",
+            label: t("ui_hud.hatralevo_tav"),
             value: fmt_km(snapshot.remaining_dist),
             unit: "km",
         },
         StatRow {
-            label: "Eltelt idő",
+            label: t("ui_hud.eltelt_ido"),
             value: fmt_duration(snapshot.elapsed_s),
             unit: "",
         },
         StatRow {
-            label: "Hátralévő idő",
+            label: t("ui_hud.hatralevo_ido"),
             value: eta_text(snapshot.eta_s),
             unit: "",
         },
         StatRow {
-            label: "Megtett szint",
+            label: t("ui_hud.megtett_szint"),
             value: fmt_m(snapshot.ascent_done),
             unit: "m",
         },
         StatRow {
-            label: "Hátralévő szintemelkedés",
+            label: t("ui_hud.hatralevo_szintemelkedes"),
             value: fmt_m(snapshot.ascent_left),
             unit: "m",
         },
         StatRow {
-            label: "Átlagsebesség",
+            label: t("ui_hud.atlagsebesseg"),
             value: fmt_speed_kmh(snapshot.avg_speed_ms),
             unit: "km/h",
         },
         StatRow {
-            label: "Csúcssebesség",
+            label: t("ui_hud.csucssebesseg"),
             value: fmt_speed_kmh(snapshot.max_speed_ms),
             unit: "km/h",
         },
         StatRow {
-            label: "Átlagteljesítmény",
+            label: t("ui_hud.atlagteljesitmeny"),
             value: fmt_opt0(snapshot.avg_power_w),
             unit: "W",
         },
         StatRow {
-            label: "Normalizált teljesítmény",
+            label: t("ui_hud.normalizalt_teljesitmeny"),
             value: fmt_opt0(snapshot.normalized_power_w),
             unit: "W",
         },
         StatRow {
-            label: "Csúcsteljesítmény",
+            label: t("ui_hud.csucsteljesitmeny"),
             value: fmt_opt0(snapshot.max_power_w),
             unit: "W",
         },
         StatRow {
-            label: "Munka",
+            label: t("ui_hud.munka"),
             value: fmt_opt0(Some(snapshot.work_kj)),
             unit: "kJ",
         },
         StatRow {
-            label: "Energia",
+            label: t("ui_hud.energia"),
             value: fmt_opt0(Some(snapshot.kcal)),
             unit: "kcal",
         },
         StatRow {
-            label: "Átlagpulzus",
+            label: t("ui_hud.atlagpulzus"),
             value: fmt_opt0(snapshot.avg_hr),
             unit: "bpm",
         },
         StatRow {
-            label: "Csúcspulzus",
+            label: t("ui_hud.csucspulzus"),
             value: fmt_opt0(snapshot.max_hr),
             unit: "bpm",
         },
@@ -416,10 +417,14 @@ pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
         .map_or_else(|| DASH.to_string(), fmt_m);
     vec![
         StatGroup {
-            heads: ["Megtett", "Hátralévő", "Összesen"],
+            heads: [
+                t("ui_hud.megtett"),
+                t("ui_hud.hatralevo"),
+                t("ui_hud.osszesen"),
+            ],
             rows: vec![
                 StatTableRow {
-                    label: "Táv",
+                    label: t("ui_hud.tav"),
                     unit: "km",
                     cells: [
                         fmt_km(snapshot.dist),
@@ -428,7 +433,7 @@ pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
                     ],
                 },
                 StatTableRow {
-                    label: "Szint",
+                    label: t("ui_hud.szint"),
                     unit: "m",
                     cells: [
                         fmt_m(snapshot.ascent_done),
@@ -437,7 +442,7 @@ pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
                     ],
                 },
                 StatTableRow {
-                    label: "Idő",
+                    label: t("ui_hud.ido"),
                     unit: "",
                     cells: [
                         fmt_duration(snapshot.elapsed_s),
@@ -448,10 +453,10 @@ pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
             ],
         },
         StatGroup {
-            heads: ["Átlag", "NP", "Csúcs"],
+            heads: [t("ui_hud.atlag"), "NP", t("ui_hud.csucs")],
             rows: vec![
                 StatTableRow {
-                    label: "Sebesség",
+                    label: t("ui_hud.dash.sebesseg"),
                     unit: "km/h",
                     cells: [
                         fmt_speed_kmh(snapshot.avg_speed_ms),
@@ -460,7 +465,7 @@ pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
                     ],
                 },
                 StatTableRow {
-                    label: "Teljesítmény",
+                    label: t("ui_hud.teljesitmeny"),
                     unit: "W",
                     cells: [
                         fmt_opt0(snapshot.avg_power_w),
@@ -469,7 +474,7 @@ pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
                     ],
                 },
                 StatTableRow {
-                    label: "Pulzus",
+                    label: t("ui_hud.dash.pulzus"),
                     unit: "bpm",
                     cells: [
                         fmt_opt0(snapshot.avg_hr),
@@ -480,9 +485,9 @@ pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
             ],
         },
         StatGroup {
-            heads: ["Munka (kJ)", "Energia (kcal)", ""],
+            heads: [t("ui_hud.munka_kj"), { t("ui_hud.energia_kcal") }, ""],
             rows: vec![StatTableRow {
-                label: "Leadott",
+                label: t("ui_hud.leadott"),
                 unit: "",
                 cells: [
                     fmt_opt0(Some(snapshot.work_kj)),
@@ -608,11 +613,11 @@ pub fn MetricTiles(
     let power_dim = view.power_text == DASH;
 
     rsx! {
-        section { class: "hud-metrics", aria_label: "Élő mérőszámok",
+        section { class: "hud-metrics", aria_label: t("ui_hud.elo_meroszamok").to_string(),
             div { class: "hud-hero",
                 div { class: "hud-hero__head",
-                    span { class: "hud-label", "Teljesítmény" }
-                    span { class: "hud-label hud-label--faint", "3 mp átlag" }
+                    span { class: "hud-label", {t("ui_hud.teljesitmeny")} }
+                    span { class: "hud-label hud-label--faint", {t("ui_hud.3_mp_atlag")} }
                     span { class: "hud-hero__state {state_badge_class(view.state)}", "{state_label(view.state)}" }
                 }
                 div { class: "hud-hero__body",
@@ -622,14 +627,14 @@ pub fn MetricTiles(
                     }
                     div { class: "hud-hero__side",
                         div { class: "hud-kv",
-                            span { class: "hud-label", "Azonnali" }
+                            span { class: "hud-label", {t("ui_hud.dash.azonnali")} }
                             span { class: "num num--md",
                                 "{view.power_instant_text}"
                                 span { class: "unit", "W" }
                             }
                         }
                         div { class: "hud-kv",
-                            span { class: "hud-label", "Fajlagos" }
+                            span { class: "hud-label", {t("ui_hud.dash.fajlagos")} }
                             span { class: "num num--md",
                                 "{view.wkg_text}"
                                 span { class: "unit", "W/kg" }
@@ -671,20 +676,20 @@ pub fn MetricTiles(
                             span { class: "hud-zone__name", "Z{z} {view.zone_name}" }
                         }
                     } else {
-                        span { class: "hud-zone hud-zone--none", "Nincs teljesítmény" }
+                        span { class: "hud-zone hud-zone--none", {t("ui_hud.dash.nincs_teljesitmeny")} }
                     }
                     span { class: "hud-label", "FTP {view.ftp_text} W" }
                 }
             }
             div { class: "cells cells--2 cells--flush hud-grid",
                 DataCell {
-                    label: "Kadencia".to_string(),
+                    label: t("ui_hud.dash.kadencia").to_string(),
                     value: view.cadence_text.clone(),
                     unit: "rpm".to_string(),
                     width_ch: 3.0,
                 }
                 DataCell {
-                    label: "Pulzus".to_string(),
+                    label: t("ui_hud.dash.pulzus").to_string(),
                     value: view.hr_text.clone(),
                     unit: "bpm".to_string(),
                     width_ch: 3.0,
@@ -694,16 +699,16 @@ pub fn MetricTiles(
                     }
                 }
                 DataCell {
-                    label: "Sebesség".to_string(),
+                    label: t("ui_hud.dash.sebesseg").to_string(),
                     value: view.speed_text.clone(),
                     unit: "km/h".to_string(),
                     width_ch: 3.5,
                     if let Some(avg) = view.avg_speed {
-                        "átl. {fmt_speed_kmh(avg)}"
+                        {tf("ui_hud.atl_fmt_speed_kmh_avg", &[("speed", &fmt_speed_kmh(avg))])}
                     }
                 }
                 DataCell {
-                    label: "Meredekség".to_string(),
+                    label: t("ui_hud.dash.meredekseg").to_string(),
                     value: view.grade_text.clone(),
                     unit: "%".to_string(),
                     width_ch: 3.5,
@@ -715,8 +720,8 @@ pub fn MetricTiles(
             }
             if !view.has_sensor_data && view.state != RideState::Empty {
                 div { class: "hud-note", role: "status",
-                    span { class: "hud-note__title", "Nincs szenzoradat" }
-                    span { "Csatlakoztass eszközt az Eszközök menüben." }
+                    span { class: "hud-note__title", {t("ui_hud.dash.nincs_szenzoradat")} }
+                    span { {t("ui_hud.dash.csatlakoztass_eszkozt_az_eszkozok_menuben")} }
                 }
             }
         }
@@ -731,7 +736,7 @@ pub fn MetricTiles(
 pub fn StatsPanel(snapshot: ReadSignal<RideSnapshot>) -> Element {
     let groups = stat_groups(&snapshot.read());
     rsx! {
-        section { class: "hud-stats", aria_label: "Menetadatok",
+        section { class: "hud-stats", aria_label: t("ui_hud.menetadatok").to_string(),
             table { class: "hud-tbl",
                 for group in groups {
                     tbody { key: "{group.heads[0]}",
@@ -770,9 +775,9 @@ pub fn StatsPanel(snapshot: ReadSignal<RideSnapshot>) -> Element {
 /// The card without a climb: same header, one quiet line.
 fn climb_placeholder(text: &str) -> Element {
     rsx! {
-        section { class: "hud-climb hud-climb--empty", aria_label: "Következő emelkedő: {text}",
+        section { class: "hud-climb hud-climb--empty", aria_label: tf("ui_hud.kovetkezo_emelkedo_text", &[("text", text)]).to_string(),
             div { class: "hud-climb__head",
-                span { class: "hud-label", "Következő emelkedő" }
+                span { class: "hud-label", {t("ui_hud.kovetkezo_emelkedo")} }
             }
             p { class: "hud-climb__none", "{text}" }
         }
@@ -792,10 +797,10 @@ pub fn ClimbCard(
     let snapshot = snapshot.read().clone();
     let theme = *theme.read();
     let Some(route) = route else {
-        return climb_placeholder("Nincs betöltött útvonal.");
+        return climb_placeholder(t("ui_hud.nincs_betoltott_utvonal"));
     };
     let Some(view) = select_climb(&route, &snapshot) else {
-        return climb_placeholder("Nincs több emelkedő az útvonalon.");
+        return climb_placeholder(t("ui_hud.nincs_tobb_emelkedo_az_utvonalon"));
     };
     let known_pr = prs.read().get(view.index).copied().flatten();
 
@@ -805,15 +810,15 @@ pub fn ClimbCard(
     let cat_ink = ink_on(&cat_color);
     let numeral = category_numeral(cat);
     let cat_word = if cat.is_some() {
-        "kategória"
+        t("ui_hud.kategoria")
     } else {
-        "besorolatlan"
+        t("ui_hud.besorolatlan")
     };
     let inside = view.inside;
     let title = if inside {
-        "Emelkedő"
+        t("ui_hud.emelkedo")
     } else {
-        "Következő emelkedő"
+        t("ui_hud.kovetkezo_emelkedo")
     };
 
     let progress = clamp01(view.progress);
@@ -825,19 +830,41 @@ pub fn ClimbCard(
     } else {
         fmt_km(view.ahead_m)
     };
-    let hero_unit = if inside { "km hátra" } else { "km múlva" };
+    let hero_unit = if inside {
+        t("ui_hud.km_hatra")
+    } else {
+        t("ui_hud.km_mulva")
+    };
     let length_text = fmt_km(climb.length);
     let grade_text = fmt_grade(climb.avg_grade);
     let gain_text = fmt_m(climb.gain);
     let remaining_gain = fmt_m((climb.gain * (1.0 - progress)).max(0.0));
     let cat_label = palette::climb_category_label(cat);
     let summary = if inside {
-        format!(
-            "{title}, {cat_label}: {length_text} km hosszú, {grade_text} % átlagos meredekség, {hero_value} km és +{remaining_gain} m hátra, {pct_whole} % kész"
+        tf(
+            "ui_hud.climb_summary_inside",
+            &[
+                ("title", title),
+                ("cat_label", cat_label),
+                ("length", &length_text),
+                ("grade", &grade_text),
+                ("hero", &hero_value),
+                ("remaining_gain", &remaining_gain),
+                ("pct", &pct_whole),
+            ],
         )
     } else {
-        format!(
-            "{title}, {cat_label}: {hero_value} {hero_unit}, {length_text} km hosszú, {grade_text} % átlagos meredekség, +{gain_text} m szint"
+        tf(
+            "ui_hud.climb_summary_ahead",
+            &[
+                ("title", title),
+                ("cat_label", cat_label),
+                ("hero", &hero_value),
+                ("hero_unit", hero_unit),
+                ("length", &length_text),
+                ("grade", &grade_text),
+                ("gain", &gain_text),
+            ],
         )
     };
 
@@ -880,21 +907,21 @@ pub fn ClimbCard(
             }
             div { class: "cells cells--3 cells--flush hud-climb__cells",
                 div { class: "cell cell--sm",
-                    div { class: "cell__label", "Hossz" }
+                    div { class: "cell__label", {t("ui_hud.hossz")} }
                     div { class: "cell__value",
                         "{length_text}"
                         span { class: "cell__unit", "km" }
                     }
                 }
                 div { class: "cell cell--sm",
-                    div { class: "cell__label", "Átlag" }
+                    div { class: "cell__label", {t("ui_hud.atlag")} }
                     div { class: "cell__value",
                         "{grade_text}"
                         span { class: "cell__unit", "%" }
                     }
                 }
                 div { class: "cell cell--sm",
-                    div { class: "cell__label", "Szint" }
+                    div { class: "cell__label", {t("ui_hud.szint")} }
                     div { class: "cell__value",
                         "+{gain_text}"
                         span { class: "cell__unit", "m" }
@@ -904,7 +931,7 @@ pub fn ClimbCard(
             if inside {
                 div { class: "progress hud-climb__bar", style: "--p: {pct_text}; --c: {cat_color}", i {} }
                 div { class: "hud-climb__foot",
-                    span { "Hátra {fmt_km(remaining_m)} km · +{remaining_gain} m" }
+                    span { {tf("ui_hud.hatra_fmt_km_remaining_m_km_remaining_gain_m", &[("km", &fmt_km(remaining_m)), ("gain", &remaining_gain)])} }
                     span { class: "hud-climb__pct", "{pct_whole} %" }
                 }
             }
@@ -921,21 +948,21 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
     let snapshot = snapshot.read().clone();
     let Some(w) = snapshot.workout.clone() else {
         return rsx! {
-            section { class: "hud-workout hud-workout--empty", aria_label: "Edzés: nincs aktív edzés",
-                p { class: "hud-climb__none", "Nincs aktív edzés. Az útvonal betöltése után indul a kiválasztott edzés." }
+            section { class: "hud-workout hud-workout--empty", aria_label: t("ui_hud.edzes_nincs_aktiv_edzes").to_string(),
+                p { class: "hud-climb__none", {t("ui_hud.nincs_aktiv_edzes_az_utvonal_betoltese_utan_indul_a_")} }
             }
         };
     };
     let finished = w.finished;
     let (target_text, unit_text) = match (w.target_w, finished) {
         (Some(t), _) => (format!("{}", t.round() as i64), "W"),
-        (None, true) => ("Kész".to_string(), ""),
-        (None, false) => ("Szabad".to_string(), ""),
+        (None, true) => (t("ui_hud.kesz").to_string(), ""),
+        (None, false) => (t("ui_hud.szabad").to_string(), ""),
     };
     let pct_text = w
         .ftp_pct
         .map(|p| format!("{p:.0} % FTP"))
-        .unwrap_or_else(|| "nincs előírt watt".to_string());
+        .unwrap_or_else(|| t("ui_hud.nincs_eloirt_watt").to_string());
     let cadence_text = w.cadence.map(|c| format!("{c} rpm"));
     let remaining = fmt_duration(w.step_remaining_s);
     let total_left = fmt_hm_text(w.total_remaining_s);
@@ -944,19 +971,25 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
     let overall_whole = format!("{:.0}", w.progress * 100.0);
     let step_number = format!("{}/{}", w.step_index + 1, w.step_count);
     let next_text = if finished {
-        "Minden blokk kész".to_string()
+        t("ui_hud.minden_blokk_kesz").to_string()
     } else {
         match &w.next_step_name {
-            Some(name) => format!("Következik: {name}"),
-            None => "Utolsó blokk".to_string(),
+            Some(name) => tf("ui_hud.kovetkezik_name", &[("name", name)]),
+            None => t("ui_hud.utolso_blokk").to_string(),
         }
     };
     let summary = if finished {
-        format!("Edzés kész: {}", w.workout_name)
+        tf("ui_hud.edzes_kesz", &[("name", &w.workout_name)])
     } else {
-        format!(
-            "Edzés: {}, {} – {} W, {} hátra, {} kész",
-            w.workout_name, w.step_name, target_text, remaining, overall_whole
+        tf(
+            "ui_hud.edzes_w_hatra_kesz",
+            &[
+                ("name", &w.workout_name),
+                ("step", &w.step_name),
+                ("target", &target_text),
+                ("remaining", &remaining),
+                ("pct", &overall_whole),
+            ],
         )
     };
 
@@ -964,7 +997,7 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
         section { class: if finished { "hud-workout hud-workout--done" } else { "hud-workout" },
             aria_label: "{summary}",
             div { class: "hud-workout__head",
-                span { class: "hud-label", "Edzés" }
+                span { class: "hud-label", {t("ui_hud.edzes")} }
                 span { class: "hud-workout__name", "{w.workout_name}" }
                 span { class: "hud-workout__count", "{step_number}" }
             }
@@ -989,15 +1022,15 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
                 }
                 div { class: "cells cells--3 cells--flush hud-workout__cells",
                     div { class: "cell cell--sm",
-                        div { class: "cell__label", "Blokk vége" }
+                        div { class: "cell__label", {t("ui_hud.blokk_vege")} }
                         div { class: "cell__value", "{remaining}" }
                     }
                     div { class: "cell cell--sm",
-                        div { class: "cell__label", "Edzés vége" }
+                        div { class: "cell__label", {t("ui_hud.edzes_vege")} }
                         div { class: "cell__value", "{total_left}" }
                     }
                     div { class: "cell cell--sm",
-                        div { class: "cell__label", "Blokk" }
+                        div { class: "cell__label", {t("ui_hud.blokk")} }
                         div { class: "cell__value",
                             "{block_pct}"
                             span { class: "cell__unit", "%" }
@@ -1067,7 +1100,7 @@ pub fn RideControls(
     on_reset: EventHandler<()>,
 ) -> Element {
     let state = snapshot.read().state;
-    let toolbar_label = format!("Menet vezérlése — {}", state_label(state));
+    let toolbar_label = tf("ui_hud.menet_vezerlese", &[("state", state_label(state))]);
 
     rsx! {
         div { class: "hud-controls", role: "toolbar", aria_label: "{toolbar_label}",
@@ -1075,7 +1108,7 @@ pub fn RideControls(
                 match state {
                     RideState::Empty => rsx! {
                         TransportButton {
-                            label: "Kezdés".to_string(),
+                            label: t("ui_hud.kezdes").to_string(),
                             icon: IconName::Play,
                             primary: true,
                             disabled: true,
@@ -1084,44 +1117,44 @@ pub fn RideControls(
                     },
                     RideState::Ready => rsx! {
                         TransportButton {
-                            label: "Kezdés".to_string(),
+                            label: t("ui_hud.kezdes").to_string(),
                             icon: IconName::Play,
                             primary: true,
-                            shortcut: "Szóköz".to_string(),
+                            shortcut: t("ui_hud.szokoz").to_string(),
                             on_click: move |_| on_start.call(()),
                         }
                     },
                     RideState::Riding => rsx! {
                         TransportButton {
-                            label: "Szünet".to_string(),
+                            label: t("ui_hud.szunet").to_string(),
                             icon: IconName::Pause,
                             primary: true,
-                            shortcut: "Szóköz".to_string(),
+                            shortcut: t("ui_hud.szokoz").to_string(),
                             on_click: move |_| on_pause.call(()),
                         }
                         TransportButton {
-                            label: "Befejezés".to_string(),
+                            label: t("ui_hud.befejezes").to_string(),
                             icon: IconName::Stop,
                             on_click: move |_| on_finish.call(()),
                         }
                     },
                     RideState::Paused => rsx! {
                         TransportButton {
-                            label: "Folytatás".to_string(),
+                            label: t("ui_hud.folytatas").to_string(),
                             icon: IconName::Play,
                             primary: true,
-                            shortcut: "Szóköz".to_string(),
+                            shortcut: t("ui_hud.szokoz").to_string(),
                             on_click: move |_| on_resume.call(()),
                         }
                         TransportButton {
-                            label: "Befejezés".to_string(),
+                            label: t("ui_hud.befejezes").to_string(),
                             icon: IconName::Stop,
                             on_click: move |_| on_finish.call(()),
                         }
                     },
                     RideState::Finished => rsx! {
                         TransportButton {
-                            label: "Újrakezdés".to_string(),
+                            label: t("ui_hud.ujrakezdes").to_string(),
                             icon: IconName::Reset,
                             primary: true,
                             on_click: move |_| on_reset.call(()),
@@ -1130,7 +1163,7 @@ pub fn RideControls(
                 }
             }
             if matches!(state, RideState::Ready | RideState::Riding | RideState::Paused) {
-                span { class: "kbd hud-controls__kbd", title: "Szóköz: indítás, szünet, folytatás", "Szóköz" }
+                span { class: "kbd hud-controls__kbd", title: t("ui_hud.szokoz_inditas_szunet_folytatas").to_string(), {t("ui_hud.szokoz")} }
             }
         }
     }

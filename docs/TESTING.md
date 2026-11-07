@@ -7,7 +7,7 @@ hardware or against real services. Numbers measured on 2026-11-04 on the maintai
 ## 1. Running
 
 ```powershell
-cargo test --workspace            # 1055 passed, 0 failed, 3 ignored
+cargo test --workspace            # 1076 passed, 0 failed, 3 ignored
 cargo clippy --workspace --all-targets   # clean, no warnings
 cargo fmt --all -- --check        # clean
 ```
@@ -57,6 +57,7 @@ started release workflow ([`RELEASING.md`](RELEASING.md)); there is no CI on pus
 | Updater logic | `ride-app/updater.rs` | version comparison, asset choice per platform, install mode, magic bytes, ignoring drafts and garbage |
 | Server-side rendering | `ride-ui-map/tests/render.rs`, the `examples/*_preview.rs` | markup of the map and the components in both themes |
 | Mock servers | `ride-ui-streetview/src/mock.rs`, `scripts/streetview_mock.mjs`, `ride-route/src/http.rs` test server | the HTTP clients, quota and key errors, caching, "a repeat ride makes no requests" |
+| **Translation catalogs** | `ride-i18n/tests/catalogs.rs`, `ride-model` | every source key present in each shipped catalog, no invented key, identical placeholder sets, leading/trailing spaces kept, no value left in Hungarian, no `ő`/`ű` in English, Spanish, German, Portuguese, Italian or Chinese, the rider is never a horse rider, Portuguese never uses a Brazilian form from the fixed list, Chinese never uses `您` or a common traditional character; a translated workout library that changes a duration, a target or a step count, or still carries `ő`/`ű`. The rendered UI is checked with `node scripts/readme_shots.mjs --lang <code> --text` + `scripts/i18n/check_ui.mjs`, and the translation's length with `scripts/i18n/overflow.mjs` at 412 × 860 and 1440 × 900 |
 
 ## 3. Looking at the real app
 

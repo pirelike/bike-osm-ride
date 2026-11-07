@@ -35,6 +35,7 @@ pub mod power;
 
 use chart::{Metric, SLOTS};
 use power::PowerView;
+use ride_i18n::{t, tf};
 
 /// Component stylesheet (tokens only; every class is prefixed `rv-`). The shell injects it after
 /// the design kit.
@@ -81,6 +82,18 @@ fn measure_width(mounted: Signal<Option<Rc<MountedData>>>, mut width: Signal<f64
     });
 }
 
+/// Class of an axis numeral at `pct` percent of the width: centred on its tick, or pulled
+/// inside when it sits at an edge of the plot.
+fn edge_class(base: &str, pct: f64) -> String {
+    if pct < 4.0 {
+        format!("{base} is-start")
+    } else if pct > 96.0 {
+        format!("{base} is-end")
+    } else {
+        base.to_string()
+    }
+}
+
 fn pointer_frac(x: f64, width: f64) -> Option<f64> {
     (width.is_finite() && width > 1.0 && x.is_finite()).then(|| (x / width).clamp(0.0, 1.0))
 }
@@ -108,13 +121,13 @@ fn stat_opt(value: Option<f64>) -> String {
 fn kind_tags(meta: &RideMeta) -> Vec<&'static str> {
     let mut tags = Vec::new();
     if meta.source == RideSource::Imported {
-        tags.push("Importált");
+        tags.push(t("ui_review.importalt"));
     }
     if meta.simulated {
-        tags.push("Szimulált");
+        tags.push(t("ui_review.szimulalt"));
     }
     if meta.power_estimated {
-        tags.push("Becsült watt");
+        tags.push(t("ui_review.becsult_watt"));
     }
     tags
 }
@@ -122,7 +135,13 @@ fn kind_tags(meta: &RideMeta) -> Vec<&'static str> {
 // ───────────────────────────── selection layer ─────────────────────────────
 
 /// Transparent layer over a plot: reports the distance under the pointer and, after a drag, the
-/// section the user swept. Works with a mouse and with a finger (`touch-action: none`).
+/// section the user swept.
+///
+/// A mouse shows the cursor while it hovers and drags a section. A finger must still be able to
+/// scroll the page, because on a phone these plots fill most of the screen: the layer only claims
+/// sideways movement (`touch-action: pan-y`), so a vertical swipe scrolls (the browser then
+/// cancels the pointer), a sideways drag selects, and a tap puts the cursor down and leaves it
+/// there, since a finger has no hover to show the values with.
 #[component]
 fn HitLayer(
     x0: f64,
@@ -134,6 +153,8 @@ fn HitLayer(
     let mut mounted = use_signal(|| None::<Rc<MountedData>>);
     let mut press = use_signal(|| None::<f64>);
     let mut live = use_signal(|| None::<f64>);
+    let mut touch = use_signal(|| false);
+    let dist_at = move |frac: f64| x0 + frac * (x1 - x0);
 
     let finish = move |end: Option<f64>| {
         let mut press = press;
@@ -165,6 +186,10 @@ fn HitLayer(
                 measure_width(mounted, width);
             },
             onpointerdown: move |event: PointerEvent| {
+                if !event.is_primary() {
+                    return;
+                }
+                touch.set(event.pointer_type() == "touch");
                 measure_width(mounted, width);
                 if let Some(frac) = pointer_frac(event.element_coordinates().x, *width.peek()) {
                     press.set(Some(frac));
@@ -172,23 +197,39 @@ fn HitLayer(
                 }
             },
             onpointermove: move |event: PointerEvent| {
+                if !event.is_primary() {
+                    return;
+                }
                 if let Some(frac) = pointer_frac(event.element_coordinates().x, *width.peek()) {
-                    on_cursor.call(Some(x0 + frac * (x1 - x0)));
+                    on_cursor.call(Some(dist_at(frac)));
                     if press.peek().is_some() {
                         live.set(Some(frac));
                     }
                 }
             },
             onpointerup: move |event: PointerEvent| {
+                if !event.is_primary() {
+                    return;
+                }
                 let end = pointer_frac(event.element_coordinates().x, *width.peek());
+                if *touch.peek() {
+                    // a tap (or the end of a drag) leaves the cursor where the finger was
+                    if let Some(frac) = end {
+                        on_cursor.call(Some(dist_at(frac)));
+                    }
+                }
                 finish(end);
             },
             onpointercancel: move |_| {
+                // the browser took the gesture over (a vertical swipe scrolls the page)
                 press.set(None);
                 live.set(None);
             },
             onpointerleave: move |_| {
-                on_cursor.call(None);
+                // a finger leaves after every lift: keep its cursor, only a mouse clears it
+                if !*touch.peek() {
+                    on_cursor.call(None);
+                }
                 let end = *live.peek();
                 finish(end);
             },
@@ -223,11 +264,15 @@ fn Overview(
         .map(|(lo, hi)| geom::y_range(lo, hi))
         .unwrap_or((0.0, 100.0));
     let transform = geom::view_transform(0.0, total, lo, hi);
-    let ticks = geom::ruler_ticks(0.0, total);
+    let mut ticks = geom::ruler_ticks(0.0, total);
+    // the first numeral carries the unit, like the ride screen's profile
+    if let Some(tick) = ticks.iter_mut().find(|tick| tick.label.is_some()) {
+        tick.label = tick.label.take().map(|label| format!("{label} km"));
+    }
     let scale = geom::XScale::new(0.0, total);
 
     rsx! {
-        div { class: "rv-overview", "aria-label": "A teljes útvonal magassági profilja",
+        div { class: "rv-overview", "aria-label": t("ui_review.a_teljes_utvonal_magassagi_profilja"),
             div { class: "rv-overview-plot",
                 svg {
                     class: "rv-svg",
@@ -254,7 +299,7 @@ fn Overview(
                         class: if tick.major { "rv-tick rv-tick--major" } else { "rv-tick" },
                         style: "left: {pct_text(scale.pct(tick.dist))}",
                         if let Some(label) = &tick.label {
-                            span { class: "rv-tick-label", "{label}" }
+                            span { class: edge_class("rv-tick-label", scale.pct(tick.dist)), "{label}" }
                         }
                     }
                 }
@@ -291,16 +336,23 @@ fn DistanceChart(
                     "aria-hidden": "true",
                     g { transform: "{transform}", dangerous_inner_html: "{g.markup}" }
                 }
-                for v in g.ticks.iter() {
+                for (i , v) in g.ticks.iter().enumerate() {
                     div {
                         key: "grid-{v:.1}",
                         class: "rv-grid",
                         style: "top: {pct_text(y_pct(*v))}",
-                        span { class: "rv-ytick", "{metric.value_text(*v)}" }
+                        span { class: "rv-ytick",
+                            // the top rule names the unit
+                            if i + 1 == g.ticks.len() {
+                                "{metric.value_text(*v)} {metric.unit()}"
+                            } else {
+                                "{metric.value_text(*v)}"
+                            }
+                        }
                     }
                 }
                 if empty {
-                    div { class: "rv-note", "Ehhez a metrikához nincs adat a kijelölt edzésekben." }
+                    div { class: "rv-note", {t("ui_review.ehhez_a_metrikahoz_nincs_adat_a_kijelolt_edzesekben")} }
                 }
                 if let Some(d) = cursor.filter(|d| *d >= g.x0 && *d <= g.x1) {
                     div { class: "rv-cursor", style: "left: {pct_text(scale.pct(d))}" }
@@ -308,12 +360,17 @@ fn DistanceChart(
                 HitLayer { x0: g.x0, x1: g.x1, on_cursor, on_select }
             }
             div { class: "rv-xaxis", "aria-hidden": "true",
-                for d in x_ticks.iter() {
+                for (i , d) in x_ticks.iter().enumerate() {
                     span {
                         key: "x-{d:.0}",
-                        class: "rv-xtick",
+                        // a numeral at an edge is pulled inside, not cut in half
+                        class: edge_class("rv-xtick", scale.pct(*d)),
                         style: "left: {pct_text(scale.pct(*d))}",
-                        "{geom::tick_label(*d, step)}"
+                        if i == 0 {
+                            "{geom::tick_label(*d, step)} km"
+                        } else {
+                            "{geom::tick_label(*d, step)}"
+                        }
                     }
                 }
             }
@@ -341,17 +398,35 @@ fn stats_cells(stats: &SectionStats, estimated: bool) -> Vec<String> {
     ]
 }
 
-const TABLE_HEAD: [&str; 9] = [
-    "Idő",
-    "Átl. seb. (km/h)",
-    "Átl. watt",
-    "NP (W)",
-    "Átl. pulzus",
-    "Max. pulzus",
-    "Kadencia",
-    "Emelkedés",
-    "VAM (m/h)",
-];
+fn table_head() -> [&'static str; 9] {
+    [
+        t("ui_review.ido"),
+        t("ui_review.atl_seb_km_h"),
+        t("ui_review.atl_watt"),
+        "NP (W)",
+        t("ui_review.atl_pulzus"),
+        t("ui_review.max_pulzus"),
+        t("ui_review.chart.kadencia"),
+        t("ui_review.emelkedes"),
+        "VAM (m/h)",
+    ]
+}
+
+// ───────────────────────────── panels ─────────────────────────────
+
+/// The title strip of a section, the same 24 px bar the ride screen's panels have, so the page
+/// reads as part of the same instrument (without their grip: these panels do not move). The
+/// phone has none: its tab already names the section.
+fn panel_bar(title: &str, compact: bool) -> Element {
+    if compact {
+        return rsx! {};
+    }
+    rsx! {
+        div { class: "rv-panel-bar",
+            h2 { class: "rv-panel-title", "{title}" }
+        }
+    }
+}
 
 // ───────────────────────────── the page ─────────────────────────────
 
@@ -390,7 +465,10 @@ pub fn ReviewPage(
     let mut metric = use_signal(|| Metric::Power);
     let mut range = use_signal(|| None::<(f64, f64)>);
     let mut cursor = use_signal(|| None::<f64>);
-    let fit_seq = use_signal(|| 0u64);
+    // Starts one ahead of the map, so the first fit is still owed when the map first has a real
+    // size: on a phone it is hidden behind a tab until then, and a fit made at another size left
+    // the start of the route under the scale bar.
+    let fit_seq = use_signal(|| 1u64);
     let mut tab = use_signal(|| "rides".to_string());
     let mut confirm_delete = use_signal(|| None::<String>);
     let mut estimating = use_signal(|| None::<String>);
@@ -518,15 +596,25 @@ pub fn ReviewPage(
     let rider_now = rider.read().clone();
     let reference_is_estimated = records.iter().any(|r| r.power_estimated);
 
-    // legend: one chip per ride with the value under the cursor
+    // legend: one chip per ride with the value under the cursor; without a cursor the mean over
+    // the window ("Ø", the time difference at its end), so the legend is never a row of dashes
     let legend: Vec<(usize, String, String)> = records
         .iter()
         .enumerate()
         .map(|(slot, record)| {
-            let value = cursor_now
-                .and_then(|d| chart::value_at(&smoothed.read(), slot, metric_now, d))
-                .map(|v| format!("{} {}", metric_now.value_text(v), metric_now.unit()))
-                .unwrap_or_else(|| DASH.to_string());
+            let with_unit = |v: f64| format!("{} {}", metric_now.value_text(v), metric_now.unit());
+            let value = match cursor_now {
+                Some(d) => chart::value_at(&smoothed.read(), slot, metric_now, d).map(with_unit),
+                None => chart::window_value(&smoothed.read(), slot, metric_now, window.0, window.1)
+                    .map(|v| {
+                        if metric_now == Metric::Delta {
+                            with_unit(v)
+                        } else {
+                            format!("Ø {}", with_unit(v))
+                        }
+                    }),
+            }
+            .unwrap_or_else(|| DASH.to_string());
             let estimated = record.power_estimated && metric_now == Metric::Power;
             (
                 slot,
@@ -540,6 +628,38 @@ pub fn ReviewPage(
         })
         .collect();
 
+    // the section table turned on its side for the phone: (row head, one cell per ride)
+    let by_metric: Vec<(String, Vec<String>)> = {
+        let mut heads: Vec<String> = table_head().iter().map(|h| h.to_string()).collect();
+        heads.push(t("ui_review.kulonbseg").to_string());
+        let columns: Vec<Vec<String>> = rows
+            .iter()
+            .map(|row| match row.stats {
+                Some(stats) => {
+                    let estimated = records.get(row.slot).is_some_and(|r| r.power_estimated);
+                    let mut cells = stats_cells(&stats, estimated);
+                    cells.push(match row.time_delta_s {
+                        Some(delta) if row.slot != 0 => fmt_delta_duration(delta),
+                        _ => DASH.to_string(),
+                    });
+                    cells
+                }
+                None => vec![DASH.to_string(); heads.len()],
+            })
+            .collect();
+        heads
+            .into_iter()
+            .enumerate()
+            .map(|(i, head)| {
+                let cells = columns
+                    .iter()
+                    .map(|c| c.get(i).cloned().unwrap_or_else(|| DASH.to_string()))
+                    .collect();
+                (head, cells)
+            })
+            .collect()
+    };
+
     let page_class = if compact {
         format!("rv-page rv-page--compact rv-tab-{tab_now}")
     } else {
@@ -547,11 +667,13 @@ pub fn ReviewPage(
     };
     let no_rides = routes_now.is_empty();
     let range_text = (*range.read()).map(|(a, b)| {
-        format!(
-            "Kijelölt szakasz: {} – {} ({})",
-            km_text(a),
-            km_text(b),
-            km_text(b - a)
+        tf(
+            "ui_review.kijelolt_szakasz",
+            &[
+                ("from", &km_text(a)),
+                ("to", &km_text(b)),
+                ("length", &km_text(b - a)),
+            ],
         )
     });
     let editing: Option<(String, Option<EstimateParams>)> = estimating.read().clone().map(|stem| {
@@ -562,49 +684,93 @@ pub fn ReviewPage(
         (stem, current)
     });
 
+    let views = vec![
+        (
+            "compare".to_string(),
+            t("ui_review.osszehasonlitas").to_string(),
+        ),
+        (
+            "power".to_string(),
+            t("ui_review.chart.teljesitmeny").to_string(),
+        ),
+    ];
+    // Phone: the metric buttons carry the unit (language-neutral and short; five full names do
+    // not fit one row in every language), and the chart head names the metric in full.
+    let metric_options: Vec<(String, String)> = Metric::ALL
+        .iter()
+        .map(|m| {
+            let label = if compact {
+                m.short_label().to_string()
+            } else {
+                m.title().to_string()
+            };
+            (m.key().to_string(), label)
+        })
+        .collect();
+
     rsx! {
-        div { class: "{page_class}", role: "region", "aria-label": "Edzések áttekintése",
+        div { class: "{page_class}", role: "region", "aria-label": t("ui_review.edzesek_attekintese"),
+            // Phone: one row holds the way back, the two views and the import (icons only, the
+            // top bar already names the page); the desktop keeps the title and a row of its own.
             header { class: "rv-head",
                 button {
-                    class: "btn btn--ghost btn--sm",
-                    "aria-label": "Vissza az edzéshez",
+                    class: if compact { "btn btn--ghost btn--icon" } else { "btn btn--ghost btn--sm" },
+                    "aria-label": t("ui_review.vissza_az_edzeshez"),
+                    title: t("ui_review.vissza_az_edzeshez").to_string(),
                     onclick: move |_| on_close.call(()),
-                    Icon { name: IconName::ChevronLeft, size: 16 }
-                    "Vissza"
+                    Icon { name: IconName::ChevronLeft, size: if compact { 20 } else { 16 } }
+                    if !compact {
+                        {t("ui_review.vissza")}
+                    }
                 }
-                h1 { class: "rv-title", "Edzések áttekintése" }
+                if compact {
+                    div { class: "rv-head-views",
+                        Segmented {
+                            options: views.clone(),
+                            value: view_now.clone(),
+                            on_change: move |value: String| view.set(value),
+                            aria_label: t("ui_review.oldal").to_string(),
+                            block: true,
+                        }
+                    }
+                } else {
+                    h1 { class: "rv-title", {t("ui_review.edzesek_attekintese")} }
+                }
                 button {
-                    class: "btn btn--sm",
+                    class: if compact { "btn btn--icon" } else { "btn btn--sm" },
+                    "aria-label": t("ui_review.edzes_importalasa"),
+                    title: t("ui_review.edzes_importalasa").to_string(),
                     disabled: busy_now || route_now.is_none() && !no_rides && current_id.is_none(),
                     onclick: move |_| on_import.call(()),
-                    Icon { name: IconName::Upload, size: 16 }
-                    "Edzés importálása"
+                    Icon { name: IconName::Upload, size: if compact { 20 } else { 16 } }
+                    if !compact {
+                        {t("ui_review.edzes_importalasa")}
+                    }
                 }
             }
-            div { class: "rv-views",
-                Segmented {
-                    options: vec![
-                        ("compare".to_string(), "Összehasonlítás".to_string()),
-                        ("power".to_string(), "Teljesítmény".to_string()),
-                    ],
-                    value: view_now.clone(),
-                    on_change: move |value: String| view.set(value),
-                    aria_label: "Oldal".to_string(),
-                    small: true,
+            if !compact {
+                div { class: "rv-views",
+                    Segmented {
+                        options: views.clone(),
+                        value: view_now.clone(),
+                        on_change: move |value: String| view.set(value),
+                        aria_label: t("ui_review.oldal").to_string(),
+                        small: true,
+                    }
                 }
             }
             if compact && !power_view {
                 div { class: "rv-tabs",
                     Segmented {
                         options: vec![
-                            ("rides".to_string(), "Edzések".to_string()),
-                            ("map".to_string(), "Térkép".to_string()),
-                            ("chart".to_string(), "Grafikon".to_string()),
-                            ("table".to_string(), "Szakasz".to_string()),
+                            ("rides".to_string(), t("ui_review.edzesek").to_string()),
+                            ("map".to_string(), t("ui_review.terkep").to_string()),
+                            ("chart".to_string(), t("ui_review.grafikon").to_string()),
+                            ("table".to_string(), t("ui_review.szakasz").to_string()),
                         ],
                         value: tab_now.clone(),
                         on_change: move |value: String| tab.set(value),
-                        aria_label: "Nézet".to_string(),
+                        aria_label: t("ui_review.nezet").to_string(),
                         small: true,
                         block: true,
                     }
@@ -619,30 +785,33 @@ pub fn ReviewPage(
                     }
                     button {
                         class: "btn btn--ghost btn--icon btn--sm",
-                        "aria-label": "Üzenetek bezárása",
+                        "aria-label": t("ui_review.uzenetek_bezarasa"),
                         onclick: move |_| on_dismiss_notes.call(()),
                         Icon { name: IconName::Close, size: 14 }
                     }
                 }
             }
             if busy_now {
-                div { class: "rv-busy", role: "status", "Betöltés…" }
+                div { class: "rv-busy", role: "status", {t("ui_review.betoltes")} }
             }
             if power_view {
                 PowerView { analysis, ftp_w, loaded, on_apply_ftp }
             } else if no_rides {
                 div { class: "rv-empty",
                     Icon { name: IconName::Bike, size: 28 }
-                    div { class: "rv-empty-title", "Még nincs mentett edzés" }
+                    div { class: "rv-empty-title", {t("ui_review.meg_nincs_mentett_edzes")} }
                     div { class: "rv-empty-hint",
-                        "Az edzések a befejezésük után itt jelennek meg. Más alkalmazásból (pl. Strava) exportált GPX vagy TCX fájlt is importálhatsz."
+                        {t("ui_review.az_edzesek_a_befejezesuk_utan_itt_jelennek_meg_mas_a")}
                     }
                 }
             } else {
                 div { class: "rv-body",
                     aside { class: "rv-side",
+                      section { class: "rv-panel", "aria-label": t("ui_review.edzesek"),
+                        {panel_bar(t("ui_review.edzesek"), compact)}
+                        div { class: "rv-panel-body rv-side-list",
                         div { class: "rv-side-routes",
-                            label { class: "t-caption", r#for: "rv-route", "Útvonal" }
+                            label { class: "t-caption", r#for: "rv-route", {t("ui_review.utvonal")} }
                             select {
                                 id: "rv-route",
                                 class: "rv-select",
@@ -653,7 +822,13 @@ pub fn ReviewPage(
                                         key: "{r.route_id}",
                                         value: "{r.route_id}",
                                         selected: Some(&r.route_id) == current_id.as_ref(),
-                                        "{r.route_name} · {r.rides.len()} edzés"
+                                        {tf(
+                                            "ui_review.r_route_name_r_rides_len_edzes",
+                                            &[
+                                                ("name", &r.route_name),
+                                                ("n", &r.rides.len().to_string()),
+                                            ],
+                                        )}
                                     }
                                 }
                             }
@@ -674,7 +849,7 @@ pub fn ReviewPage(
                                                 class: "rv-ride-main",
                                                 disabled: !can_tick,
                                                 "aria-pressed": "{ticked}",
-                                                title: if can_tick { "" } else { "Legfeljebb négy edzést lehet egyszerre összehasonlítani." },
+                                                title: if can_tick { "" } else { {t("ui_review.legfeljebb_negy_edzest_lehet_egyszerre_osszehasonlit")} },
                                                 onclick: {
                                                     let stem = stem.clone();
                                                     move |_| on_toggle.call(stem.clone())
@@ -689,7 +864,7 @@ pub fn ReviewPage(
                                                     span { class: "rv-ride-meta",
                                                         "{fmt_duration(meta.elapsed_s)} · {stat_opt(meta.avg_power_w)} W · {stat_opt(meta.avg_hr)} bpm"
                                                         if !meta.complete {
-                                                            " · részleges"
+                                                            {t("ui_review.reszleges")}
                                                         }
                                                     }
                                                     if !tags.is_empty() {
@@ -705,8 +880,8 @@ pub fn ReviewPage(
                                                 if meta.power_estimated && ticked {
                                                     button {
                                                         class: "btn btn--ghost btn--icon btn--sm",
-                                                        title: "A becslés beállításai",
-                                                        "aria-label": "A becslés beállításai",
+                                                        title: t("ui_review.a_becsles_beallitasai").to_string(),
+                                                        "aria-label": t("ui_review.a_becsles_beallitasai"),
                                                         onclick: {
                                                             let stem = stem.clone();
                                                             let rider = rider_now.clone();
@@ -731,18 +906,18 @@ pub fn ReviewPage(
                                                                 on_delete.call(stem.clone());
                                                             }
                                                         },
-                                                        "Törlés"
+                                                        {t("ui_review.torles")}
                                                     }
                                                     button {
                                                         class: "btn btn--ghost btn--sm",
                                                         onclick: move |_| confirm_delete.set(None),
-                                                        "Mégse"
+                                                        {t("ui_review.megse")}
                                                     }
                                                 } else {
                                                     button {
                                                         class: "btn btn--ghost btn--icon btn--sm",
-                                                        title: "Edzés törlése",
-                                                        "aria-label": "Edzés törlése",
+                                                        title: t("ui_review.edzes_torlese").to_string(),
+                                                        "aria-label": t("ui_review.edzes_torlese"),
                                                         onclick: {
                                                             let stem = stem.clone();
                                                             move |_| confirm_delete.set(Some(stem.clone()))
@@ -756,45 +931,56 @@ pub fn ReviewPage(
                                 }
                             }
                         }
+                        }
+                      }
                         if let Some((stem, current)) = editing.clone() {
-                            div { class: "rv-estimate", role: "group", "aria-label": "A becsült watt beállításai",
-                                div { class: "rv-estimate-head",
-                                    span { class: "t-title", "Becsült watt" }
+                            div { class: "rv-panel rv-estimate", role: "group", "aria-label": t("ui_review.a_becsult_watt_beallitasai"),
+                                div { class: "rv-panel-bar rv-estimate-head",
+                                    h2 { class: "rv-panel-title", {t("ui_review.becsult_watt")} }
                                     button {
-                                        class: "btn btn--ghost btn--icon btn--sm",
-                                        "aria-label": "Bezárás",
+                                        class: "rv-panel-close",
+                                        "aria-label": t("ui_review.bezaras"),
+                                        title: t("ui_review.bezaras").to_string(),
                                         onclick: move |_| estimating.set(None),
                                         Icon { name: IconName::Close, size: 14 }
                                     }
                                 }
+                                div { class: "rv-panel-body rv-estimate-body",
                                 p { class: "rv-estimate-lede",
-                                    "A fájlban nem volt teljesítményadat, ezért a szimuláció fizikáját visszafelé futtattuk: a sebességből és a lejtőből számoltuk ki, mennyi watt kellett hozzá. Szél és szélárnyék nélkül ez közelítés, a kerékpár és a versenyző adatai pedig sokat számítanak."
+                                    {t("ui_review.a_fajlban_nem_volt_teljesitmenyadat_ezert_a_szimulac")}
                                 }
                                 if let Some(current) = current {
                                     p { class: "rv-estimate-now",
-                                        "Most: {chart::hu(current.rider_kg, 1)} kg versenyző + {chart::hu(current.bike_kg, 1)} kg kerékpár, Crr {chart::hu(current.crr, 4)}"
+                                        {tf(
+                                            "ui_review.most_chart_hu_current_rider_kg_1_kg_versenyzo_chart_",
+                                            &[
+                                                ("rider", &chart::hu(current.rider_kg, 1)),
+                                                ("bike", &chart::hu(current.bike_kg, 1)),
+                                                ("crr", &chart::hu(current.crr, 4)),
+                                            ],
+                                        )}
                                         if current.from_profile {
-                                            " (a saját adataid)"
+                                            {t("ui_review.a_sajat_adataid")}
                                         } else {
-                                            " (egyéni értékek)"
+                                            {t("ui_review.egyeni_ertekek")}
                                         }
                                     }
                                 }
                                 Segmented {
                                     options: vec![
-                                        ("own".to_string(), "Saját adataim".to_string()),
-                                        ("custom".to_string(), "Egyéni értékek".to_string()),
+                                        ("own".to_string(), t("ui_review.sajat_adataim").to_string()),
+                                        ("custom".to_string(), t("ui_review.egyeni_ertekek_2").to_string()),
                                     ],
                                     value: if *est_custom.read() { "custom".to_string() } else { "own".to_string() },
                                     on_change: move |value: String| est_custom.set(value == "custom"),
-                                    aria_label: "Kinek az adataival számoljunk".to_string(),
+                                    aria_label: t("ui_review.kinek_az_adataival_szamoljunk").to_string(),
                                     small: true,
                                     block: true,
                                 }
                                 if *est_custom.read() {
                                     div { class: "rv-estimate-fields",
                                         NumberField {
-                                            label: "Testsúly".to_string(),
+                                            label: t("ui_review.testsuly").to_string(),
                                             value: *est_rider_kg.read(),
                                             min: 30.0,
                                             max: 200.0,
@@ -803,7 +989,7 @@ pub fn ReviewPage(
                                             on_change: move |v: f64| est_rider_kg.set(v),
                                         }
                                         NumberField {
-                                            label: "Kerékpár".to_string(),
+                                            label: t("ui_review.kerekpar").to_string(),
                                             value: *est_bike_kg.read(),
                                             min: 3.0,
                                             max: 30.0,
@@ -812,21 +998,28 @@ pub fn ReviewPage(
                                             on_change: move |v: f64| est_bike_kg.set(v),
                                         }
                                         NumberField {
-                                            label: "Gördülési ellenállás (Crr)".to_string(),
+                                            label: t("ui_review.gordulesi_ellenallas_crr").to_string(),
                                             value: *est_crr.read(),
                                             min: 0.002,
                                             max: 0.02,
                                             step: 0.001,
-                                            hint: "Jó aszfalton kb. 0,004. Kavicsos útra nincs külön modell.".to_string(),
+                                            hint: t("ui_review.jo_aszfalton_kb_0_004_kavicsos_utra_nincs_kulon_mode").to_string(),
                                             on_change: move |v: f64| est_crr.set(v),
                                         }
                                     }
                                 } else {
                                     p { class: "rv-estimate-now",
-                                        "{chart::hu(rider_now.rider_kg, 1)} kg + {chart::hu(rider_now.bike_kg, 1)} kg kerékpár, Crr {chart::hu(rider_now.crr, 4)} (Beállítások)"
+                                        {tf(
+                                            "ui_review.chart_hu_rider_now_rider_kg_1_kg_chart_hu_rider_now_",
+                                            &[
+                                                ("rider", &chart::hu(rider_now.rider_kg, 1)),
+                                                ("bike", &chart::hu(rider_now.bike_kg, 1)),
+                                                ("crr", &chart::hu(rider_now.crr, 4)),
+                                            ],
+                                        )}
                                     }
                                 }
-                                p { class: "rv-estimate-now", "A CdA-t, a hajtáslánc hatásfokát és a levegő sűrűségét mindig a Beállításokból vesszük." }
+                                p { class: "rv-estimate-now", {t("ui_review.a_cda_t_a_hajtaslanc_hatasfokat_es_a_levego_surusege")} }
                                 button {
                                     class: "btn btn--primary btn--sm",
                                     disabled: busy_now,
@@ -842,44 +1035,56 @@ pub fn ReviewPage(
                                         }
                                     },
                                     Icon { name: IconName::Refresh, size: 16 }
-                                    "Újraszámolás"
+                                    {t("ui_review.ujraszamolas")}
+                                }
                                 }
                             }
                         }
                     }
                     main { class: "rv-main",
-                        section { class: "rv-map", "aria-label": "Térkép",
-                            MapView {
-                                route,
-                                snapshot,
-                                style: map_style,
-                                follow,
-                                on_style: move |style| on_map_style.call(style),
-                                on_follow: move |_| {},
-                                overlay,
+                        section { class: "rv-panel rv-map-panel", "aria-label": t("ui_review.terkep"),
+                            {panel_bar(t("ui_review.terkep"), compact)}
+                            div { class: "rv-map",
+                                MapView {
+                                    route,
+                                    snapshot,
+                                    style: map_style,
+                                    follow,
+                                    on_style: move |style| on_map_style.call(style),
+                                    on_follow: move |_| {},
+                                    overlay,
+                                }
                             }
                         }
-                        section { class: "rv-charts",
+                        section { class: "rv-panel rv-charts", "aria-label": t("ui_review.grafikon"),
+                            {panel_bar(t("ui_review.szakasz"), compact)}
+                            div { class: "rv-panel-body rv-charts-body",
                             div { class: "rv-section-bar",
                                 button {
                                     class: if range.read().is_none() { "rv-chip is-on" } else { "rv-chip" },
                                     onclick: move |_| set_range(None),
-                                    "Teljes útvonal"
+                                    {t("ui_review.teljes_utvonal")}
                                 }
                                 for (index , from , to) in climbs.iter().copied() {
                                     button {
                                         key: "climb-{index}",
                                         class: if *range.read() == Some((from, to)) { "rv-chip is-on" } else { "rv-chip" },
-                                        title: "Ráközelítés erre az emelkedőre",
+                                        title: t("ui_review.rakozelites_erre_az_emelkedore").to_string(),
                                         onclick: move |_| set_range(Some((from, to))),
                                         Icon { name: IconName::Mountain, size: 14 }
-                                        "{index + 1}. emelkedő · {km_text(to - from)}"
+                                        {tf(
+                                            "ui_review.index_1_emelkedo_km_text_to_from",
+                                            &[
+                                                ("n", &(index + 1).to_string()),
+                                                ("km", &km_text(to - from)),
+                                            ],
+                                        )}
                                     }
                                 }
                                 if let Some(text) = range_text {
                                     span { class: "rv-range-text", "{text}" }
                                 } else {
-                                    span { class: "rv-range-text", "Húzd végig az egeret (vagy az ujjad) a profilon vagy a grafikonon egy szakasz kijelöléséhez." }
+                                    span { class: "rv-range-text", {t("ui_review.huzd_vegig_az_egeret_vagy_az_ujjad_a_profilon_vagy_a")} }
                                 }
                             }
                             if let Some(route_ref) = route_now.clone() {
@@ -892,24 +1097,33 @@ pub fn ReviewPage(
                                     on_select: move |(a, b)| set_range(Some((a, b))),
                                 }
                             } else {
-                                div { class: "rv-note", "Ennek az útvonalnak a fájlja már nem érhető el, ezért a térkép és a profil nem rajzolható. Töltsd be újra az Útvonal ablakban." }
+                                div { class: "rv-note", {t("ui_review.ennek_az_utvonalnak_a_fajlja_mar_nem_erheto_el_ezert")} }
                             }
+                            }
+                        }
+                        section { class: "rv-panel rv-charts", "aria-label": t("ui_review.mit_mutasson_a_grafikon"),
+                            {panel_bar(t("ui_review.grafikon"), compact)}
+                            div { class: "rv-panel-body rv-charts-body",
                             div { class: "rv-chart-head",
                                 Segmented {
-                                    options: Metric::ALL
-                                        .iter()
-                                        .map(|m| (m.key().to_string(), m.title().to_string()))
-                                        .collect::<Vec<_>>(),
+                                    options: metric_options.clone(),
                                     value: metric_now.key().to_string(),
                                     on_change: move |value: String| {
                                         if let Some(m) = Metric::from_key(&value) {
                                             metric.set(m);
                                         }
                                     },
-                                    aria_label: "Mit mutasson a grafikon".to_string(),
-                                    small: true,
+                                    aria_label: t("ui_review.mit_mutasson_a_grafikon").to_string(),
+                                    small: !compact,
+                                    block: compact,
                                 }
-                                span { class: "rv-unit", "{metric_now.unit()}" }
+                                span { class: "rv-unit",
+                                    if compact {
+                                        "{metric_now.title()}"
+                                    } else {
+                                        "{metric_now.unit()}"
+                                    }
+                                }
                             }
                             div { class: "rv-legend",
                                 for (slot , stamp , value) in legend.iter() {
@@ -920,7 +1134,7 @@ pub fn ReviewPage(
                                     }
                                 }
                                 if records.is_empty() {
-                                    span { class: "rv-legend-hint", "Jelölj ki legalább egy edzést a listában." }
+                                    span { class: "rv-legend-hint", {t("ui_review.jelolj_ki_legalabb_egy_edzest_a_listaban")} }
                                 }
                             }
                             DistanceChart {
@@ -930,16 +1144,52 @@ pub fn ReviewPage(
                                 on_cursor: move |d| cursor.set(d),
                                 on_select: move |(a, b)| set_range(Some((a, b))),
                             }
+                            }
                         }
-                        section { class: "rv-stats", "aria-label": "A szakasz adatai",
+                        section { class: "rv-panel rv-stats", "aria-label": t("ui_review.a_szakasz_adatai"),
+                            {panel_bar(t("ui_review.a_szakasz_adatai"), compact)}
+                            div { class: "rv-panel-body rv-stats-body",
                             if rows.is_empty() || rows.iter().all(|r| r.stats.is_none()) {
                                 div { class: "rv-note",
                                     if records.is_empty() {
-                                        "Jelölj ki egy vagy több edzést a listában."
+                                        {t("ui_review.jelolj_ki_egy_vagy_tobb_edzest_a_listaban")}
                                     } else if table_span.is_none() {
-                                        "A kijelölt edzéseknek nincs közös szakasza. Jelölj ki egy szakaszt, amelyet mindegyik érint."
+                                        {t("ui_review.a_kijelolt_edzeseknek_nincs_kozos_szakasza_jelolj_ki")}
                                     } else {
-                                        "A kijelölt szakaszt nem érintette végig egyik edzés sem."
+                                        {t("ui_review.a_kijelolt_szakaszt_nem_erintette_vegig_egyik_edzes_")}
+                                    }
+                                }
+                            } else if compact {
+                                // phone: one row per number, one column per ride, so up to four
+                                // rides fit the width without scrolling sideways
+                                div { class: "rv-table-wrap",
+                                    table { class: "rv-table rv-table--by-metric",
+                                        thead {
+                                            tr {
+                                                th { scope: "col", class: "rv-dim", {t("ui_review.edzes")} }
+                                                for row in rows.iter() {
+                                                    th { key: "col-{row.slot}", scope: "col",
+                                                        title: "{legend.get(row.slot).map(|l| l.1.clone()).unwrap_or_default()}",
+                                                        span { class: "rv-swatch rv-swatch--sm", style: "--c: {var_of(row.slot)}", "{letter(row.slot)}" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        tbody {
+                                            for (i , (head , cells)) in by_metric.iter().enumerate() {
+                                                tr { key: "m-{i}",
+                                                    th { scope: "row", "{head}" }
+                                                    for (j , cell) in cells.iter().enumerate() {
+                                                        td { key: "m-{i}-{j}", class: "num", "{cell}" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if reference_is_estimated {
+                                    p { class: "rv-footnote",
+                                        {t("ui_review.a_jelu_watt_ertekek_becsultek_a_sebessegbol_es_a_lej")}
                                     }
                                 }
                             } else {
@@ -947,11 +1197,11 @@ pub fn ReviewPage(
                                     table { class: "rv-table",
                                         thead {
                                             tr {
-                                                th { "Edzés" }
-                                                for head in TABLE_HEAD.iter() {
+                                                th { {t("ui_review.edzes")} }
+                                                for head in table_head().iter() {
                                                     th { key: "{head}", "{head}" }
                                                 }
-                                                th { "Különbség" }
+                                                th { {t("ui_review.kulonbseg")} }
                                             }
                                         }
                                         tbody {
@@ -975,7 +1225,7 @@ pub fn ReviewPage(
                                                             }
                                                         }
                                                     } else {
-                                                        td { colspan: "{TABLE_HEAD.len() + 1}", class: "rv-dim", "Ezt a szakaszt az edzés nem érintette végig." }
+                                                        td { colspan: "{table_head().len() + 1}", class: "rv-dim", {t("ui_review.ezt_a_szakaszt_az_edzes_nem_erintette_vegig")} }
                                                     }
                                                 }
                                             }
@@ -984,9 +1234,10 @@ pub fn ReviewPage(
                                 }
                                 if reference_is_estimated {
                                     p { class: "rv-footnote",
-                                        "A ~ jelű watt-értékek becsültek: a sebességből és a lejtőből számoltuk vissza őket."
+                                        {t("ui_review.a_jelu_watt_ertekek_becsultek_a_sebessegbol_es_a_lej")}
                                     }
                                 }
+                            }
                             }
                         }
                     }

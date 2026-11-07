@@ -18,6 +18,7 @@ use ride_ui_kit::workout_chart::{self, Block};
 use ride_ui_kit::{Icon, IconName, Segmented};
 
 use crate::{measure_width, pct_text, pointer_frac, swipe, Pages, Pair, ViewSwitch, TIP_FLIP_FRAC};
+use ride_i18n::{t, tf};
 
 /// Length of the look-ahead window, seconds (the whole workout when it is shorter).
 pub const LOOKAHEAD_S: f64 = 20.0 * 60.0;
@@ -127,11 +128,11 @@ pub fn WorkoutProfile(
     let chart_ref = chart.read();
     let Some(chart) = chart_ref.as_ref().filter(|c| !c.blocks.is_empty()) else {
         return rsx! {
-            div { class: "profile profile--empty", "aria-label": "Edzés",
+            div { class: "profile profile--empty", "aria-label": t("ui_profile.edzes"),
                 div { class: "profile-empty",
                     Icon { name: IconName::Bike, size: 24 }
-                    span { class: "profile-empty-title", "Nincs kiválasztott edzés" }
-                    span { class: "profile-empty-hint", "Az Edzés gombbal választhatsz a felső sávban." }
+                    span { class: "profile-empty-title", {t("ui_profile.workout.nincs_kivalasztott_edzes")} }
+                    span { class: "profile-empty-hint", {t("ui_profile.workout.az_edzes_gombbal_valaszthatsz_a_felso_savban")} }
                 }
             }
         };
@@ -187,12 +188,12 @@ pub fn WorkoutProfile(
     } else {
         step / 5.0
     };
-    let mut t = (t0 / minor).ceil() * minor;
-    while t <= t1 + 1e-6 {
-        let major = (t / step).round() * step;
-        let label = ((t - major).abs() < 1e-6).then(|| fmt_hm_text(t));
-        ticks.push((t, x_pct(t), label));
-        t += minor;
+    let mut tick = (t0 / minor).ceil() * minor;
+    while tick <= t1 + 1e-6 {
+        let major = (tick / step).round() * step;
+        let label = ((tick - major).abs() < 1e-6).then(|| fmt_hm_text(tick));
+        ticks.push((tick, x_pct(tick), label));
+        tick += minor;
     }
 
     // read-out
@@ -216,12 +217,16 @@ pub fn WorkoutProfile(
     let next_text = next.map(|n| (step_name(n.step), block_target(&n, ftp)));
     let next_in = next.map(|n| fmt_duration(n.start_s - elapsed));
     let summary = match (&current, &next_text) {
-        (Some(c), Some((name, target))) => format!(
-            "Edzés: {} ({}), következik {name}, {target}",
-            step_name(c.step),
-            block_target(c, ftp)
+        (Some(c), Some((name, target))) => tf(
+            "ui_profile.workout.edzes_kovetkezik_name_target",
+            &[
+                ("step", &step_name(c.step)),
+                ("current", &block_target(c, ftp)),
+                ("name", name),
+                ("target", target),
+            ],
         ),
-        _ => "Edzés blokkjai".to_string(),
+        _ => t("ui_profile.workout.edzes_blokkjai").to_string(),
     };
     let ftp_top = y_pct(100.0);
     let now_x = x_pct(elapsed);
@@ -236,18 +241,22 @@ pub fn WorkoutProfile(
             div { class: if pages.is_some() { "profile-head profile-head--pages" } else { "profile-head" },
                 div { class: "profile-readout",
                     if let Some((_, b)) = hover_info {
-                        Pair { label: "Blokk".to_string(), value: step_name(b.step) }
-                        Pair { label: "Cél".to_string(), value: block_target(&b, ftp) }
-                        Pair { label: "Hossz".to_string(), value: fmt_duration(b.duration_s) }
+                        Pair { label: t("ui_profile.workout.blokk").to_string(), value: step_name(b.step) }
+                        Pair { label: t("ui_profile.workout.cel").to_string(), value: block_target(&b, ftp) }
+                        Pair { label: t("ui_profile.workout.hossz").to_string(), value: fmt_duration(b.duration_s) }
                     } else if finished {
-                        Pair { label: "Edzés".to_string(), value: "kész".to_string() }
+                        Pair { label: t("ui_profile.edzes").to_string(), value: t("ui_profile.workout.kesz").to_string() }
                     } else {
-                        Pair { label: "Cél".to_string(), value: target_now, unit: "W".to_string() }
+                        Pair { label: t("ui_profile.workout.cel").to_string(), value: target_now, unit: "W".to_string() }
                         if let Some(left) = left_now {
-                            Pair { label: "Blokk vége".to_string(), value: left }
+                            Pair { label: t("ui_profile.workout.blokk_vege").to_string(), value: left }
                         }
                         if let (Some((name, target)), Some(when)) = (next_text.clone(), next_in.clone()) {
-                            Pair { label: format!("Következik: {name}"), value: target, unit: format!("{when} múlva") }
+                            Pair {
+                                label: tf("ui_hud.kovetkezik_name", &[("name", &name)]),
+                                value: target,
+                                unit: tf("ui_profile.workout.when_mulva", &[("when", &when)]),
+                            }
                         }
                     }
                 }
@@ -257,14 +266,14 @@ pub fn WorkoutProfile(
                     div { class: "profile-switches",
                         Segmented {
                             options: vec![
-                                ("full".to_string(), "Teljes".to_string()),
-                                ("lookahead".to_string(), "Előretekintés".to_string()),
+                                ("full".to_string(), t("ui_profile.teljes").to_string()),
+                                ("lookahead".to_string(), t("ui_profile.eloretekintes").to_string()),
                             ],
                             value: if mode_v == ProfileMode::Full { "full".to_string() } else { "lookahead".to_string() },
                             on_change: move |value: String| {
                                 on_mode.call(if value == "full" { ProfileMode::Full } else { ProfileMode::Lookahead });
                             },
-                            aria_label: "Edzés nézet".to_string(),
+                            aria_label: t("ui_profile.workout.edzes_nezet").to_string(),
                             small: true,
                         }
                         ViewSwitch { view: ProfileView::Workout, on_view }

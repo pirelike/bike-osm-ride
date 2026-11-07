@@ -19,6 +19,7 @@ use ride_route::store::Store;
 use ride_ui_kit::ToastKind;
 
 use super::{boot, guarded, Controller, Inner};
+use ride_i18n::{t, tf};
 
 fn now_unix() -> f64 {
     SystemTime::now()
@@ -28,7 +29,12 @@ fn now_unix() -> f64 {
 
 /// Writes the backup to `path` (the blocking part of a save).
 fn write_backup(path: &Path, settings: &Settings) -> Result<backup::ExportReport, String> {
-    let file = File::create(path).map_err(|err| format!("A fájl nem hozható létre: {err}"))?;
+    let file = File::create(path).map_err(|err| {
+        tf(
+            "app.controller.backup.a_fajl_nem_hozhato_letre_err",
+            &[("err", &err.to_string())],
+        )
+    })?;
     let mut out = BufWriter::new(file);
     let done = backup::export(
         &Store::default_location(),
@@ -38,9 +44,12 @@ fn write_backup(path: &Path, settings: &Settings) -> Result<backup::ExportReport
         &mut out,
     )
     .and_then(|report| {
-        out.flush()
-            .map(|()| report)
-            .map_err(|err| format!("A mentés írása nem sikerült: {err}"))
+        out.flush().map(|()| report).map_err(|err| {
+            tf(
+                "app.controller.backup.a_mentes_irasa_nem_sikerult_err",
+                &[("err", &err.to_string())],
+            )
+        })
     });
     if done.is_err() {
         // a half-written zip must not look like a backup
@@ -52,7 +61,12 @@ fn write_backup(path: &Path, settings: &Settings) -> Result<backup::ExportReport
 
 /// Reads the backup at `path` into the data folder (the blocking part of a restore).
 fn read_backup(path: &Path) -> Result<backup::RestoreReport, String> {
-    let file = File::open(path).map_err(|err| format!("A fájl nem nyitható meg: {err}"))?;
+    let file = File::open(path).map_err(|err| {
+        tf(
+            "app.controller.backup.a_fajl_nem_nyithato_meg_err",
+            &[("err", &err.to_string())],
+        )
+    })?;
     backup::restore(&Store::default_location(), BufReader::new(file))
 }
 
@@ -75,7 +89,7 @@ impl Controller {
         if riding {
             self.st.toast(
                 ToastKind::Warning,
-                "Tekerés közben nem lehet mentést készíteni vagy visszaállítani. Előbb fejezd be a túrát.",
+                t("app.controller.backup.tekeres_kozben_nem_lehet_mentest_kesziteni_vagy_viss"),
             );
         }
         !riding
@@ -103,9 +117,9 @@ impl Controller {
         let settings = self.backup_settings();
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
-                .set_title("Biztonsági mentés mentése")
+                .set_title(t("app.controller.backup.biztonsagi_mentes_mentese"))
                 .set_file_name(backup::suggested_filename(now_unix()))
-                .add_filter("Mentés (zip)", &["zip"])
+                .add_filter(t("app.controller.backup.mentes_zip"), &["zip"])
                 .set_parent(&*win.window)
                 .save_file()
                 .await
@@ -126,13 +140,21 @@ impl Controller {
             match joined {
                 Ok(Ok(Ok(report))) => self.st.toast(
                     ToastKind::Success,
-                    format!(
-                        "Mentve: {name} ({} útvonal, {} túra, {} edzés)",
-                        report.routes, report.rides, report.workouts
+                    tf(
+                        "app.controller.backup.mentve_name_utvonal_tura_edzes",
+                        &[
+                            ("name", &name),
+                            ("routes", &report.routes.to_string()),
+                            ("rides", &report.rides.to_string()),
+                            ("workouts", &report.workouts.to_string()),
+                        ],
                     ),
                 ),
                 Ok(Ok(Err(message))) => self.st.toast(ToastKind::Error, message),
-                _ => self.st.toast(ToastKind::Error, "A mentés nem sikerült."),
+                _ => self.st.toast(
+                    ToastKind::Error,
+                    t("app.controller.backup.a_mentes_nem_sikerult"),
+                ),
             }
         });
     }
@@ -154,8 +176,12 @@ impl Controller {
                 let path = path.clone();
                 tokio::task::spawn_blocking(move || {
                     guarded("backup export", || {
-                        std::fs::create_dir_all(&temp)
-                            .map_err(|err| format!("A mappa nem hozható létre: {err}"))?;
+                        std::fs::create_dir_all(&temp).map_err(|err| {
+                            tf(
+                                "app.controller.backup.a_mappa_nem_hozhato_letre_err",
+                                &[("err", &err.to_string())],
+                            )
+                        })?;
                         write_backup(&path, &settings)
                     })
                 })
@@ -168,7 +194,10 @@ impl Controller {
                     return;
                 }
                 _ => {
-                    self.st.toast(ToastKind::Error, "A mentés nem sikerült.");
+                    self.st.toast(
+                        ToastKind::Error,
+                        t("app.controller.backup.a_mentes_nem_sikerult"),
+                    );
                     return;
                 }
             }
@@ -178,7 +207,10 @@ impl Controller {
                 let _ = std::fs::remove_file(&path);
                 self.st.toast(
                     ToastKind::Error,
-                    format!("A fájlválasztó nem nyílt meg: {err}"),
+                    tf(
+                        "app.controller.backup.a_fajlvalaszto_nem_nyilt_meg_err",
+                        &[("err", &err.to_string())],
+                    ),
                 );
             }
         });
@@ -189,12 +221,14 @@ impl Controller {
     pub fn backup_saved(self, how: crate::android_picker::BackupSaved) {
         use crate::android_picker::BackupSaved;
         match how {
-            BackupSaved::Saved => self.st.toast(ToastKind::Success, "A mentés elkészült."),
-            BackupSaved::Cancelled => {}
-            BackupSaved::Failed => self.st.toast(
-                ToastKind::Error,
-                "A mentést nem sikerült a kiválasztott helyre írni.",
+            BackupSaved::Saved => self.st.toast(
+                ToastKind::Success,
+                t("app.controller.backup.a_mentes_elkeszult"),
             ),
+            BackupSaved::Cancelled => {}
+            BackupSaved::Failed => self.st.toast(ToastKind::Error, {
+                t("app.controller.backup.a_mentest_nem_sikerult_a_kivalasztott_helyre_irni")
+            }),
         }
     }
 
@@ -213,9 +247,9 @@ impl Controller {
         };
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
-                .set_title("Visszaállítás mentésből")
-                .add_filter("Mentés (zip)", &["zip"])
-                .add_filter("Minden fájl", &["*"])
+                .set_title(t("app.controller.backup.visszaallitas_mentesbol"))
+                .add_filter(t("app.controller.backup.mentes_zip"), &["zip"])
+                .add_filter(t("app.controller.backup.minden_fajl"), &["*"])
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
@@ -235,7 +269,10 @@ impl Controller {
         if let Err(err) = crate::android_picker::pick_backup() {
             self.st.toast(
                 ToastKind::Error,
-                format!("A fájlválasztó nem nyílt meg: {err}"),
+                tf(
+                    "app.controller.backup.a_fajlvalaszto_nem_nyilt_meg_err",
+                    &[("error", &err.to_string())],
+                ),
             );
         }
     }
@@ -261,9 +298,10 @@ impl Controller {
             match joined {
                 Ok(Ok(Ok(report))) => self.finish_restore(report),
                 Ok(Ok(Err(message))) => self.st.toast(ToastKind::Error, message),
-                _ => self
-                    .st
-                    .toast(ToastKind::Error, "A visszaállítás nem sikerült."),
+                _ => self.st.toast(
+                    ToastKind::Error,
+                    t("app.controller.backup.a_visszaallitas_nem_sikerult"),
+                ),
             }
         });
     }
@@ -291,22 +329,27 @@ impl Controller {
 
         let added = report.routes + report.rides + report.workouts;
         let mut text = if added == 0 {
-            "Minden megvolt már, nem került be új útvonal, túra vagy edzés.".to_string()
+            t("app.controller.backup.minden_megvolt_mar_nem_kerult_be_uj_utvonal_tura_vag")
+                .to_string()
         } else {
-            format!(
-                "Visszaállítva: {} útvonal, {} túra, {} edzés.",
-                report.routes, report.rides, report.workouts
+            tf(
+                "app.controller.backup.visszaallitva_utvonal_tura_edzes",
+                &[
+                    ("routes", &report.routes.to_string()),
+                    ("rides", &report.rides.to_string()),
+                    ("workouts", &report.workouts.to_string()),
+                ],
             )
         };
         if settings_restored {
-            text.push_str(
-                " A beállítások is a mentésből valók (a Street View kulcs a régi maradt).",
-            );
+            text.push_str(t(
+                "app.controller.backup.a_beallitasok_is_a_mentesbol_valok_a_street_view_kul",
+            ));
         }
         if report.skipped > 0 {
-            text.push_str(&format!(
-                " {} elem kimaradt (ismeretlen vagy sérült).",
-                report.skipped
+            text.push_str(&tf(
+                "app.controller.backup.elem_kimaradt_ismeretlen_vagy_serult",
+                &[("n", &report.skipped.to_string())],
             ));
         }
         self.st.toast(ToastKind::Success, text);

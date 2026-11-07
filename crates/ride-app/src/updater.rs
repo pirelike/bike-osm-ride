@@ -31,6 +31,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use ride_i18n::t;
 use serde::Deserialize;
 
 /// `owner/repo` from the crate's `repository` URL, `None` while it is not set.
@@ -280,7 +281,7 @@ pub async fn install(update: &UpdateInfo, platform: Platform) -> Result<PathBuf,
     let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
     let target = install_target(platform, &exe, appimage.as_deref());
 
-    let client = client().ok_or("a HTTP-kliens nem indult el")?;
+    let client = client().ok_or(t("app.updater.a_http_kliens_nem_indult_el"))?;
     let response = client
         .get(&update.asset_url)
         .send()
@@ -293,7 +294,7 @@ pub async fn install(update: &UpdateInfo, platform: Platform) -> Result<PathBuf,
     // An exe starts with "MZ", an AppImage with "\x7fELF"; anything else (an HTML error page, a
     // link to a login wall) is not installed.
     if !looks_like_program(platform, &bytes) {
-        return Err("a letöltött fájl nem futtatható program".into());
+        return Err(t("app.updater.a_letoltott_fajl_nem_futtathato_program").into());
     }
 
     let staged = staged_path(&target);
@@ -336,16 +337,10 @@ pub fn open_release_page(update: &UpdateInfo) -> bool {
 /// What the rider has to do when the package cannot be installed from inside the app.
 pub fn manual_install_hint(platform: Platform) -> &'static str {
     match platform {
-        Platform::Linux => {
-            "Nyisd meg a kiadás oldalát, töltsd le a .deb csomagot, és telepítsd \
-             (sudo apt install ./bike-osm-ride-*.deb)."
-        }
-        Platform::MacOs => {
-            "Nyisd meg a kiadás oldalát, töltsd le a .dmg-t, és húzd a bike-osm-ride.app-ot \
-             az Alkalmazások mappába."
-        }
-        Platform::Android => "Töltsd le és telepítsd az új APK-t.",
-        Platform::Windows => "Töltsd le az új exe-t a kiadás oldaláról.",
+        Platform::Linux => t("app.updater.nyisd_meg_a_kiadas_oldalat_toltsd_le_a_deb_csomagot_"),
+        Platform::MacOs => t("app.updater.nyisd_meg_a_kiadas_oldalat_toltsd_le_a_dmg_t_es_huzd"),
+        Platform::Android => t("app.updater.toltsd_le_es_telepitsd_az_uj_apk_t"),
+        Platform::Windows => t("app.updater.toltsd_le_az_uj_exe_t_a_kiadas_oldalarol"),
     }
 }
 

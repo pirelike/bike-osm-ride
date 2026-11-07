@@ -48,6 +48,7 @@
 use std::time::Duration;
 
 use crate::{err, http, Result};
+use ride_i18n::{t, tf};
 
 /// Public BRouter endpoint used unless a raw API URL names another host.
 pub const DEFAULT_API: &str = "https://brouter.de/brouter";
@@ -180,7 +181,10 @@ fn numeric_list(name: &str, v: &str) -> Result<String> {
             .chars()
             .all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '|' | '+' | '-' | 'e' | 'E'))
     {
-        return err(format!("A linkben érvénytelen a(z) „{name}” paraméter."));
+        return err(tf(
+            "route.bikerouter.a_linkben_ervenytelen_a_z_name_parameter",
+            &[("name", name)],
+        ));
     }
     Ok(v.to_string())
 }
@@ -195,20 +199,20 @@ fn parse_lonlats(v: &str) -> Result<Vec<(f64, f64)>> {
                 .filter(|x| x.is_finite())
         };
         let (Some(lon), Some(lat)) = (parse(lon), parse(lat)) else {
-            return err(format!(
-                "A linkben a(z) {}. útpont koordinátája nem értelmezhető.",
-                i + 1
+            return err(tf(
+                "route.bikerouter.a_linkben_a_z_utpont_koordinataja_nem_ertelmezheto",
+                &[("n", &(i + 1).to_string())],
             ));
         };
         if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
             let hint = if (-90.0..=90.0).contains(&lon) && (-180.0..=180.0).contains(&lat) {
-                " (felcserélt hosszúság/szélesség?)"
+                t("route.bikerouter.felcserelt_hosszusag_szelesseg")
             } else {
                 ""
             };
-            return err(format!(
-                "A linkben a(z) {}. útpont koordinátája érvénytelen{hint}.",
-                i + 1
+            return err(tf(
+                "route.bikerouter.a_linkben_a_z_utpont_koordinataja_ervenytelen_hint",
+                &[("n", &(i + 1).to_string()), ("hint", hint)],
             ));
         }
         out.push((lon, lat));
@@ -246,18 +250,21 @@ pub fn parse_link(link: &str) -> Result<BrouterRequest> {
         sources.push(parse_params(&cleaned));
     }
     let Some(params) = sources.into_iter().find(|p| get(p, "lonlats").is_some()) else {
-        return err(
-            "A linkben nincs útvonal (hiányzik a „lonlats” rész). Tervezz útvonalat a bikerouter.de oldalon, majd másold ki a teljes címet a böngésző címsorából.",
-        );
+        return err(t(
+            "route.bikerouter.a_linkben_nincs_utvonal_hianyzik_a_lonlats_resz_terv",
+        ));
     };
 
     let lonlats = parse_lonlats(get(&params, "lonlats").unwrap_or(""))?;
     if lonlats.len() < 2 {
-        return err("A linkben legalább két útpont (start és cél) szükséges.");
+        return err(t(
+            "route.bikerouter.a_linkben_legalabb_ket_utpont_start_es_cel_szukseges",
+        ));
     }
     if lonlats.len() > MAX_WAYPOINTS {
-        return err(format!(
-            "A linkben túl sok útpont van (legfeljebb {MAX_WAYPOINTS} engedélyezett)."
+        return err(tf(
+            "route.bikerouter.a_linkben_tul_sok_utpont_van_legfeljebb_max_waypoint",
+            &[("max", &MAX_WAYPOINTS.to_string())],
         ));
     }
 
@@ -274,7 +281,7 @@ pub fn parse_link(link: &str) -> Result<BrouterRequest> {
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
             {
-                return err("A linkben érvénytelen a profil neve.");
+                return err(t("route.bikerouter.a_linkben_ervenytelen_a_profil_neve"));
             }
             p.to_string()
         }
@@ -320,13 +327,30 @@ fn server_error(status: u16, body: &str) -> String {
     let text = http::short_server_text(body);
     let lower = text.to_ascii_lowercase();
     match status {
-        429 | 503 => "A BRouter szerver túlterhelt, próbáld újra egy perc múlva.".to_string(),
-        404 => "A BRouter végpont nem található (404). Ellenőrizd a linket.".to_string(),
-        _ if lower.contains("not mapped") => "Az egyik útpont a BRouter adatain kívül esik (ott nincs térképadat).".to_string(),
-        _ if lower.contains("timeout") => "A BRouter időtúllépés miatt megszakította a számolást (túl hosszú vagy bonyolult útvonal?).".to_string(),
-        _ if lower.contains("profile") => format!("A BRouter nem ismeri a kért profilt: {text}"),
-        _ if text.is_empty() => format!("A BRouter hibát jelzett (HTTP {status})."),
-        _ => format!("A BRouter nem tudott útvonalat számolni: {text} (HTTP {status})."),
+        429 | 503 => {
+            t("route.bikerouter.a_brouter_szerver_tulterhelt_probald_ujra_egy_perc_m").to_string()
+        }
+        404 => {
+            t("route.bikerouter.a_brouter_vegpont_nem_talalhato_404_ellenorizd_a_lin").to_string()
+        }
+        _ if lower.contains("not mapped") => {
+            t("route.bikerouter.az_egyik_utpont_a_brouter_adatain_kivul_esik_ott_nin").to_string()
+        }
+        _ if lower.contains("timeout") => {
+            t("route.bikerouter.a_brouter_idotullepes_miatt_megszakitotta_a_szamolas").to_string()
+        }
+        _ if lower.contains("profile") => tf(
+            "route.bikerouter.a_brouter_nem_ismeri_a_kert_profilt_text",
+            &[("text", &text)],
+        ),
+        _ if text.is_empty() => tf(
+            "route.bikerouter.a_brouter_hibat_jelzett_http_status",
+            &[("status", &status.to_string())],
+        ),
+        _ => tf(
+            "route.bikerouter.a_brouter_nem_tudott_utvonalat_szamolni_text_http_st",
+            &[("text", &text), ("status", &status.to_string())],
+        ),
     }
 }
 

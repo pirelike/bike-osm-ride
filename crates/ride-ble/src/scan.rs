@@ -21,6 +21,7 @@ use uuid::Uuid;
 use crate::link::{stopped, HubConfig, Internal};
 use crate::transport::{sig_uuid, AdapterEvent, Advertisement, BleAdapter, GattPeripheral};
 use crate::zwift::ControllerKind;
+use ride_i18n::{t, tf};
 
 pub const SERVICE_HEART_RATE: Uuid = sig_uuid(0x180D);
 pub const SERVICE_CYCLING_POWER: Uuid = sig_uuid(0x1818);
@@ -221,10 +222,12 @@ impl DiscoveryTable {
                     .into_iter()
                     .rev()
                     .collect();
-                let name = e
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| format!("Névtelen eszköz ({tail})"));
+                let name = e.name.clone().unwrap_or_else(|| {
+                    tf(
+                        "ble.scan.nevtelen_eszkoz_tail",
+                        &[("tail", &tail.to_string())],
+                    )
+                });
                 Some((
                     !kinds.is_empty(),
                     DeviceInfo {
@@ -258,9 +261,10 @@ impl DiscoveryTable {
     }
 }
 
-/// The scan task: runs until `stop` fires, publishing `Internal::Discovered`.
 /// Shown once when a scan that started without error has not heard a single device.
-const SILENT_SCAN_HINT: &str = "A keresés nem lát egyetlen Bluetooth-eszközt sem. Ellenőrizd, hogy a Bluetooth be van-e kapcsolva, az alkalmazásnak megvan-e a „Közeli eszközök” (Androidon 11 és régebben a „Hely”) engedélye, és Androidon 11 és régebben a helymeghatározás is be van-e kapcsolva; a trainert ne tartsa más alkalmazás vagy eszköz.";
+fn silent_scan_hint() -> &'static str {
+    t("ble.scan.a_kereses_nem_lat_egyetlen_bluetooth_eszkozt_sem_ell")
+}
 
 pub(crate) async fn run_scan<A: BleAdapter>(
     adapter: Arc<A>,
@@ -274,13 +278,17 @@ pub(crate) async fn run_scan<A: BleAdapter>(
     let mut events = match adapter.events().await {
         Ok(e) => e,
         Err(e) => {
-            notice(format!("A keresés nem indítható: {e}"));
+            notice(tf(
+                "ble.scan.a_kereses_nem_indithato_e",
+                &[("e", &e.to_string())],
+            ));
             return;
         }
     };
     if let Err(e) = adapter.start_scan().await {
-        notice(format!(
-            "A keresés nem indítható: {e}. Ellenőrizd, hogy be van-e kapcsolva a Bluetooth."
+        notice(tf(
+            "ble.scan.a_kereses_nem_indithato_e_ellenorizd_hogy_be_van_e_k",
+            &[("e", &e.to_string())],
         ));
         return;
     }
@@ -319,7 +327,10 @@ pub(crate) async fn run_scan<A: BleAdapter>(
                 None => match adapter.events().await {
                     Ok(e) => events = e,
                     Err(e) => {
-                        notice(format!("A keresés megszakadt: {e}"));
+                        notice(tf(
+                            "ble.scan.a_kereses_megszakadt_e",
+                            &[("e", &e.to_string())],
+                        ));
                         break;
                     }
                 },
@@ -336,12 +347,15 @@ pub(crate) async fn run_scan<A: BleAdapter>(
                 if now.saturating_duration_since(last_event) > cfg.scan_silence_restart {
                     if !heard_anything && !told_silence {
                         told_silence = true;
-                        notice(SILENT_SCAN_HINT.to_string());
+                        notice(silent_scan_hint().to_string());
                     }
                     // a scan that heard nothing for a long time is probably stuck: restart it
                     let _ = adapter.stop_scan().await;
                     if let Err(e) = adapter.start_scan().await {
-                        notice(format!("A keresés újraindítása nem sikerült: {e}"));
+                        notice(tf(
+                            "ble.scan.a_kereses_ujrainditasa_nem_sikerult_e",
+                            &[("e", &e.to_string())],
+                        ));
                         break;
                     }
                     last_event = now;

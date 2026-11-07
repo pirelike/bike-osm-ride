@@ -18,6 +18,7 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 
+use ride_i18n::{t, tf};
 use ride_model::{SensorCommand, SensorEvent};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -56,7 +57,7 @@ mod fake;
 mod hub_tests;
 
 pub use hexlog::default_hex_log_path;
-pub use hub::{SIM_ID, SIM_NAME};
+pub use hub::{sim_name, SIM_ID};
 
 /// Handle to the running backend. Drop `tx` (or send nothing more) to let it wind down.
 pub struct SensorLink {
@@ -86,9 +87,9 @@ pub fn spawn_sensor_hub(opts: HubOptions) -> SensorLink {
         .spawn(move || {
             let log = match &opts.hex_log {
                 Some(path) => hexlog::HexLog::open(path).unwrap_or_else(|e| {
-                    let _ = evt_tx.send(SensorEvent::Notice(format!(
-                        "A BLE-napló nem nyitható meg ({}): {e}",
-                        path.display()
+                    let _ = evt_tx.send(SensorEvent::Notice(tf(
+                        "ble.a_ble_naplo_nem_nyithato_meg_e",
+                        &[("path", &path.display().to_string()), ("e", &e.to_string())],
                     )));
                     hexlog::HexLog::disabled()
                 }),
@@ -107,8 +108,9 @@ pub fn spawn_sensor_hub(opts: HubOptions) -> SensorLink {
             let runtime = match runtime {
                 Ok(rt) => rt,
                 Err(e) => {
-                    let _ = evt_tx.send(SensorEvent::Notice(format!(
-                        "A Bluetooth-háttér nem indítható: {e}"
+                    let _ = evt_tx.send(SensorEvent::Notice(tf(
+                        "ble.a_bluetooth_hatter_nem_indithato_e",
+                        &[("e", &e.to_string())],
                     )));
                     return;
                 }
@@ -124,8 +126,9 @@ pub fn spawn_sensor_hub(opts: HubOptions) -> SensorLink {
             // adapter itself reports the reason (`btle::BtleAdapter::init`).
             #[cfg(target_os = "android")]
             if let Err(err) = android_ble::init_backend() {
-                let _ = evt_tx.send(SensorEvent::Notice(format!(
-                    "A Bluetooth ezen az eszközön nem indítható el: {err}"
+                let _ = evt_tx.send(SensorEvent::Notice(tf(
+                    "ble.a_bluetooth_ezen_az_eszkozon_nem_indithato_el_err",
+                    &[("err", &err.to_string())],
                 )));
             }
             let init: hub::InitFn<btle::BtleAdapter> =
@@ -142,14 +145,14 @@ pub fn spawn_sensor_hub(opts: HubOptions) -> SensorLink {
             }));
             if outcome.is_err() {
                 let _ = panic_tx.send(SensorEvent::Notice(
-                    "A Bluetooth-háttér váratlanul leállt; indítsd újra az alkalmazást."
-                        .to_string(),
+                    t("ble.a_bluetooth_hatter_varatlanul_leallt_inditsd_ujra_az").to_string(),
                 ));
             }
         });
     if let Err(e) = spawned {
-        let _ = evt_for_errors.send(SensorEvent::Notice(format!(
-            "A Bluetooth-háttér nem indítható: {e}"
+        let _ = evt_for_errors.send(SensorEvent::Notice(tf(
+            "ble.a_bluetooth_hatter_nem_indithato_e",
+            &[("e", &e.to_string())],
         )));
     }
     SensorLink {

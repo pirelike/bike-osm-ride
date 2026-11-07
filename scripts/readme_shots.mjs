@@ -3,6 +3,11 @@
 //
 //   node scripts/readme_shots.mjs [--only ride-dark,phone-ride] [--out docs/screenshots]
 //                                 [--exe target/debug/bike-osm-ride.exe] [--port 9333] [--list]
+//                                 [--lang es] [--text]
+//
+// `--lang` pins the UI language (`RIDE_LANG`) for every scenario, so a translation can be looked
+// at; `--text` also writes the visible text of the page next to each PNG (same name, `.txt`), which
+// is what `scripts/i18n/check_ui.mjs` scans for leftovers in the source language.
 //
 // Needs Node 22+ (built-in fetch and WebSocket) and a built ride-app on Windows: the DevTools
 // port is a WebView2 feature (`RIDE_DEBUG_PORT`, see crates/ride-app/src/main.rs).
@@ -27,6 +32,30 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+// `--lang <code>` also switches the labels this script clicks. The steps below name catalog keys,
+// not Hungarian text, so a translated UI is driven the same way: read the catalog of the requested
+// language (Hungarian when none was given) and resolve a key before the scenario is built.
+const LANG = (() => {
+  const index = process.argv.indexOf('--lang');
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : 'hu';
+})();
+const CATALOG = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, 'crates', 'ride-i18n', 'locales', `${LANG}.json`), 'utf8'));
+  } catch {
+    return JSON.parse(fs.readFileSync(path.join(root, 'crates', 'ride-i18n', 'locales', 'hu.json'), 'utf8'));
+  }
+})();
+const HU_CATALOG = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, 'crates', 'ride-i18n', 'locales', 'hu.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+})();
+/** The visible text of one catalog key in the requested language (Hungarian fallback). */
+const label = key => CATALOG[key] ?? HU_CATALOG[key] ?? key;
+
 // ───────────────────────────── scenarios ─────────────────────────────
 
 const DESKTOP = { width: 1440, height: 900, dpr: 1 };
@@ -36,14 +65,14 @@ const REVIEW = { width: 1440, height: 1250, dpr: 1 };
 
 /** Click the compact layout's tab with this label (phone layout only). */
 const tab = label =>
-  `(() => { const b = [...document.querySelectorAll('.compact-tab')].find(x => x.textContent.includes(${JSON.stringify(label)})); if (!b) return 'no tab ${label}'; b.click(); return 'ok'; })()`;
+  `(() => { const b = [...document.querySelectorAll('.compact-tab')].find(x => x.textContent.includes(${JSON.stringify(label)})); if (!b) return ${JSON.stringify(`no tab ${label}`)}; b.click(); return 'ok'; })()`;
 
 /**
  * Click a button of the review page: inside `scope`, the first button with this text, or (with no
  * text) the first one matching `selector`.
  */
 const reviewButton = (scope, text, selector = 'button') =>
-  `(() => { const b = [...document.querySelectorAll(${JSON.stringify(scope)} + ' ' + ${JSON.stringify(selector)})].find(x => ${text === null ? 'true' : `x.textContent.includes(${JSON.stringify(text)})`}); if (!b) return 'no button ${text ?? selector} in ${scope}'; b.click(); return 'ok'; })()`;
+  `(() => { const b = [...document.querySelectorAll(${JSON.stringify(scope)} + ' ' + ${JSON.stringify(selector)})].find(x => ${text === null ? 'true' : `x.textContent.toLowerCase().includes(${JSON.stringify(text.toLowerCase())})`}); if (!b) return ${JSON.stringify(`no button ${text ?? selector} in ${scope}`)}; b.click(); return 'ok'; })()`;
 
 /** Close a panel of the tiled layout (its neighbour takes the space), by its `data-panel` key. */
 const closePanel = key =>
@@ -97,7 +126,7 @@ const scenarios = [
     settle: 55,
     steps: [
       { js: closePanel('rider'), settle: 2 },
-      { drag: { from: chip('Grafikonok'), x: 180, y: 560 }, settle: 3 },
+      { drag: { from: chip(label('app.dock.grafikonok')), x: 180, y: 560 }, settle: 3 },
     ],
     view: DESKTOP,
   },
@@ -152,7 +181,7 @@ const scenarios = [
     env: { ...ROUTE, ...RIDER, ...DARK, ...FAST },
     seed: LEARNED_SWIPE,
     settle: 33,
-    steps: [{ js: tab('Térkép'), settle: 3 }],
+    steps: [{ js: tab(label('ui_map.terkep')), settle: 3 }],
     view: PHONE,
   },
   {
@@ -163,8 +192,8 @@ const scenarios = [
     waitFor: '.rv-table',
     settle: 4,
     steps: [
-      { js: reviewButton('.rv-section-bar', 'emelkedő'), settle: 3 },
-      { js: reviewButton('.rv-ride-actions', null, '[aria-label="A becslés beállításai"]'), settle: 2 },
+      { js: reviewButton('.rv-section-bar', label('ui_review.index_1_emelkedo_km_text_to_from').split('{')[0].trim()), settle: 3 },
+      { js: reviewButton('.rv-ride-actions', null, `[aria-label="${label('ui_review.a_becsles_beallitasai')}"]`), settle: 2 },
       { move: `document.querySelector('.rv-plot .rv-hit')`, settle: 1 },
     ],
     view: REVIEW,
@@ -176,7 +205,7 @@ const scenarios = [
     seedRides: true,
     waitFor: '.rv-table',
     settle: 4,
-    steps: [{ js: reviewButton('.rv-views', 'Teljesítmény'), settle: 3 }],
+    steps: [{ js: reviewButton('.rv-views', label('ui_review.chart.teljesitmeny')), settle: 3 }],
     view: { width: 1440, height: 1060, dpr: 1 },
   },
   {
@@ -186,7 +215,7 @@ const scenarios = [
     seedRides: true,
     waitFor: '.rv-table',
     settle: 4,
-    steps: [{ js: reviewButton('.rv-tabs', 'Grafikon'), settle: 3 }],
+    steps: [{ js: reviewButton('.rv-tabs', label('ui_review.grafikon')), settle: 3 }],
     view: PHONE,
   },
 ];
@@ -196,7 +225,7 @@ const scenarios = [
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function parseArgs(argv) {
-  const out = { only: null, out: path.join(root, 'docs', 'screenshots'), port: 9333, list: false };
+  const out = { only: null, out: path.join(root, 'docs', 'screenshots'), port: 9333, list: false, lang: null, text: false };
   out.exe = path.join(root, 'target', 'debug', process.platform === 'win32' ? 'bike-osm-ride.exe' : 'bike-osm-ride');
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -205,6 +234,8 @@ function parseArgs(argv) {
     else if (arg === '--out') out.out = path.resolve(argv[++i]);
     else if (arg === '--exe') out.exe = path.resolve(argv[++i]);
     else if (arg === '--port') out.port = Number(argv[++i]);
+    else if (arg === '--lang') out.lang = argv[++i];
+    else if (arg === '--text') out.text = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
   return out;
@@ -353,7 +384,10 @@ async function connect(page) {
   });
   const evaluate = async expression => {
     const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (result.exceptionDetails) throw new Error(`page script failed: ${result.exceptionDetails.text}`);
+    if (result.exceptionDetails) {
+      const detail = result.exceptionDetails.exception?.description ?? result.exceptionDetails.exception?.value ?? '';
+      throw new Error(`page script failed: ${result.exceptionDetails.text}${detail ? ` — ${detail}` : ''}`);
+    }
     return result.result?.value;
   };
   return { send, evaluate, close: () => ws.close() };
@@ -380,6 +414,8 @@ async function runScenario(scenario, options, dataDir, routeFile) {
   if (scenario.seedRides) seedRides(dataDir, routeFile);
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('RIDE_')));
   const hooks = Object.fromEntries(Object.entries(scenario.env).map(([key, value]) => [key, value === '$ROUTE' ? routeFile : value]));
+  // `--lang` pins the UI language for every scenario, so a translation can be looked at.
+  if (options.lang) hooks.RIDE_LANG = options.lang;
   Object.assign(env, hooks, {
     RIDE_DATA_DIR: dataDir,
     RIDE_DEBUG_PORT: String(options.port),
@@ -416,6 +452,10 @@ async function runScenario(scenario, options, dataDir, routeFile) {
           if (answer !== 'ok') console.log(`    step said: ${answer}`);
         }
         await sleep((step.settle ?? 1) * 1000);
+      }
+      if (options.text) {
+        const text = await cdp.evaluate('document.body.innerText');
+        fs.writeFileSync(path.join(options.out, `${scenario.name}.txt`), text ?? '');
       }
       const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
       const bytes = Buffer.from(shot.data, 'base64');

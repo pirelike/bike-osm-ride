@@ -18,6 +18,7 @@ use ride_sim::power_curve;
 use ride_ui_kit::ToastKind;
 
 use super::{guarded, Controller};
+use ride_i18n::{t, tf};
 
 /// Rides compared at once (the number of series colours of the page).
 const MAX_TICKED: usize = 4;
@@ -124,30 +125,37 @@ fn import_file(
     route: &Route,
     rider: &RiderSettings,
 ) -> Result<(import::Imported, String), String> {
-    let meta =
-        std::fs::metadata(path).map_err(|_| "A fájlt nem sikerült megnyitni.".to_string())?;
+    let meta = std::fs::metadata(path)
+        .map_err(|_| t("app.controller.review.a_fajlt_nem_sikerult_megnyitni").to_string())?;
     if !meta.is_file() {
-        return Err("A kiválasztott elem nem fájl.".into());
+        return Err(t("app.controller.review.a_kivalasztott_elem_nem_fajl").into());
     }
     if meta.len() > MAX_ACTIVITY_BYTES {
-        return Err(format!(
-            "A fájl túl nagy (legfeljebb {} MB engedélyezett).",
-            MAX_ACTIVITY_BYTES / (1024 * 1024)
+        return Err(tf(
+            "app.controller.review.a_fajl_tul_nagy_legfeljebb_mb_engedelyezett",
+            &[("mb", &(MAX_ACTIVITY_BYTES / (1024 * 1024)).to_string())],
         ));
     }
-    let bytes = std::fs::read(path).map_err(|_| "A fájlt nem sikerült megnyitni.".to_string())?;
+    let bytes = std::fs::read(path)
+        .map_err(|_| t("app.controller.review.a_fajlt_nem_sikerult_megnyitni").to_string())?;
     let parsed = activity::from_bytes(&bytes).map_err(|e| e.to_string())?;
     let done = import::import_activity(&parsed, route, rider, None).map_err(|e| e.to_string())?;
     let started = done.record.summary.started_unix_s;
     if rides::has_ride(&route.id, started) {
-        return Err(
-            "Ezt az edzést már importáltad erre az útvonalra (ugyanaz a kezdési időpont).".into(),
-        );
+        return Err(t(
+            "app.controller.review.ezt_az_edzest_mar_importaltad_erre_az_utvonalra_ugya",
+        )
+        .into());
     }
     let saved = rides::save_ride(&done.record, route)
-        .map_err(|e| format!("Az edzést nem sikerült elmenteni: {e}"))?
+        .map_err(|e| {
+            tf(
+                "app.controller.review.az_edzest_nem_sikerult_elmenteni_e",
+                &[("e", &e.to_string())],
+            )
+        })?
         .ok_or_else(|| {
-            "Az edzés túl rövid (legalább 1 perc és 200 m kell), ezért nem mentettük el."
+            t("app.controller.review.az_edzes_tul_rovid_legalabb_1_perc_es_200_m_kell_eze")
                 .to_string()
         })?;
     Ok((done, saved.stem))
@@ -193,7 +201,7 @@ impl Controller {
         } else if keep.len() >= MAX_TICKED {
             self.st.toast(
                 ToastKind::Info,
-                "Legfeljebb négy edzést lehet egyszerre összehasonlítani.",
+                t("app.controller.review.legfeljebb_negy_edzest_lehet_egyszerre_osszehasonlit"),
             );
             return;
         } else {
@@ -226,11 +234,15 @@ impl Controller {
             })
             .await;
             match joined {
-                Ok(Ok(Ok(true))) => self.st.toast(ToastKind::Success, "Az edzést töröltük."),
+                Ok(Ok(Ok(true))) => self.st.toast(
+                    ToastKind::Success,
+                    t("app.controller.review.az_edzest_toroltuk"),
+                ),
                 Ok(Ok(Ok(false))) => {}
-                _ => self
-                    .st
-                    .toast(ToastKind::Error, "Az edzést nem sikerült törölni."),
+                _ => self.st.toast(
+                    ToastKind::Error,
+                    t("app.controller.review.az_edzest_nem_sikerult_torolni"),
+                ),
             }
             self.review_refresh(Some(route_id), keep, None);
         });
@@ -248,9 +260,12 @@ impl Controller {
         };
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
-                .set_title("Edzés importálása (GPX vagy TCX)")
-                .add_filter("Edzésfájl (GPX, TCX)", &["gpx", "tcx"])
-                .add_filter("Minden fájl", &["*"])
+                .set_title(t("app.controller.review.edzes_importalasa_gpx_vagy_tcx"))
+                .add_filter(
+                    t("app.controller.review.edzesfajl_gpx_tcx"),
+                    &["gpx", "tcx"],
+                )
+                .add_filter(t("app.controller.backup.minden_fajl"), &["*"])
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
@@ -264,10 +279,9 @@ impl Controller {
     /// Android has no native file dialog and the system picker is wired to the route loader only.
     #[cfg(target_os = "android")]
     pub fn review_import(self) {
-        self.st.toast(
-            ToastKind::Info,
-            "Androidon az edzésimport még nem elérhető.",
-        );
+        self.st.toast(ToastKind::Info, {
+            t("app.controller.review.androidon_az_edzesimport_meg_nem_elerheto")
+        });
     }
 
     /// Puts the activity file at `path` on the route shown and stores it as a ride.
@@ -275,7 +289,7 @@ impl Controller {
         let Some(route) = self.st.review.route.peek().clone() else {
             self.st.toast(
                 ToastKind::Warning,
-                "Előbb válassz egy útvonalat, amelynek megvan a fájlja: az edzést erre vetítjük rá.",
+                t("app.controller.review.elobb_valassz_egy_utvonalat_amelynek_megvan_a_fajlja"),
             );
             return;
         };
@@ -283,7 +297,7 @@ impl Controller {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "edzés".to_string());
+            .unwrap_or_else(|| t("app.controller.review.edzes").to_string());
         let mut busy = self.st.review.busy;
         busy.set(true);
         let keep = self.st.review.selected.peek().clone();
@@ -297,15 +311,21 @@ impl Controller {
             .await;
             match joined {
                 Ok(Ok(Ok((done, stem)))) => {
-                    let mut notes = vec![format!(
-                        "„{}” importálva: {:.1} km, {}.",
-                        if done.name.is_empty() {
-                            &name
-                        } else {
-                            &done.name
-                        },
-                        done.record.summary.dist / 1000.0,
-                        ride_ui_kit::format::fmt_duration(done.record.summary.elapsed_s)
+                    let display_name = if done.name.is_empty() {
+                        name.as_str()
+                    } else {
+                        done.name.as_str()
+                    };
+                    let mut notes = vec![tf(
+                        "app.controller.review.importalva_1_km",
+                        &[
+                            ("name", display_name),
+                            ("km", &format!("{:.1}", done.record.summary.dist / 1000.0)),
+                            (
+                                "time",
+                                &ride_ui_kit::format::fmt_duration(done.record.summary.elapsed_s),
+                            ),
+                        ],
                     )];
                     notes.extend(done.warnings);
                     let mut signal = self.st.review.notes;
@@ -318,8 +338,10 @@ impl Controller {
                     busy.set(false);
                 }
                 _ => {
-                    self.st
-                        .toast(ToastKind::Error, "Az edzés importálása nem sikerült.");
+                    self.st.toast(
+                        ToastKind::Error,
+                        t("app.controller.review.az_edzes_importalasa_nem_sikerult"),
+                    );
                     let mut busy = self.st.review.busy;
                     busy.set(false);
                 }
@@ -343,23 +365,30 @@ impl Controller {
             let id = route_id.clone();
             let joined = tokio::task::spawn_blocking(move || {
                 guarded("review reestimate", || -> Result<(), String> {
-                    let record = rides::load_ride(&id, &stem).ok_or("Az edzés nem tölthető be.")?;
+                    let record = rides::load_ride(&id, &stem)
+                        .ok_or(t("app.controller.review.az_edzes_nem_toltheto_be"))?;
                     let redone =
                         import::reestimate(&record, params, &rider).map_err(|e| e.to_string())?;
-                    rides::save_ride(&redone, &route)
-                        .map_err(|e| format!("Az edzést nem sikerült elmenteni: {e}"))?;
+                    rides::save_ride(&redone, &route).map_err(|e| {
+                        tf(
+                            "app.controller.review.az_edzest_nem_sikerult_elmenteni_e",
+                            &[("e", &e.to_string())],
+                        )
+                    })?;
                     Ok(())
                 })
             })
             .await;
             match joined {
-                Ok(Ok(Ok(()))) => self
-                    .st
-                    .toast(ToastKind::Success, "A wattokat újraszámoltuk."),
+                Ok(Ok(Ok(()))) => self.st.toast(
+                    ToastKind::Success,
+                    t("app.controller.review.a_wattokat_ujraszamoltuk"),
+                ),
                 Ok(Ok(Err(message))) => self.st.toast(ToastKind::Error, message),
-                _ => self
-                    .st
-                    .toast(ToastKind::Error, "Az újraszámolás nem sikerült."),
+                _ => self.st.toast(
+                    ToastKind::Error,
+                    t("app.controller.review.az_ujraszamolas_nem_sikerult"),
+                ),
             }
             self.review_refresh(Some(route_id), keep, None);
         });
@@ -375,8 +404,13 @@ impl Controller {
             .round()
             .clamp(power_curve::FTP_MIN_W, power_curve::FTP_MAX_W);
         self.update_settings(|s| s.rider.ftp_w = ftp);
-        self.st
-            .toast(ToastKind::Success, format!("Az FTP beállítva: {ftp:.0} W."));
+        self.st.toast(
+            ToastKind::Success,
+            tf(
+                "app.controller.review.az_ftp_beallitva_ftp_0_w",
+                &[("ftp", &format!("{ftp:.0}"))],
+            ),
+        );
     }
 
     /// Reads the ride log and puts the result on the page.
@@ -421,7 +455,7 @@ impl Controller {
                 }
                 _ => self.st.toast(
                     ToastKind::Error,
-                    "Az edzések listáját nem sikerült beolvasni.",
+                    t("app.controller.review.az_edzesek_listajat_nem_sikerult_beolvasni"),
                 ),
             }
             busy.set(false);

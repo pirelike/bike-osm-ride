@@ -499,11 +499,11 @@ fn Foundations(theme: Theme) -> Element {
                 div { class: "panel",
                     div { class: "panel__head", span { "Teljesítményzónák, % FTP" } span { "Z1-Z7" } }
                     div { class: "kp-zones",
-                        for (i , name) in POWER_ZONE_NAMES.iter().enumerate() {
+                        for i in 0..7usize {
                             div { class: "kp-zone", style: "--c: {power_zone_var((i + 1) as u8)}",
                                 b { "Z{i + 1}" }
                                 div { class: "bar", style: "width: {38 + i * 9}%" }
-                                span { class: "nm", "{name}" }
+                                span { class: "nm", "{power_zone_name((i + 1) as u8)}" }
                             }
                         }
                     }
@@ -511,11 +511,11 @@ fn Foundations(theme: Theme) -> Element {
                 div { class: "panel",
                     div { class: "panel__head", span { "Pulzuszónák, % max. pulzus" } span { "H1-H5" } }
                     div { class: "kp-zones",
-                        for (i , name) in HR_ZONE_NAMES.iter().enumerate() {
+                        for i in 0..5usize {
                             div { class: "kp-zone", style: "--c: {hr_zone_var((i + 1) as u8)}",
                                 b { "H{i + 1}" }
                                 div { class: "bar", style: "width: {44 + i * 12}%" }
-                                span { class: "nm", "{name}" }
+                                span { class: "nm", "{hr_zone_name((i + 1) as u8)}" }
                             }
                         }
                     }

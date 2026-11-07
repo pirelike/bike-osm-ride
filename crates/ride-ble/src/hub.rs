@@ -37,11 +37,14 @@ use crate::sim::SimRider;
 use crate::trainer::TrainerCmd;
 use crate::transport::{BleAdapter, GattPeripheral};
 use crate::zwift::ControllerKind;
+use ride_i18n::{t, tf};
 
 /// Id of the simulated rider in `Discovered` / `Connect`.
 pub const SIM_ID: &str = "sim:rider";
-/// Display name of the simulated rider.
-pub const SIM_NAME: &str = "Szimulált tekerő";
+/// Display name of the simulated rider (a function: the catalog is not a `const`).
+pub fn sim_name() -> &'static str {
+    t("ble.hub.szimulalt_tekero")
+}
 
 /// Canonical slot order (the UI shows the cards in this order).
 const SLOT_ORDER: [DeviceKind; 5] = [
@@ -55,7 +58,7 @@ const SLOT_ORDER: [DeviceKind; 5] = [
 fn sim_device() -> DeviceInfo {
     DeviceInfo {
         id: SIM_ID.to_string(),
-        name: SIM_NAME.to_string(),
+        name: sim_name().to_string(),
         kinds: vec![
             DeviceKind::Trainer,
             DeviceKind::PowerMeter,
@@ -297,8 +300,9 @@ impl<A: BleAdapter> Hub<A> {
                 Some(a)
             }
             Err(e) => {
-                self.notice(format!(
-                    "{e}. A szimulált tekerő Bluetooth nélkül is használható."
+                self.notice(tf(
+                    "ble.hub.e_a_szimulalt_tekero_bluetooth_nelkul_is_hasznalhato",
+                    &[("e", &e.to_string())],
                 ));
                 None
             }
@@ -345,7 +349,7 @@ impl<A: BleAdapter> Hub<A> {
         }
         self.sim_slots.retain(|k| *k != kind);
         self.sim_slots.push(kind);
-        self.emit_state(kind, ConnState::Connected, Some(SIM_NAME.to_string()));
+        self.emit_state(kind, ConnState::Connected, Some(sim_name().to_string()));
         // show the first values immediately
         self.on_tick();
     }
@@ -369,7 +373,7 @@ impl<A: BleAdapter> Hub<A> {
         advertised.push(kind);
 
         let Some(adapter) = self.ensure_adapter().await else {
-            let msg = "A Bluetooth nem érhető el".to_string();
+            let msg = t("ble.hub.a_bluetooth_nem_erheto_el").to_string();
             for k in &advertised {
                 self.emit_state(*k, ConnState::Failed(msg.clone()), Some(name.clone()));
             }

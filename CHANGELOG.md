@@ -8,9 +8,181 @@ a dátumok a commitok dátumai.
 A **v0.2.0** és a **v0.2.2** címke megvan a tárolóban, de nincs hozzá kiadás: a kiadási futásuk elbukott, a tartalmuk a
 következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címkét nem mozgatunk; a javítás új patch-verzió.
 
-## [Kiadatlan]
+## [0.5.0] – 2026-11-07
+
+### Új
+- **Spanyol felület.** Az app minden felirata, hibaüzenete, tippje és a beállítások szövege elérhető spanyolul: a
+  Beállítások → Megjelenés → Nyelv alatt választható („Automatikus”, „Magyar”, „Español”). Az „Automatikus” a készülék
+  nyelvét használja, ha annak a szövege hiánytalan; különben magyarul indul, hogy senki ne lásson félkész felületet.
+  A szövegek nyelvi katalógusokban élnek (`crates/ride-i18n/locales/`), a magyar a forrás. A spanyol fordítás
+  végig „ciclista” (soha nem „lovas”), a mértékegységek és a márkanevek (FTP, ERG, TCX, GPX, BRouter, Open-Meteo,
+  Street View) változatlanok. Részletek: `docs/I18N.md`.
+- **A spanyol edzéskönyvtár is elkészült**: mind a 93 edzés neve, célja, leírása, blokkneve, megjegyzése és
+  minden edzőüzenete (2 065 szöveg). A fordítás a magyar szövegekhez kötött térképből generálódik
+  (`workouts.es.map.json` → `workouts.es.json`), és a generátor nem ír ki félkész fájlt; egy teszt
+  őrzi, hogy a fordítás ne változtasson egyetlen blokk hosszán, célján vagy számán sem. Az edzéslista
+  spanyolul a spanyol nevek szerint rendeződik.
+- **A nyelvváltás azonnal érvénybe lép**, a mentett nevek (útvonal, tekerés) nem követik: azok maradnak, ahogy
+  elnevezted őket.
+- **A felhasználói dokumentumok is elérhetők spanyolul**: a README mellett a teljes kézikönyv
+  (`docs/i18n/es/USER_GUIDE.md`) és az adatvédelmi lap (`docs/i18n/es/PRIVACY.md`). A magyar dokumentumok
+  tetején hivatkozás mutat a spanyol változatra.
+- **Angol felület.** Az app minden felirata, hibaüzenete, tippje és a beállítások szövege elérhető angolul is:
+  a Beállítások → Megjelenés → Nyelv alatt választható („Automatikus”, „Magyar”, „English”, „Español”). A spanyol
+  mellé a teljes katalógus elkészült (`crates/ride-i18n/locales/en.json`, 1 055 szöveg), a mértékegységek és a
+  márkanevek változatlanok, a „tekerő” végig „rider” (soha nem „horse rider”). Az angol egyben a fordítási sor
+  köztes nyelve: a következő nyelvek innen indulnak. Részletek: `docs/I18N.md`.
+- **Az angol edzéskönyvtár is elkészült**: mind a 93 edzés neve, célja, leírása, blokkneve, megjegyzése és minden
+  edzőüzenete (2 065 szöveg) a `workouts.en.map.json` térképből generálva (`workouts.en.json`). Ugyanaz a generátor
+  és ugyanaz a teszt őrzi, mint a spanyolnál: blokk-hossz, cél és darabszám nem változhat.
+- **A felhasználói dokumentumok angolul is elérhetők**: `docs/i18n/en/README.md`,
+  `docs/i18n/en/USER_GUIDE.md` és `docs/i18n/en/PRIVACY.md`. A magyar dokumentumok tetején hivatkozás mutat rájuk.
+- **A Linuxos asztali bejegyzés angol leírást is kapott** (`Comment[en]` a `.desktop` fájlban).
+- **Portugál felület.** Az app minden felirata, hibaüzenete, tippje és a beállítások szövege elérhető
+  portugálul (európai portugál): a Beállítások → Megjelenés → Nyelv alatt választható („Automatikus”,
+  „Magyar”, „English”, „Español”, „Português”). A katalógus hiánytalan (`crates/ride-i18n/locales/pt.json`,
+  1 066 szöveg), a „tekerő” végig „ciclista” (soha nem „cavaleiro”), a mértékegységek és a márkanevek
+  változatlanok. A brazil alakok (`você`, `arquivo`, `salvar`, `excluir`, `tela`, `configuração`) ellen a
+  katalógus-teszt is őrködik. Részletek: `docs/I18N.md`.
+- **A portugál edzéskönyvtár is elkészült**: mind a 93 edzés neve, célja, leírása, blokkneve, megjegyzése és
+  minden edzőüzenete (2 065 szöveg) a `workouts.pt.map.json` térképből generálva (`workouts.pt.json`).
+  Ugyanaz a generátor és ugyanaz a teszt őrzi, mint a spanyolnál és az angolnál: blokk-hossz, cél és
+  darabszám nem változhat. Az edzéslista portugálul a portugál nevek szerint rendeződik.
+- **A felhasználói dokumentumok portugálul is elérhetők**: `docs/i18n/pt/README.md`,
+  `docs/i18n/pt/USER_GUIDE.md` és `docs/i18n/pt/PRIVACY.md`; a portugál README `## Licença` szakasza a
+  magyar `## Licenc` szakaszt tükrözi, a licencnevek és SPDX-azonosítók változatlanok. A magyar
+  dokumentumok tetején hivatkozás mutat rájuk.
+- **Csomagolás portugálul**: `Comment[pt]` a Linuxos `.desktop` bejegyzésben, `pt.lproj/InfoPlist.strings`
+  a macOS-bundle Bluetooth-kérdéséhez, `values-pt/strings.xml` az Android-hoz, a `Dioxus.toml`
+  egynyelvű mezői mellett pedig kommentben a portugál szöveg. Az Android-összeállítás és a macOS futás
+  ebben a környezetben nem volt kipróbálható: ezek **nem ellenőrzöttek**, és az anyanyelvi lektorálás is
+  hátravan.
+- **Német felület.** Az app minden felirata, hibaüzenete, tippje és a beállítások szövege elérhető
+  németül: a Beállítások → Megjelenés → Nyelv alatt választható („Automatikus”, „Magyar”, „English”,
+  „Español”, „Português”, „Deutsch”). A katalógus hiánytalan (`crates/ride-i18n/locales/de.json`,
+  1 064 szöveg), a „tekerő” végig „Fahrer” (soha nem „Reiter” vagy „Pferd”), a megszólítás végig „du”
+  (soha nem „Sie”), a tizedesvessző és a százalékjel előtti szóköz a német helyesírást követi, a
+  mértékegységek és a márkanevek változatlanok. A `de` oszlop a `GLOSSARY.tsv`-ben és a `STYLE.tsv`-ben
+  is ott van, a katalógus-teszt pedig a megszólítást és a ló szavakat is őrzi. Részletek: `docs/I18N.md`.
+- **A német edzéskönyvtár is elkészült**: mind a 93 edzés neve, célja, leírása, blokkneve, megjegyzése és
+  minden edzőüzenete (2 065 szöveg) a `workouts.de.map.json` térképből generálva (`workouts.de.json`).
+  Ugyanaz a generátor és ugyanaz a teszt őrzi, mint a többi nyelvnél: blokk-hossz, cél és darabszám nem
+  változhat. Az edzéslista németül a német nevek szerint rendeződik.
+- **A felhasználói dokumentumok németül is elérhetők**: `docs/i18n/de/README.md`,
+  `docs/i18n/de/USER_GUIDE.md` és `docs/i18n/de/PRIVACY.md`; a német README `## Lizenz` szakasza a
+  magyar `## Licenc` szakaszt tükrözi, a licencnevek és SPDX-azonosítók változatlanok. A magyar
+  dokumentumok tetején hivatkozás mutat rájuk.
+- **Csomagolás németül**: `Comment[de]` a Linuxos `.desktop` bejegyzésben, `de.lproj/InfoPlist.strings`
+  a macOS-bundle Bluetooth-kérdéséhez, a `Dioxus.toml` egynyelvű mezői mellett pedig kommentben a német
+  szöveg. Androidhoz nem kellett külön német erőforrás: az egyetlen felhasználónak látszó szöveg ott a
+  terméknév. Az Android-összeállítás és a macOS futás ebben a környezetben nem volt kipróbálható: ezek
+  **nem ellenőrzöttek**, és az anyanyelvi lektorálás is hátravan.
+- **Kínai felület.** Az app minden felirata, hibaüzenete, tippje és a beállítások szövege elérhető
+  egyszerűsített kínaiul (zh-Hans): a Beállítások → Megjelenés → Nyelv alatt választható („Automatikus”,
+  „Magyar”, „English”, „Español”, „Português”, „Deutsch”, „Italiano”, „简体中文”). A katalógus hiánytalan
+  (`crates/ride-i18n/locales/zh.json`, 1 057 szöveg), a „tekerő” végig „骑行者” (soha nem „骑马 / 马术 /
+  赛马”), a megszólítás végig „你” (soha nem „您”), a tizedespont és a százalékjel előtti szóköz nélküli
+  írás a kínai helyesírást követi, a mértékegységek és a márkanevek változatlanok. A `zh` oszlop a
+  `GLOSSARY.tsv`-ben és a `STYLE.tsv`-ben is ott van, a katalógus-teszt pedig a megszólítást, a ló
+  szavakat és a hagyományos írásjeleket is őrzi. Részletek: `docs/I18N.md`.
+- **A kínai edzéskönyvtár is elkészült**: mind a 93 edzés neve, célja, leírása, blokkneve, megjegyzése és
+  minden edzőüzenete (2 065 szöveg) a `workouts.zh.map.json` térképből generálva (`workouts.zh.json`).
+  Ugyanaz a generátor és ugyanaz a teszt őrzi, mint a többi nyelvnél: blokk-hossz, cél és darabszám nem
+  változhat. Az edzéslista kínaiul a kínai nevek szerint rendeződik.
+- **A felhasználói dokumentumok kínaiul is elérhetők**: `docs/i18n/zh/README.md`,
+  `docs/i18n/zh/USER_GUIDE.md`, `docs/i18n/zh/PRIVACY.md` és `docs/i18n/zh/CHANGELOG.md`; a kínai README
+  `## 许可证` szakasza a magyar `## Licenc` szakaszt tükrözi, a licencnevek és SPDX-azonosítók változatlanok.
+  A magyar dokumentumok tetején hivatkozás mutat rájuk.
+- **Csomagolás kínaiul**: `Comment[zh]` a Linuxos `.desktop` bejegyzésben, `zh-Hans.lproj/InfoPlist.strings`
+  a macOS-bundle Bluetooth-kérdéséhez, `values-zh/strings.xml` az Androidhoz, a `Dioxus.toml` egynyelvű
+  mezői mellett pedig kommentben a kínai szöveg. Az Android-összeállítás és a macOS futás ebben a
+  környezetben nem volt kipróbálható: ezek **nem ellenőrzöttek**, és az anyanyelvi lektorálás is hátravan.
+- **A kínai betűkészlet rendszerbetűre vált.** A beágyazott Barlow nem tartalmaz han jeleket, ezért a
+  `:lang(zh-Hans)` szabály a szöveghez és a címekhez rendszerbetűt ad (`--font-cjk`), a latin betűk és a
+  számok viszont maradnak Barlow, illetve Barlow Condensed alatt. A CSS-token és a rá épülő teszt a
+  `ride-ui-kit`-ben van; a nyelvváltó nyolc lehetőséggel már nem fér el egy sorban a telefonon, ezért a
+  szegmentált vezérlő törhető lett.
+- **Olasz felület.** Az app minden felirata, hibaüzenete, tippje és a beállítások szövege elérhető
+  olaszul: a Beállítások → Megjelenés → Nyelv alatt választható („Automatikus”, „Magyar”, „English”,
+  „Español”, „Português”, „Deutsch”, „Italiano”, „简体中文”). A katalógus hiánytalan
+  (`crates/ride-i18n/locales/it.json`, 1 061 szöveg), a „tekerő” végig „ciclista” (soha nem „cavaliere”
+  vagy „fantino”), a megszólítás végig „tu” (soha nem a formális „Lei”), a tizedesvesszőt használja, a
+  mértékegységek és a márkanevek változatlanok. Az `it` oszlop a `GLOSSARY.tsv`-ben és a `STYLE.tsv`-ben
+  is ott van, a katalógus-teszt pedig a ló szavakat is őrzi. Részletek: `docs/I18N.md`.
+- **Az olasz edzéskönyvtár is elkészült**: mind a 93 edzés neve, célja, leírása, blokkneve, megjegyzése és
+  minden edzőüzenete (2 065 szöveg) a `workouts.it.map.json` térképből generálva (`workouts.it.json`).
+  Ugyanaz a generátor és ugyanaz a teszt őrzi, mint a többi nyelvnél: blokk-hossz, cél és darabszám nem
+  változhat. Az edzéslista olaszul az olasz nevek szerint rendeződik.
+- **A felhasználói dokumentumok olaszul is elérhetők**: `docs/i18n/it/README.md`,
+  `docs/i18n/it/USER_GUIDE.md`, `docs/i18n/it/PRIVACY.md`, valamint a fordítói `PROMPT.md` és
+  `REVIEW_PROMPT.md`; az olasz README `## Licenza` szakasza a magyar `## Licenc` szakaszt tükrözi, a
+  licencnevek és SPDX-azonosítók változatlanok. A magyar dokumentumok tetején hivatkozás mutat rájuk.
+- **Csomagolás olaszul**: `Comment[it]` a Linuxos `.desktop` bejegyzésben, `it.lproj/InfoPlist.strings`
+  a macOS-bundle Bluetooth-kérdéséhez, `values-it/strings.xml` az Androidhoz, a `Dioxus.toml` egynyelvű
+  mezői mellett pedig kommentben az olasz szöveg. Az Android-összeállítás és a macOS futás ebben a
+  környezetben nem volt kipróbálható: ezek **nem ellenőrzöttek**, és az anyanyelvi lektorálás is hátravan.
+- **Olaszul is elférnek a feliratok.** A 412 × 860-as ellenőrzés egyetlen olyan elemet talált, amely csak
+  olaszul csordult túl: az adatok táblázatának pulzusfejlécét; ezért a keskeny HUD-csempe rövid felirata
+  „FC” lett. A többi vágott elem (`profile-readout`, a térkép vászna, a Névjegy licenctáblázata)
+  magyarul is vág.
+- **Néhány keménykódolt felirat a katalógusba került.** Az eszközlista „Cadence-szenzor” szerepneve és a
+  beállítások „Google Maps API-kulcs” címkéje eddig a forráskódban élt; most kulcs, és minden kész
+  katalógusban megvan (a magyar forrás is „Kadenciaszenzor”). A `check_ui.mjs` szólistája ezzel bővült.
+- **A felső sáv bal sarkában az app saját ikonja látszik** (sötét lekerekített négyzet, türkiz hegygerinc) a korábbi
+  általános kerékpár-jel helyett: ugyanaz a kép, mint az ablak, a Linux/macOS csomagok és az APK ikonja. Ugyanazokból
+  az állandókból rajzolódik (`crates/ride-app/src/icon.rs`), így a négy nem tud elcsúszni egymástól.
+- **Áttekintés oldal: egységes panelek és olvashatóbb grafikonok.** Asztalon minden szakasz (Edzések, Becsült watt,
+  Térkép, Szakasz, Grafikon, A szakasz adatai) a tekerés képernyő paneljeivel azonos címsoros keretet kapott; a
+  távolságtengelyek első számán ott a `km`, a grafikon felső vonalán a mértékegység, a szélső számok nem vágódnak
+  félbe. Kurzor nélkül a jelmagyarázat az ablak átlagát mutatja („Ø 258 W”; időkülönbségnél az ablak végén mért
+  különbséget), nem egy sor gondolatjelet.
+- **Áttekintés oldal telefonon.** Egy fejlécsor (vissza, Összehasonlítás | Teljesítmény, importálás ikonként) a korábbi
+  három helyett; a mérőszám-gombokon a mértékegység áll (`W · bpm · rpm · km/h · ±s`), a grafikon fölött a teljes név;
+  a szakasz adatai elforgatott táblázatban (soronként egy szám, oszloponként egy edzés), így négy edzés is elfér
+  oldalra görgetés nélkül; a csúcsteljesítmény-táblában a dátum alá kerül az útvonal, a sávoszlop elmarad.
+- **Telefonon a felső sávban ott az Áttekintés gombja**, a téma-kapcsoló helyén (a téma a Beállítások → Megjelenés
+  alatt állítható). Eddig csak az Útvonal ablakon át lehetett eljutni oda.
+- **Gépi fordítás-átnézés mind a hat nyelvre**: nyelvenként egy agent a teljes felületi katalógust átolvasta, és
+  megjelölte a kérdéses fordításokat (`docs/i18n/review/<nyelv>.md`, összesen 224 jelölés). Ez egy anyanyelvi lektor
+  munkalistája, nem ítélet; a téves jelöléseket és a már javítottakat a `docs/i18n/review/README.md` sorolja fel.
 
 ### Javítva
+- **Áttekintés oldal telefonon: a grafikonok fölött nem lehetett görgetni, és a koppintott érték azonnal eltűnt.** A
+  profil és a grafikon minden érintést magának tartott (`touch-action: none`), pedig a telefon képernyőjének nagy
+  részét kitöltik. Most a függőleges húzás görget, a vízszintes kijelöl egy szakaszt, a koppintás pedig leteszi a
+  kurzort, és ott is marad (az ujjnak nincs „lebegése”, ami mutatná az értékeket).
+- **Áttekintés oldal telefonon: a térkép rossz méretre igazodott**, és az útvonal eleje a méretarány alá került. A
+  térkép most akkor igazodik a szakaszra, amikor a Térkép fülön először valódi mérete van. Minden térkép-ráigazítás
+  (a tekerés képernyőn is) alul helyet hagy a méretaránynak és a forrásmegjelölésnek.
+- **Az élő grafikonok üresek maradtak, ha az előzmény ritkábban került rögzítésre, mint másodpercenként** (lassú
+  eszköz, vagy a `RIDE_TIMESCALE` tesztkapcsoló): a vonal minden mintánál „szenzorkiesést” látott és szétesett.
+  A szakadás határa most a rögzítés saját üteméhez igazodik; egy valódi kiesés továbbra is megszakítja a vonalat.
+- **Telefon, Adatok fül: a statisztika utolsó sora és a szimulált kerékpáros gombjai levágódtak**, a szimulált
+  kerékpáros panel pedig keskenyebb volt a többinél, dupla kerettel. Most mindkettő a tartalma szerinti magas, a
+  panel teljes szélességű.
+- **Telefon: a profil fejlécében félbevágott feliratok** („A” az „Ablak 3.00 km” helyett, „Követke” a „Következik”
+  helyett). A keskeny fejléc most egész értékpárokat hagy el jobbról.
+- **Telefon: a Beállítások „Elrendezés” csoportja nem jelenik meg**: a telefonon fülek vannak, nincs húzható panel.
+- **Eszközök ablak: a „Nincs kapcsolat” gombnak látszott.** Az állapot most ugyanolyan pill, mint a „Csatlakoztatva”.
+- **Edzéslista: a 30 perces edzés hossza „30” volt** az „1:00” mellett; most „0:30”.
+- **Olasz felület: „1 immagini”, „1 percorsi”.** Az olasz katalógusból hiányoztak az egyes számú alakok; most megvannak,
+  és a katalógus-teszt minden egyes számot ismerő nyelvnél megköveteli őket (a teljesség tesztje is mind a hat nyelvre
+  kiterjed, eddig csak az angolra és a spanyolra).
+- **Fordítási hibák**, egy gépi átnézés jelölései alapján (`docs/i18n/review/`): portugálul a „km múlva” „megtett
+  km” volt, és a terhelés-összegzés második mondata hiányzott; angolul, németül és spanyolul „az utolsó 12 hét”
+  egyes számban állt („12 week”, „12 Woche”, „12 mes”); németül „Rennynamik” → „Renndynamik”.
+- **Előretekintő magassági profil: egy-egy pillanatra eltűnt a görbe, a pötty pedig a bal szélre ugrott.** Az ablak
+  azt nézte, hogy „kezdet + hossz − kezdet” rövidebb-e a hossznál, és a lebegőpontos kerekítés miatt ez a távolságok
+  nagyjából harmadánál igaz lett: az app ilyenkor azt hitte, az ablak az útvonal végébe ütközött, és egy képkockára
+  oda ugrott (a vonalzó például 9,5–12 km-t mutatott 2,4 km-nél). Most az ablak végét hasonlítja az útvonal hosszához;
+  egy teszt tört méteres távolságokon végigsöpörve őrzi.
+- **Néhány felirat kimaradt a fordításból.** A katalóguson kívül maradt szövegek (a szellemválasztó „Ki”
+  gombja, a „besorolatlan” emelkedő-kategória, a „2. kat.” típusú jelölések, az útvonal-betöltés hibaüzenetei,
+  a képernyőolvasóknak szóló leírások, a Street View letöltés állapotsorai és a hibaüzenetei) most a katalógusból
+  jönnek, így spanyolul is spanyolul jelennek meg. A `scripts/i18n/check_ui.mjs` a renderelt felületet vizsgálja,
+  ez fogta meg őket.
+- **Az „Automatikus” nyelv leírása elavult volt**: azt írta, hogy ismeretlen nyelvnél angolul indul, pedig a
+  program magyarul indul (félkész katalógust senki ne lásson). A szöveg most a valóságot írja.
 - **Android: a „Mentés TCX-ként” nem hagyott használható fájlt.** A fájl a Letöltések mappába próbált közvetlenül írni,
   amit az Android 11+ nem enged, ezért az app saját, kívülről nem látható mappájába került, a jelzés pedig „Mentve” volt.
   Most megnyílik a rendszer „Mentés másként” ablaka (mint a biztonsági mentésnél), és te választod ki a helyet.

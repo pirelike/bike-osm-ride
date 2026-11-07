@@ -6,7 +6,7 @@ declared in the crate metadata are marked; the map and route data sources are
 attributed in the README Licenc section and in the app about dialog, and vendored
 or ported source files are described in [`NOTICE.md`](NOTICE.md).
 
-Packages: **638**. Without a declared licence field: **0**.
+Packages: **639**. Without a declared licence field: **0**.
 
 | Crate | Version | Licence | Repository |
 |---|---|---|---|
@@ -484,6 +484,7 @@ Packages: **638**. Without a declared licence field: **0**.
 | syn | 3.0.9 | MIT OR Apache-2.0 | <https://github.com/dtolnay/syn> |
 | sync_wrapper | 1.0.2 | Apache-2.0 | <https://github.com/Actyx/sync_wrapper> |
 | synstructure | 0.14.0 | MIT | <https://github.com/mystor/synstructure> |
+| sys-locale | 0.3.2 | MIT OR Apache-2.0 | <https://github.com/1Password/sys-locale> |
 | system-deps | 6.2.2 | MIT OR Apache-2.0 | <https://github.com/gdesmott/system-deps> |
 | tao | 0.34.8 | Apache-2.0 | <https://github.com/tauri-apps/tao> |
 | tao-macros | 0.1.4 | MIT OR Apache-2.0 | <https://github.com/tauri-apps/tao> |

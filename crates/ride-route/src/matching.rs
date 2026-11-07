@@ -15,6 +15,7 @@ use ride_model::Route;
 
 use crate::activity::ActivitySample;
 use crate::{err, Result};
+use ride_i18n::{t, tf};
 
 /// A sample this close to the route counts as on it, metres.
 pub const TOLERANCE_M: f64 = 30.0;
@@ -112,7 +113,9 @@ fn first_match(route: &Route, lat: f64, lon: f64) -> Option<(f64, f64)> {
 /// half of the samples on it, or a matched span under [`MIN_SPAN_M`].
 pub fn match_to_route(samples: &[ActivitySample], route: &Route) -> Result<Matched> {
     if route.points.len() < 2 || !(route.total_dist.is_finite() && route.total_dist > 0.0) {
-        return err("A kiválasztott útvonalnak nincs hossza, erre nem lehet edzést illeszteni.");
+        return err(t(
+            "route.matching.a_kivalasztott_utvonalnak_nincs_hossza_erre_nem_lehe",
+        ));
     }
     let mut dist: Vec<Option<f64>> = Vec::with_capacity(samples.len());
     let mut offsets: Vec<f64> = Vec::new();
@@ -153,17 +156,24 @@ pub fn match_to_route(samples: &[ActivitySample], route: &Route) -> Result<Match
         } else {
             (100.0 * matched as f64 / samples.len() as f64).round() as u32
         };
-        return err(format!(
-            "Az edzés nyoma nem illik az útvonalra: a pontoknak csak {share}%-a esik {} m-en belülre. Biztosan ezt az útvonalat teker\u{e9}ted?",
-            TOLERANCE_M as u32
+        return err(tf(
+            "route.matching.az_edzes_nyoma_nem_illik_az_utvonalra_a_pontoknak_cs",
+            &[
+                ("share", &share.to_string()),
+                ("tolerance", &(TOLERANCE_M as u32).to_string()),
+            ],
         ));
     }
     let start_dist = dist.iter().flatten().copied().next().unwrap_or(0.0);
     let end_dist = dist.iter().flatten().copied().last().unwrap_or(0.0);
     let span = end_dist - start_dist;
     if span < MIN_SPAN_M {
-        return err(format!(
-            "Az edzés csak {span:.0} m-en fut az útvonalon, ez kevés az összehasonlításhoz (legalább {MIN_SPAN_M:.0} m kell)."
+        return err(tf(
+            "route.matching.az_edzes_csak_span_0_m_en_fut_az_utvonalon_ez_keves_",
+            &[
+                ("span", &ride_i18n::decimal(span, 0)),
+                ("min", &ride_i18n::decimal(MIN_SPAN_M, 0)),
+            ],
         ));
     }
     offsets.sort_by(f64::total_cmp);

@@ -10,6 +10,7 @@
 //! Note the `jni` version: `btleplug` 0.13 uses `jni` 0.22, this crate's other Android code
 //! (`ride-app`) uses 0.21, so the `Env` here is a 0.22 one and the two must not be mixed.
 
+use ride_i18n::t;
 #[cfg(target_os = "android")]
 use std::sync::OnceLock;
 
@@ -37,7 +38,7 @@ fn initialize() -> Result<(), String> {
 
     // `android_context()` panics once the activity released the context (app going away).
     let context = catch_unwind(AssertUnwindSafe(ndk_context::android_context))
-        .map_err(|_| "az Android-környezet már nem elérhető".to_string())?;
+        .map_err(|_| t("ble.android_ble.az_android_kornyezet_mar_nem_elerheto").to_string())?;
     // SAFETY: the JavaVM pointer comes from the NDK context the webview runtime set up and stays
     // valid for the life of the process.
     let vm = unsafe { jni::JavaVM::from_raw(context.vm().cast()) };

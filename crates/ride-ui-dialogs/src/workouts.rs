@@ -11,6 +11,7 @@ use ride_model::{StepTarget, TagGroup, Workout, WorkoutCategory, WorkoutLibrary,
 use ride_ui_kit::palette::{power_zone_name, power_zone_var};
 use ride_ui_kit::{Dialog, Icon, IconName};
 
+use ride_i18n::{t, tf};
 use ride_ui_kit::workout_chart;
 
 /// Tags shown on a list card (the detail column shows all of them).
@@ -61,27 +62,27 @@ pub fn WorkoutsDialog(
     rsx! {
         Dialog {
             open: true,
-            title: "Edzés".to_string(),
+            title: t("ui_dialogs.workouts.edzes").to_string(),
             on_close,
             wide: true,
             flush: true,
             foot: rsx! {
                 span { class: "dlg-foot__note",
-                    "A célwattok az FTP-ből számolódnak (Beállítások → FTP), a trainer ERG-módban tartja őket. Saját edzés: MyWhoosh / Zwift fájl (XML, ZWO, JSON)."
+                    {t("ui_dialogs.workouts.a_celwattok_az_ftp_bol_szamolodnak_beallitasok_ftp_a")}
                 }
                 div { class: "dlg-foot__end",
                     button {
                         class: "btn btn--ghost btn--sm",
                         r#type: "button",
-                        title: "MyWhoosh / Zwift edzésfájl (XML, ZWO, JSON) importálása",
+                        title: t("ui_dialogs.workouts.mywhoosh_zwift_edzesfajl_xml_zwo_json_importalasa").to_string(),
                         onclick: move |_| on_import.call(()),
-                        "Edzés importálása…"
+                        {t("ui_dialogs.workouts.edzes_importalasa")}
                     }
                     button {
                         class: "btn btn--ghost",
                         r#type: "button",
                         onclick: move |_| on_select.call(None),
-                        "Edzés nélkül"
+                        {t("ui_dialogs.workouts.edzes_nelkul")}
                     }
                 }
             },
@@ -89,14 +90,14 @@ pub fn WorkoutsDialog(
                 class: "dlg-workouts",
                 "data-page": if *details_page.read() { "details" } else { "list" },
                 "data-tags": if *tags_open.read() { "open" } else { "closed" },
-                div { class: "dlg-phonebar", role: "tablist", aria_label: "Edzésválasztó",
+                div { class: "dlg-phonebar", role: "tablist", aria_label: t("ui_dialogs.workouts.edzesvalaszto").to_string(),
                     button {
                         class: if *details_page.read() { "dlg-phonetab" } else { "dlg-phonetab dlg-phonetab--on" },
                         r#type: "button",
                         role: "tab",
                         "aria-selected": if *details_page.read() { "false" } else { "true" },
                         onclick: move |_| details_page.set(false),
-                        "Lista"
+                        {t("ui_dialogs.workouts.lista")}
                         span { class: "dlg-phonetab__n num", "{shown}" }
                     }
                     button {
@@ -105,7 +106,7 @@ pub fn WorkoutsDialog(
                         role: "tab",
                         "aria-selected": if *details_page.read() { "true" } else { "false" },
                         onclick: move |_| details_page.set(true),
-                        "Részletek"
+                        {t("ui_dialogs.workouts.reszletek")}
                     }
                     button {
                         class: if *tags_open.read() { "dlg-phonetab dlg-phonetab--filter dlg-phonetab--on" } else { "dlg-phonetab dlg-phonetab--filter" },
@@ -116,20 +117,20 @@ pub fn WorkoutsDialog(
                             tags_open.set(!open);
                             details_page.set(false);
                         },
-                        "Címkék"
+                        {t("ui_dialogs.workouts.cimkek")}
                         if !tags.is_empty() {
                             span { class: "dlg-phonetab__n num", "{tags.len()}" }
                         }
                     }
                 }
-                aside { class: "dlg-workouts__cats", aria_label: "Edzéskategóriák",
+                aside { class: "dlg-workouts__cats", aria_label: t("ui_dialogs.workouts.edzeskategoriak").to_string(),
                     div { class: "dlg-cats",
                     button {
                         class: if filter.is_none() { "dlg-cat dlg-cat--active" } else { "dlg-cat" },
                         r#type: "button",
                         "aria-pressed": if filter.is_none() { "true" } else { "false" },
                         onclick: move |_| category.set(None),
-                        span { class: "dlg-cat__name", "Mind" }
+                        span { class: "dlg-cat__name", {t("ui_dialogs.workouts.mind")} }
                         span { class: "dlg-cat__count num", "{total}" }
                     }
                     for (cat, n) in categories {
@@ -177,26 +178,26 @@ pub fn WorkoutsDialog(
                         }
                     }
                 }
-                section { class: "dlg-workouts__list", aria_label: "Edzések",
+                section { class: "dlg-workouts__list", aria_label: t("ui_dialogs.workouts.edzesek").to_string(),
                     if imported_count > 0 || !tags.is_empty() {
                         div { class: "dlg-workouts__bar",
                             if imported_count > 0 {
-                                span { class: "dlg-workouts__found num", "{imported_count} importált" }
+                                span { class: "dlg-workouts__found num", {tf("ui_dialogs.workouts.imported_count_importalt", &[("imported_count", &imported_count.to_string())])} }
                             }
                             if !tags.is_empty() {
-                                span { class: "dlg-workouts__found num", "{shown} találat" }
+                                span { class: "dlg-workouts__found num", {tf("ui_dialogs.workouts.shown_talalat", &[("shown", &shown.to_string())])} }
                                 button {
                                     class: "btn btn--ghost btn--sm",
                                     r#type: "button",
                                     onclick: move |_| picked.write().clear(),
-                                    "Címkék törlése"
+                                    {t("ui_dialogs.workouts.cimkek_torlese")}
                                 }
                             }
                         }
                     }
                     if workouts.is_empty() {
                         p { class: "dlg-workouts__none",
-                            "Ebben a kategóriában nincs a címkéknek megfelelő edzés. Válaszd a „Mind” nézetet, vagy vegyél le egy címkét."
+                            {t("ui_dialogs.workouts.ebben_a_kategoriaban_nincs_a_cimkeknek_megfelelo_edz")}
                         }
                     }
                     for workout in workouts {
@@ -225,10 +226,10 @@ pub fn WorkoutsDialog(
                                 span { class: "tag", "{workout.category.label()}" }
                                 span { class: "dlg-workout__pct num", "{workout.ftp_pct}% FTP" }
                                 if workout.is_imported() {
-                                    span { class: "tag tag--data", "Importált" }
+                                    span { class: "tag tag--data", {t("ui_dialogs.workouts.importalt")} }
                                 }
                                 if selected.as_deref() == Some(workout.id.as_str()) {
-                                    span { class: "tag tag--solid", "Kiválasztva" }
+                                    span { class: "tag tag--solid", {t("ui_dialogs.workouts.kivalasztva")} }
                                 }
                             }
                             p { class: "dlg-workout__goal", "{workout.goal}" }
@@ -240,7 +241,7 @@ pub fn WorkoutsDialog(
                         }
                     }
                 }
-                aside { class: "dlg-workouts__detail", aria_label: "Edzés részletei",
+                aside { class: "dlg-workouts__detail", aria_label: t("ui_dialogs.workouts.edzes_reszletei").to_string(),
                     if let Some(w) = current {
                         header { class: "dlg-workout-detail__head",
                             h3 { class: "dlg-workout-detail__name", "{w.name}" }
@@ -248,7 +249,7 @@ pub fn WorkoutsDialog(
                                 "{w.category.label()} · {w.duration_text()} · {w.ftp_pct}% FTP"
                             }
                             if w.is_imported() {
-                                span { class: "tag tag--data", "Importált" }
+                                span { class: "tag tag--data", {t("ui_dialogs.workouts.importalt")} }
                             }
                         }
                         div { class: "dlg-workout-detail__tags",
@@ -266,7 +267,15 @@ pub fn WorkoutsDialog(
                             div {
                                 class: "dlg-wchart",
                                 role: "img",
-                                aria_label: "Az edzés profilja: {w.steps.len()} blokk, {w.duration_text()}, {w.ftp_pct}% FTP",
+                                aria_label: tf(
+                                    "ui_dialogs.workouts.az_edzes_profilja_w_steps_len_blokk_w_duration_text_",
+                                    &[
+                                        ("blocks", &w.steps.len().to_string()),
+                                        ("duration", &w.duration_text()),
+                                        ("ftp", &w.ftp_pct.to_string()),
+                                    ],
+                                )
+                                .to_string(),
                                 div { class: "dlg-wchart__plot",
                                     svg {
                                         class: "dlg-wchart__svg",
@@ -304,7 +313,7 @@ pub fn WorkoutsDialog(
                             }
                         }
                         div { class: "dlg-steps__head",
-                            span { class: "label", "Blokkok" }
+                            span { class: "label", {t("ui_dialogs.workouts.blokkok")} }
                             span { class: "dlg-steps__sum num", "{w.steps.len()} blokk" }
                         }
                         ol { class: "dlg-steps",
@@ -327,7 +336,7 @@ pub fn WorkoutsDialog(
                         }
                         if !w.sources.is_empty() {
                             div { class: "dlg-workout-detail__sources",
-                                span { class: "label", "Források" }
+                                span { class: "label", {t("ui_dialogs.workouts.forrasok")} }
                                 ul {
                                     for url in w.sources.iter() {
                                         li { key: "{url}", title: "{url}", "{source_host(url)}" }
@@ -338,7 +347,7 @@ pub fn WorkoutsDialog(
                     } else {
                         div { class: "dlg-workout-detail__empty",
                             Icon { name: IconName::Bike, size: 28 }
-                            p { "Válassz egy edzést a listából, vagy tekerj szabadon." }
+                            p { {t("ui_dialogs.workouts.valassz_egy_edzest_a_listabol_vagy_tekerj_szabadon")} }
                         }
                     }
                 }

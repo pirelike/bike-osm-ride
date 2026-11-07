@@ -1,0 +1,5 @@
+/* Localized strings of bike-osm-ride (Portuguese). The product name is a brand and stays as it
+   is; the Bluetooth permission prompt is the text macOS shows the rider. */
+"CFBundleDisplayName" = "bike-osm-ride";
+"CFBundleName" = "bike-osm-ride";
+"NSBluetoothAlwaysUsageDescription" = "O bike-osm-ride liga-se por Bluetooth ao rolo inteligente, ao monitor de pulso, ao potenciómetro, ao sensor de cadência e ao manípulo Zwift. Sem isto não é possível procurar sensores.";

@@ -1,30 +1,52 @@
 //! Error type of the BLE layer. The messages are Hungarian because they can end up in
 //! a toast (`SensorEvent::Notice` / `ConnState::Failed`).
 
+use ride_i18n::{t, tf};
 use std::future::Future;
 use std::time::Duration;
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BleError {
     /// No adapter, Bluetooth switched off, permission denied, runtime start-up failure.
-    #[error("A Bluetooth nem érhető el: {0}")]
     Unavailable(String),
     /// The peripheral is not (or no longer) known to the adapter.
-    #[error("Az eszköz nem található (indíts új keresést)")]
     NotFound,
     /// The link dropped while an operation was in flight.
-    #[error("Nincs kapcsolat az eszközzel")]
     NotConnected,
     /// An operation took longer than its budget.
-    #[error("Időtúllépés: {0}")]
     Timeout(String),
     /// The connected device does not expose what its role needs.
-    #[error("Az eszköz nem kínálja a szükséges szolgáltatást: {0}")]
     MissingService(String),
     /// Anything else the platform stack reported.
-    #[error("Bluetooth hiba: {0}")]
     Gatt(String),
 }
+
+impl std::fmt::Display for BleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BleError::Unavailable(reason) => write!(
+                f,
+                "{}: {reason}",
+                t("ble.error.a_bluetooth_nem_erheto_el_0")
+            ),
+            BleError::NotFound => {
+                f.write_str(t("ble.error.az_eszkoz_nem_talalhato_indits_uj_keresest"))
+            }
+            BleError::NotConnected => f.write_str(t("ble.error.nincs_kapcsolat_az_eszkozzel")),
+            BleError::Timeout(reason) => {
+                write!(f, "{}: {reason}", t("ble.error.idotullepes_0"))
+            }
+            BleError::MissingService(reason) => write!(
+                f,
+                "{}: {reason}",
+                t("ble.error.az_eszkoz_nem_kinalja_a_szukseges_szolgaltatast_0")
+            ),
+            BleError::Gatt(reason) => write!(f, "{}: {reason}", t("ble.error.bluetooth_hiba")),
+        }
+    }
+}
+
+impl std::error::Error for BleError {}
 
 impl BleError {
     /// A retry cannot help (wrong kind of device, permission problem).
@@ -44,9 +66,16 @@ impl From<btleplug::Error> for BleError {
         match e {
             E::NotConnected => BleError::NotConnected,
             E::DeviceNotFound => BleError::NotFound,
-            E::PermissionDenied => BleError::Unavailable("hozzáférés megtagadva".into()),
-            E::NoAdapterAvailable => BleError::Unavailable("nincs Bluetooth-adapter".into()),
-            E::TimedOut(d) => BleError::Timeout(format!("{} mp", d.as_secs())),
+            E::PermissionDenied => {
+                BleError::Unavailable(t("ble.error.hozzaferes_megtagadva").into())
+            }
+            E::NoAdapterAvailable => {
+                BleError::Unavailable(t("ble.error.nincs_bluetooth_adapter").into())
+            }
+            E::TimedOut(d) => BleError::Timeout(tf(
+                "ble.error.seconds_short",
+                &[("s", &d.as_secs().to_string())],
+            )),
             other => BleError::Gatt(other.to_string()),
         }
     }

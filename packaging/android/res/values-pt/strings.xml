@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Portuguese resources. The only label the APK takes from here is the application name, which is a
+     brand: `dx` writes `BikeOsmRide` into `values/strings.xml` and this copy keeps the same value, so
+     the launcher label does not change with the language. The permission prompts come from the
+     system, and the Android 11 and older location prompt is generated from Dioxus.toml. Kept as an
+     explicit file so a later, rider-visible Android-only string has an obvious place in the
+     Portuguese build. This resource was written but not built into an APK here (no NDK). -->
+<resources>
+    <string name="app_name">BikeOsmRide</string>
+</resources>

@@ -74,12 +74,16 @@ Befejezés, gear − / +, or just "Fokozat N" with a Zwift shifter).
   content-height column.
 - The profile has swipe pages (`ride_ui_profile::swipe`): workout (ahead / full) and elevation (ahead / full), with
   dots, a one-time "húzd oldalra" hint and a nudge until `profile_swipe_learned`.
-- Under 700 px the top bar drops the logo (the route length would not fit), dialogs are full screen, the workout
+- Under 700 px the top bar drops the logo (the app icon plus the name, see `DESIGN.md` § Icons; the route length would not fit), dialogs are full screen, the workout
   picker becomes two pages (Lista | Részletek) with categories as a strip and the tag filters behind a button;
   the footer is a two-column grid. The top bar and the tabs are padded by `env(safe-area-inset-*)`.
 - At 1000 px and above, even on a landscape phone or tablet, the tiling layout is used.
 - Text scale (Beállítások → Megjelenés, 80-160 %) multiplies every `--t-*` type token through `--ui-scale`;
   from 115 % `data-text="large"` lays the head unit's four cells out two by two.
+- Language (Beállítások → Megjelenés → Nyelv) switches the catalog in force; the root component is keyed by the
+  language, so the whole tree is rebuilt and every label is looked up again. The picker is "Automatic" plus
+  `ride_i18n::Lang::complete()` — a language whose catalog is missing keys is not offered, and the language's own
+  name is never translated.
 
 ## 5. Dialogs (`ride-ui-dialogs`)
 
@@ -107,16 +111,27 @@ window steps aside as it does for a dialog; a dropped file is imported instead o
 The state is `ReviewSignals` (open, routes, route id and `Route`, ticked stems, loaded records, busy, notes), written only by
 `controller/review.rs`. The page owns just view state: metric, section (`range`), cursor, open forms. `chart.rs` is the pure part
 (lines on the distance grid, y range, SVG markup, table rows, `hu()` decimal comma); `HitLayer` reports the distance under the
-pointer and the section a drag swept (pointer events, `touch-action: none`, so it works with a finger); `Overview` is the whole
-elevation profile with the section as a band; `DistanceChart` draws the lines in route space inside one `view_transform`.
+pointer and the section a drag swept (pointer events with `touch-action: pan-y`: a vertical swipe still scrolls the page, which
+the plots otherwise blocked on a phone where they fill the screen; a sideways drag selects; a finger's tap sets the cursor and
+leaves it there, since a finger has no hover); `Overview` is the whole elevation profile with the section as a band;
+`DistanceChart` draws the lines in route space inside one `view_transform`. Without a cursor the legend shows each ride's mean
+over the window (`Ø`; the time difference at the window's end), from `chart::window_value`. The distance axes carry `km` on their
+first numeral and the chart's top rule names the unit; numerals at a plot edge are pulled inside (`is-start` / `is-end`).
 
 `MapView` got additive props: `overlay: ReadSignal<MapOverlay>` (a highlighted section in the accent colour, ride markers, and a
 camera command `fit` + `fit_seq`) with `route_path::range_path` and `range_bounds`; the ride screen passes none.
 
-**Layout.** Desktop: list column (340 px) and a main column (map, section bar, overview, chart, table). Phone and portrait
-tablet: the same panels behind a four-tab `Segmented` (`Edzések`, `Térkép`, `Grafikon`, `Szakasz`). The top bar has no room for a
-seventh icon on a phone, so `Áttekintés` is hidden there and the route dialog carries a link (`on_review`). Hooks are classes
-(`shell-tb--review`, `shell-tb--fullscreen`): an `[aria-label="…"]` selector with an accented value did not match in the webview.
+**Layout.** Desktop: list column (340 px) and a main column; every section is a panel (`.rv-panel`) with the dock's 24 px
+title strip (`Edzések`, `Becsült watt`, `Térkép`, `Szakasz`, `Grafikon`, `A szakasz adatai`) but no grip, since these panels do
+not move. Phone and portrait tablet: one header row (back icon, the `Összehasonlítás | Teljesítmény` switch, import icon; the top
+bar already names the page) and the sections behind a four-tab `Segmented` (`Edzések`, `Térkép`, `Grafikon`, `Szakasz`), without
+frames or title strips (the tab names them). The metric buttons show the unit there (`W · bpm · rpm · km/h · ±s`: the five names
+do not fit one row in every language) and the chart head names the metric in full; the section table is turned on its side
+(`.rv-table--by-metric`: a row per number, a column per ride) so four rides fit without sideways scrolling; the power curve hides
+its bar column and puts the route under the date. The review page's `fit_seq` starts at 1, so the map fits the section once it
+first has a real size (on a phone it is hidden behind a tab until then). On a phone the top bar's theme switch gives way to
+`Áttekintés` (the theme is in Settings → Appearance); the route dialog still carries a link (`on_review`). Hooks are classes
+(`shell-tb--theme`, `shell-tb--fullscreen`): an `[aria-label="…"]` selector with an accented value did not match in the webview.
 
 **The power view** (`power.rs`, `PowerView`) is a second page of the same layer, switched by a `Segmented` row under the header
 (`Összehasonlítás` | `Teljesítmény`, view state only; the phone's four-tab strip belongs to the comparison and is hidden on the

@@ -6,6 +6,7 @@ license.workspace = true
 description = "Design system: CSS tokens + primitives, palette (zones, grades), icons, formatting, base components"
 
 [dependencies]
+ride-i18n = { workspace = true }
 ride-model = { workspace = true }
 dioxus = { workspace = true }
 tokio = { workspace = true }

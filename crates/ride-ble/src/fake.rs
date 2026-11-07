@@ -16,6 +16,7 @@ use crate::transport::{
     Notification,
 };
 use crate::zwift;
+use ride_i18n::t;
 
 #[derive(Default)]
 struct FakeState {
@@ -324,7 +325,9 @@ impl GattPeripheral for FakePeripheral {
         st.connects += 1;
         if st.connect_failures > 0 {
             st.connect_failures -= 1;
-            return Err(BleError::Gatt("a kapcsolódás sikertelen".into()));
+            return Err(BleError::Gatt(
+                t("ble.fake.a_kapcsolodas_sikertelen").into(),
+            ));
         }
         st.connected = true;
         Ok(())
@@ -364,7 +367,7 @@ impl GattPeripheral for FakePeripheral {
         st.reads
             .get(&c.uuid)
             .cloned()
-            .ok_or_else(|| BleError::Gatt("nincs érték".into()))
+            .ok_or_else(|| BleError::Gatt(t("ble.fake.nincs_ertek").into()))
     }
 
     async fn write(&self, c: &GattChar, data: &[u8], _with_response: bool) -> Result<(), BleError> {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- zh-Hans resources. The product name is a brand and is never translated; there are no other
+     user-visible strings in the Android resources (the runtime permission prompts are the
+     system's own text). -->
+<resources>
+    <string name="app_name">bike-osm-ride</string>
+</resources>

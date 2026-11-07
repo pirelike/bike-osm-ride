@@ -19,6 +19,7 @@ use quick_xml::Reader;
 
 use crate::gpx::{decode_bytes, parse_iso8601, parse_number};
 use crate::{err, geo, Result};
+use ride_i18n::{t, tf};
 
 /// A recording needs at least this many usable samples.
 const MIN_SAMPLES: usize = 10;
@@ -76,7 +77,7 @@ pub fn from_bytes(bytes: &[u8]) -> Result<Activity> {
     let text = decode_bytes(bytes);
     let text = text.trim_start_matches('\u{feff}').trim_start();
     if text.is_empty() {
-        return err("A fájl üres.");
+        return err(t("route.activity.a_fajl_ures"));
     }
     let head: String = text.chars().take(4096).collect();
     if head.contains("<TrainingCenterDatabase") {
@@ -84,7 +85,9 @@ pub fn from_bytes(bytes: &[u8]) -> Result<Activity> {
     } else if head.to_ascii_lowercase().contains("<gpx") {
         parse_gpx(text)
     } else {
-        err("A fájl sem GPX-, sem TCX-fájl. Az edzés importálásához GPX vagy TCX kell.")
+        err(t(
+            "route.activity.a_fajl_sem_gpx_sem_tcx_fajl_az_edzes_importalasahoz_",
+        ))
     }
 }
 
@@ -140,9 +143,13 @@ impl Collector {
     fn finish(self, name: String, format: ActivityFormat) -> Result<Activity> {
         if self.samples.len() < MIN_SAMPLES {
             return if self.skipped > self.samples.len() {
-                err("A fájl pontjainak többségéből hiányzik az időbélyeg vagy a pozíció, ezért nem importálható edzésként. Az útvonalak betöltése az Útvonal ablakban lehetséges.")
+                err(t(
+                    "route.activity.a_fajl_pontjainak_tobbsegebol_hianyzik_az_idobelyeg_",
+                ))
             } else {
-                err("A fájlban túl kevés (időbélyeges) pont van egy edzéshez.")
+                err(t(
+                    "route.activity.a_fajlban_tul_keves_idobelyeges_pont_van_egy_edzeshe",
+                ))
             };
         }
         Ok(Activity {
@@ -179,8 +186,9 @@ fn xml_error(text: &str, reader: &Reader<&[u8]>, what: &str) -> crate::RouteErro
         .filter(|&&b| b == b'\n')
         .count()
         + 1;
-    crate::RouteError::Message(format!(
-        "A {what}-fájl hibás vagy sérült (XML-hiba a(z) {line}. sor környékén)."
+    crate::RouteError::Message(tf(
+        "route.activity.a_what_fajl_hibas_vagy_serult_xml_hiba_a_z_line_sor_",
+        &[("what", what), ("line", &line.to_string())],
     ))
 }
 
@@ -207,7 +215,9 @@ pub fn parse_gpx(text: &str) -> Result<Activity> {
             let tag = local_name(e);
             if stack.is_empty() {
                 if tag != "gpx" {
-                    return err("A fájl nem GPX-fájl (hiányzik a <gpx> gyökérelem).");
+                    return err(t(
+                        "route.activity.a_fajl_nem_gpx_fajl_hianyzik_a_gpx_gyokerelem",
+                    ));
                 }
                 saw_root = true;
             }
@@ -273,10 +283,14 @@ pub fn parse_gpx(text: &str) -> Result<Activity> {
         }
     }
     if !saw_root {
-        return err("A fájl nem GPX-fájl (nem található <gpx> elem).");
+        return err(t(
+            "route.activity.a_fajl_nem_gpx_fajl_nem_talalhato_gpx_elem",
+        ));
     }
     if !stack.is_empty() {
-        return err("A GPX-fájl csonka vagy sérült (hiányzó záró elemek).");
+        return err(t(
+            "route.activity.a_gpx_fajl_csonka_vagy_serult_hianyzo_zaro_elemek",
+        ));
     }
     collector.finish(name, ActivityFormat::Gpx)
 }
@@ -304,17 +318,18 @@ pub fn parse_tcx(text: &str) -> Result<Activity> {
             let tag = local_name(e);
             if stack.is_empty() {
                 if tag != "trainingcenterdatabase" {
-                    return err(
-                        "A fájl nem TCX-fájl (hiányzik a <TrainingCenterDatabase> gyökérelem).",
-                    );
+                    return err(t(
+                        "route.activity.a_fajl_nem_tcx_fajl_hianyzik_a_trainingcenterdatabas",
+                    ));
                 }
                 saw_root = true;
             }
             if tag == "activity" {
                 if let Some(sport) = attribute(e, &["sport"]) {
                     if !sport.eq_ignore_ascii_case("biking") {
-                        return err(format!(
-                            "A TCX-fájl nem kerékpáros edzés (Sport = {sport}), ezért nem importálható."
+                        return err(tf(
+                            "route.activity.a_tcx_fajl_nem_kerekparos_edzes_sport_sport_ezert_ne",
+                            &[("sport", &sport)],
                         ));
                     }
                 }
@@ -379,10 +394,14 @@ pub fn parse_tcx(text: &str) -> Result<Activity> {
         }
     }
     if !saw_root {
-        return err("A fájl nem TCX-fájl (nem található <TrainingCenterDatabase> elem).");
+        return err(t(
+            "route.activity.a_fajl_nem_tcx_fajl_nem_talalhato_trainingcenterdata",
+        ));
     }
     if !stack.is_empty() {
-        return err("A TCX-fájl csonka vagy sérült (hiányzó záró elemek).");
+        return err(t(
+            "route.activity.a_tcx_fajl_csonka_vagy_serult_hianyzo_zaro_elemek",
+        ));
     }
     collector.finish(notes, ActivityFormat::Tcx)
 }

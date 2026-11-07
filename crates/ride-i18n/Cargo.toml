@@ -1,0 +1,14 @@
+[package]
+name = "ride-i18n"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Language registry and text catalogs for bike-osm-ride"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sys-locale = { workspace = true }
+
+[build-dependencies]
+serde_json = { workspace = true }

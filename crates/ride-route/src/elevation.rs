@@ -14,6 +14,7 @@ use std::time::Duration;
 use crate::geo;
 use crate::gpx::RawPoint;
 use crate::{err, http, Result};
+use ride_i18n::{t, tf};
 
 pub const OPEN_METEO_URL: &str = "https://api.open-meteo.com/v1/elevation";
 pub const MAX_COORDS_PER_REQUEST: usize = 100;
@@ -85,26 +86,30 @@ pub fn request_url(base: &str, coords: &[(f64, f64)]) -> String {
 /// Parse `{"elevation":[…]}`; `null` entries become `None`.
 pub fn parse_response(body: &str, expected: usize) -> Result<Vec<Option<f64>>> {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else {
-        return err("Open-Meteo: a válasz nem értelmezhető.");
+        return err(t("route.elevation.open_meteo_a_valasz_nem_ertelmezheto"));
     };
     if v.get("error").and_then(serde_json::Value::as_bool) == Some(true) {
         let reason = v
             .get("reason")
             .and_then(serde_json::Value::as_str)
-            .unwrap_or("ismeretlen hiba");
+            .unwrap_or(t("route.elevation.ismeretlen_hiba"));
         return err(format!(
             "Open-Meteo: {}",
             reason.chars().take(160).collect::<String>()
         ));
     }
     let Some(arr) = v.get("elevation").and_then(serde_json::Value::as_array) else {
-        return err("Open-Meteo: a válaszból hiányzik a magassági adat.");
+        return err(t(
+            "route.elevation.open_meteo_a_valaszbol_hianyzik_a_magassagi_adat",
+        ));
     };
     if arr.len() != expected {
-        return err(format!(
-            "Open-Meteo: {} magassági érték érkezett {} helyett.",
-            arr.len(),
-            expected
+        return err(tf(
+            "route.elevation.open_meteo_magassagi_ertek_erkezett_helyett",
+            &[
+                ("got", &arr.len().to_string()),
+                ("expected", &expected.to_string()),
+            ],
         ));
     }
     Ok(arr
@@ -118,7 +123,9 @@ pub fn parse_response(body: &str, expected: usize) -> Result<Vec<Option<f64>>> {
 /// missing to be trustworthy (less than half).
 pub fn apply(points: &mut [RawPoint], plan: &SamplePlan, elevations: &[Option<f64>]) -> Result<()> {
     if plan.indices.len() != elevations.len() || plan.cum_dist.len() != points.len() {
-        return err("Open-Meteo: a magassági adatok száma nem egyezik a kért pontokéval.");
+        return err(t(
+            "route.elevation.open_meteo_a_magassagi_adatok_szama_nem_egyezik_a_ke",
+        ));
     }
     let known: Vec<(f64, f64)> = plan
         .indices
@@ -127,7 +134,9 @@ pub fn apply(points: &mut [RawPoint], plan: &SamplePlan, elevations: &[Option<f6
         .filter_map(|(&i, e)| Some((*plan.cum_dist.get(i)?, (*e)?)))
         .collect();
     if known.len() * 2 < plan.indices.len() || known.is_empty() {
-        return err("Open-Meteo: a pontok többségéhez nem érhető el magassági adat.");
+        return err(t(
+            "route.elevation.open_meteo_a_pontok_tobbsegehez_nem_erheto_el_magass",
+        ));
     }
     let mut j = 0usize;
     for (p, &d) in points.iter_mut().zip(&plan.cum_dist) {
@@ -165,16 +174,19 @@ async fn fetch_chunk(
         match http::get_text(client, &url, "Open-Meteo").await {
             Ok(f) if f.status == 200 => return parse_response(&f.body, coords.len()),
             Ok(f) if f.status == 429 || f.status >= 500 => {
-                last_err = format!(
-                    "Open-Meteo: a szerver most nem elérhető (HTTP {}).",
-                    f.status
+                last_err = tf(
+                    "route.elevation.open_meteo_a_szerver_most_nem_elerheto_http",
+                    &[("status", &f.status.to_string())],
                 );
             }
             Ok(f) => {
                 // 4xx: our request is wrong, retrying will not help; surface the reason.
                 return match parse_response(&f.body, coords.len()) {
                     Err(e) => Err(e),
-                    Ok(_) => err(format!("Open-Meteo: váratlan válasz (HTTP {}).", f.status)),
+                    Ok(_) => err(tf(
+                        "route.elevation.open_meteo_varatlan_valasz_http",
+                        &[("status", &f.status.to_string())],
+                    )),
                 };
             }
             Err(e) => last_err = e.to_string(),
@@ -187,7 +199,9 @@ async fn fetch_chunk(
 pub async fn fill_from(base: &str, points: &mut [RawPoint]) -> Result<()> {
     let plan = plan_samples(points);
     if plan.indices.len() < 2 {
-        return err("Az útvonalnak legalább két pontja kell legyen a magasságadatok lekéréséhez.");
+        return err(t(
+            "route.elevation.az_utvonalnak_legalabb_ket_pontja_kell_legyen_a_maga",
+        ));
     }
     let coords: Vec<(f64, f64)> = plan
         .indices

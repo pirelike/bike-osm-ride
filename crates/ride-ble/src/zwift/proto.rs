@@ -9,7 +9,7 @@
 //! Field layout follows the reverse-engineered `zwift.proto` of the public-domain
 //! `virtual-cog` project (see `NOTICE.md`); Makinolo's notes describe the same messages.
 
-use thiserror::Error;
+use ride_i18n::t;
 
 /// Opcodes (first byte of a plaintext packet).
 pub mod opcode {
@@ -41,15 +41,26 @@ pub enum WireType {
 }
 
 /// A malformed protobuf payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtoError {
-    #[error("a protobuf üzenet véget ért")]
     Truncated,
-    #[error("a protobuf szám túl hosszú")]
     Overflow,
-    #[error("ismeretlen protobuf mezőtípus")]
     InvalidWireType,
 }
+
+impl std::fmt::Display for ProtoError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProtoError::Truncated => f.write_str(t("ble.zwift.proto.a_protobuf_uzenet_veget_ert")),
+            ProtoError::Overflow => f.write_str(t("ble.zwift.proto.a_protobuf_szam_tul_hosszu")),
+            ProtoError::InvalidWireType => {
+                f.write_str(t("ble.zwift.proto.ismeretlen_protobuf_mezotipus"))
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProtoError {}
 
 /// Reads protobuf fields from a byte slice without ever indexing out of bounds.
 pub struct Reader<'a> {

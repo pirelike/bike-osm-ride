@@ -22,6 +22,7 @@ use ride_model::{RideMeta, RideRecord, RideSummary, Route, RouteRides};
 use ride_sim::{power_curve, segments};
 
 use crate::store::{self, Store};
+use ride_i18n::t;
 
 /// Folder (below the data directory) holding the ride log.
 pub const RIDES_DIR: &str = "rides";
@@ -306,7 +307,7 @@ fn usable_summary(summary: &RideSummary) -> Option<&RideSummary> {
 fn invalid_time() -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidInput,
-        "Érvénytelen menet-kezdés (időbélyeg).",
+        t("route.rides.ervenytelen_menet_kezdes_idobelyeg"),
     )
 }
 

@@ -14,13 +14,20 @@ use ride_ui_kit::format::fmt_duration;
 use ride_ui_kit::Segmented;
 
 use crate::{chart, letter, var_of, DASH};
+use ride_i18n::{t, tf};
 
 /// "5 mp", "1 perc", ...
 pub fn duration_label(seconds: u32) -> String {
     if seconds < 60 {
-        format!("{seconds} mp")
+        tf(
+            "ui_review.power.duration_seconds",
+            &[("n", &seconds.to_string())],
+        )
     } else {
-        format!("{} perc", seconds / 60)
+        tf(
+            "ui_review.power.duration_minutes",
+            &[("n", &(seconds / 60).to_string())],
+        )
     }
 }
 
@@ -100,34 +107,37 @@ pub fn PowerView(
     let total_time: f64 = buckets.iter().map(|b| b.time_s).sum();
     let total_tss: f64 = buckets.iter().map(|b| b.tss).sum();
     let period_name = match period_now {
-        Period::Week => "hét",
-        Period::Month => "hónap",
+        Period::Week => t("ui_review.power.het"),
+        Period::Month => t("ui_review.power.honap"),
     };
 
     rsx! {
-        div { class: "rv-power", role: "region", "aria-label": "Teljesítmény",
+        div { class: "rv-power", role: "region", "aria-label": t("ui_review.chart.teljesitmeny"),
             if analysis_now.rides_pending > 0 {
                 div { class: "rv-note", role: "status",
-                    "{analysis_now.rides_pending} régebbi edzés számai még nincsenek meg, a következő frissítésnél készülnek el."
+                    {tf(
+                        "ui_review.power.analysis_now_rides_pending_regebbi_edzes_szamai_meg_",
+                        &[("n", &analysis_now.rides_pending.to_string())],
+                    )}
                 }
             }
-            section { class: "rv-card", "aria-label": "Csúcsteljesítmény",
-                h2 { class: "rv-card-title", "Csúcsteljesítmény" }
+            section { class: "rv-card", "aria-label": t("ui_review.power.csucsteljesitmeny"),
+                h2 { class: "rv-card-title", {t("ui_review.power.csucsteljesitmeny")} }
                 p { class: "rv-card-note",
-                    "A legjobb átlagos watt a megadott ideig, az összes mért edzésed közül. A rövidebb edzésnek nincs értéke a hosszabb időre."
+                    {t("ui_review.power.a_legjobb_atlagos_watt_a_megadott_ideig_az_osszes_me")}
                 }
                 if nothing_yet {
                     div { class: "rv-note",
-                        "Még nincs mért teljesítményű edzés. A szimulált tekerő és a becsült (~) wattok nem számítanak."
+                        {t("ui_review.power.meg_nincs_mert_teljesitmenyu_edzes_a_szimulalt_teker")}
                     }
                 }
                 div { class: "rv-table-wrap",
                     table { class: "rv-table rv-curve",
                         thead {
                             tr {
-                                th { "Idő" }
-                                th { "Legjobb (W)" }
-                                th { "Mikor" }
+                                th { {t("ui_review.ido")} }
+                                th { {t("ui_review.power.legjobb_w")} }
+                                th { {t("ui_review.power.mikor")} }
                                 th { class: "rv-bar-head", "" }
                                 for (slot , stamp , _estimated , _curve) in ticked.iter() {
                                     th { key: "head-{slot}", title: "{stamp}",
@@ -145,9 +155,11 @@ pub fn PowerView(
                                         tr { key: "dur-{seconds}",
                                             th { scope: "row", "{duration_label(seconds)}" }
                                             td { class: "num", "{watts_text(best.map(|b| b.watts))}" }
-                                            td { class: "rv-dim",
+                                            td { class: "rv-dim rv-when",
                                                 if let Some(b) = best {
-                                                    "{chart::fmt_stamp(b.started_unix_s)} · {b.route_name}"
+                                                    // two spans: a narrow screen puts the route under the date
+                                                    span { class: "rv-when-date", "{chart::fmt_stamp(b.started_unix_s)}" }
+                                                    span { class: "rv-when-route", "{b.route_name}" }
                                                 } else {
                                                     "{DASH}"
                                                 }
@@ -174,7 +186,7 @@ pub fn PowerView(
                 }
                 if ticked.iter().any(|t| t.2) {
                     p { class: "rv-footnote",
-                        "A ~ jelű értékek becsült vagy szimulált wattból számolódnak, ezért nem kerülnek a legjobbak közé."
+                        {t("ui_review.power.a_jelu_ertekek_becsult_vagy_szimulalt_wattbol_szamol")}
                     }
                 }
             }
@@ -184,10 +196,16 @@ pub fn PowerView(
                     div { class: "rv-ftp-row",
                         span { class: "rv-ftp-value num", "{estimate.ftp_w:.0}" }
                         span { class: "rv-ftp-unit", "W" }
-                        span { class: "rv-ftp-now", "jelenleg beállítva: {current_ftp:.0} W" }
+                        span { class: "rv-ftp-now", {tf("ui_review.power.jelenleg_beallitva_current_ftp_0_w", &[("ftp", &format!("{:.0}", current_ftp))])} }
                     }
                     p { class: "rv-card-note",
-                        "A legjobb 20 perced {estimate.best_20min_w:.0} W volt ({chart::fmt_stamp(estimate.started_unix_s)}); ennek 95 %-a a becsült FTP."
+                        {tf(
+                            "ui_review.power.a_legjobb_20_perced_estimate_best_20min_w_0_w_volt_c",
+                            &[
+                                ("w", &format!("{:.0}", estimate.best_20min_w)),
+                                ("when", &chart::fmt_stamp(estimate.started_unix_s)),
+                            ],
+                        )}
                     }
                     button {
                         class: "btn rv-ftp-action",
@@ -198,49 +216,64 @@ pub fn PowerView(
                             move |_| on_apply_ftp.call(target)
                         },
                         if (estimate.ftp_w - current_ftp).abs() < 0.5 {
-                            "Az FTP már ennyi"
+                            {t("ui_review.power.az_ftp_mar_ennyi")}
                         } else {
-                            "FTP beállítása {estimate.ftp_w:.0} W-ra"
+                            {tf(
+                                "ui_review.power.ftp_beallitasa_estimate_ftp_w_0_w_ra",
+                                &[("ftp", &format!("{:.0}", estimate.ftp_w))],
+                            )}
                         }
                     }
                 } else {
                     div { class: "rv-note",
-                        "Még nincs 20 perces mért teljesítmény. Az Edzések között az „FTP-teszt 20 perc” segít, vagy tekerj (importálj) legalább 20 percet egyben, a lehető legerősebben."
+                        {t("ui_review.power.meg_nincs_20_perces_mert_teljesitmeny_az_edzesek_koz")}
                     }
                 }
                 p { class: "rv-footnote",
-                    "Csak mért watt számít. A trainer saját wattja nem teljesítménymérő, ezért a javaslat is csak annyira pontos, amennyire az. Az FTP-t te állítod át, az app nem teszi meg magától."
+                    {t("ui_review.power.csak_mert_watt_szamit_a_trainer_sajat_wattja_nem_tel")}
                 }
             }
-            section { class: "rv-card", "aria-label": "Terhelés",
+            section { class: "rv-card", "aria-label": t("ui_review.power.terheles"),
                 div { class: "rv-card-head",
-                    h2 { class: "rv-card-title", "Terhelés" }
+                    h2 { class: "rv-card-title", {t("ui_review.power.terheles")} }
                     Segmented {
                         options: vec![
-                            ("week".to_string(), "Heti".to_string()),
-                            ("month".to_string(), "Havi".to_string()),
+                            ("week".to_string(), t("ui_review.power.heti").to_string()),
+                            ("month".to_string(), t("ui_review.power.havi").to_string()),
                         ],
                         value: if period_now == Period::Week { "week".to_string() } else { "month".to_string() },
                         on_change: move |value: String| {
                             period.set(if value == "month" { Period::Month } else { Period::Week });
                         },
-                        aria_label: "Időszak".to_string(),
+                        aria_label: t("ui_review.power.idoszak").to_string(),
                         small: true,
                     }
                 }
                 p { class: "rv-card-note",
-                    "Az utolsó {buckets.len()} {period_name}: {total_rides} edzés, {fmt_duration(total_time)}, TSS {total_tss:.0}. Az oszlop a TSS-t mutatja; a szimulált edzések nem számítanak, a becsült wattú edzések ideje igen, a TSS-ük nem."
+                    {tf(
+                        "ui_review.power.az_utolso_buckets_len_period_name_total_rides_edzes_",
+                        &[
+                            ("n", &buckets.len().to_string()),
+                            ("period", period_name),
+                            ("rides", &total_rides.to_string()),
+                            ("time", &fmt_duration(total_time)),
+                            ("tss", &format!("{total_tss:.0}")),
+                        ],
+                    )}
                 }
-                div { class: "rv-trend", role: "img", "aria-label": "Terhelés időszakonként",
+                div { class: "rv-trend", role: "img", "aria-label": t("ui_review.power.terheles_idoszakonkent"),
                     for bucket in buckets.iter() {
                         {
                             let height = bar_pct(bucket.tss, tss_max);
                             let label = period_label(bucket.start_unix_s, period_now);
-                            let title = format!(
-                                "{label}: {} edzés, {}, TSS {:.0}",
-                                bucket.rides,
-                                fmt_duration(bucket.time_s),
-                                bucket.tss
+                            let title = tf(
+                                "ui_review.power.label_edzes_tss_0",
+                                &[
+                                    ("label", &label),
+                                    ("rides", &bucket.rides.to_string()),
+                                    ("time", &fmt_duration(bucket.time_s)),
+                                    ("tss", &format!("{:.0}", bucket.tss)),
+                                ],
                             );
                             rsx! {
                                 div { key: "{bucket.start_unix_s}", class: "rv-trend-col", title: "{title}",

@@ -29,6 +29,7 @@ use crate::imagestore::{image_url, ImageStore};
 use crate::planner::{Availability, Effect, Outcome, Planner};
 use crate::prefetch::{bucket_point, resolve_live, PrefetchConfig, PrefetchHandle, Prefetcher};
 use crate::url::{EmbedTarget, EmbedUrl};
+use ride_i18n::{t, tf, tn};
 
 /// Component stylesheet (tokens only). The shell injects it after the design kit.
 pub const CSS: &str = include_str!("../assets/streetview.css");
@@ -86,12 +87,14 @@ impl PanelStatus {
     pub fn title(self) -> Option<&'static str> {
         match self {
             PanelStatus::Ok => None,
-            PanelStatus::NoRoute => Some("Nincs betöltött útvonal"),
+            PanelStatus::NoRoute => Some(t("ui_streetview.panel.nincs_betoltott_utvonal")),
             PanelStatus::NoKey => Some(SvError::MissingKey.title()),
-            PanelStatus::Checking => Some("Panoráma keresése"),
+            PanelStatus::Checking => Some(t("ui_streetview.panel.panorama_keresese")),
             PanelStatus::NoCoverage => Some(SvError::NoCoverage.title()),
             PanelStatus::Error(e) => Some(e.title()),
-            PanelStatus::ImageMissing => Some("Ez a szakasz még nincs letöltve"),
+            PanelStatus::ImageMissing => {
+                Some(t("ui_streetview.panel.ez_a_szakasz_meg_nincs_letoltve"))
+            }
         }
     }
 
@@ -99,15 +102,18 @@ impl PanelStatus {
     pub fn hint(self) -> Option<&'static str> {
         match self {
             PanelStatus::Ok => None,
-            PanelStatus::NoRoute => Some("Tölts be egy útvonalat a Street View-hoz."),
+            PanelStatus::NoRoute => Some(t(
+                "ui_streetview.panel.tolts_be_egy_utvonalat_a_street_view_hoz",
+            )),
             PanelStatus::NoKey => Some(SvError::MissingKey.hint()),
-            PanelStatus::Checking => Some("A Google Street View-felvétel betöltése folyamatban."),
+            PanelStatus::Checking => Some(t(
+                "ui_streetview.panel.a_google_street_view_felvetel_betoltese_folyamatban",
+            )),
             PanelStatus::NoCoverage => Some(SvError::NoCoverage.hint()),
             PanelStatus::Error(e) => Some(e.hint()),
-            PanelStatus::ImageMissing => Some(
-                "Indítsd el a képek letöltését a fejléc gombjával: utána ez az útvonal Google-\
-                 kérés és API-kulcs nélkül is végigtekered.",
-            ),
+            PanelStatus::ImageMissing => Some(t(
+                "ui_streetview.panel.inditsd_el_a_kepek_letolteset_a_fejlec_gombjaval_uta",
+            )),
         }
     }
 
@@ -135,12 +141,12 @@ impl PanelStatus {
     pub fn readout(self) -> Option<&'static str> {
         match self {
             PanelStatus::Ok => None,
-            PanelStatus::NoRoute => Some("Nincs útvonal"),
-            PanelStatus::NoKey => Some("API-kulcs szükséges"),
-            PanelStatus::Checking => Some("Keresés…"),
-            PanelStatus::NoCoverage => Some("Itt nincs Street View"),
+            PanelStatus::NoRoute => Some(t("ui_streetview.panel.nincs_utvonal")),
+            PanelStatus::NoKey => Some(t("ui_streetview.error.api_kulcs_szukseges")),
+            PanelStatus::Checking => Some(t("ui_streetview.panel.kereses")),
+            PanelStatus::NoCoverage => Some(t("ui_streetview.error.itt_nincs_street_view")),
             PanelStatus::Error(e) => Some(e.short()),
-            PanelStatus::ImageMissing => Some("Nincs letöltött kép"),
+            PanelStatus::ImageMissing => Some(t("ui_streetview.panel.nincs_letoltott_kep")),
         }
     }
 }
@@ -216,9 +222,9 @@ pub fn StreetViewView(
         None => format!("{} km", view.dist_text),
     };
     let size_label = if view.large {
-        "Térkép és Street View cseréje (a térkép lesz nagy)"
+        t("ui_streetview.panel.terkep_es_street_view_csereje_a_terkep_lesz_nagy")
     } else {
-        "Térkép és Street View cseréje (a Street View lesz nagy)"
+        t("ui_streetview.panel.terkep_es_street_view_csereje_a_street_view_lesz_nag")
     };
     let size_icon = IconName::Fullscreen;
     let state = status.data_state();
@@ -228,9 +234,9 @@ pub fn StreetViewView(
     let offers_download = status.offers_download() && view.can_download;
     let note = view.note.clone().unwrap_or_default();
     let download_label = if view.downloading {
-        "Street View letöltés leállítása"
+        t("ui_streetview.panel.street_view_letoltes_leallitasa")
     } else {
-        "Street View képek letöltése az útvonalhoz"
+        t("ui_streetview.panel.street_view_kepek_letoltese_az_utvonalhoz")
     };
     let download_icon = if view.downloading {
         IconName::Stop
@@ -269,16 +275,16 @@ pub fn StreetViewView(
                     button {
                         class: "sv-btn",
                         r#type: "button",
-                        aria_label: "Street View beállítások",
-                        title: "Street View beállítások",
+                        aria_label: t("ui_streetview.panel.street_view_beallitasok").to_string(),
+                        title: t("ui_streetview.panel.street_view_beallitasok").to_string(),
                         onclick: move |_| on_open_settings.call(()),
                         Icon { name: IconName::Settings, size: 14 }
                     }
                     button {
                         class: "sv-btn",
                         r#type: "button",
-                        aria_label: "Street View bezárása",
-                        title: "Street View bezárása",
+                        aria_label: t("ui_streetview.panel.street_view_bezarasa").to_string(),
+                        title: t("ui_streetview.panel.street_view_bezarasa").to_string(),
                         onclick: move |_| on_close.call(()),
                         Icon { name: IconName::Close, size: 14 }
                     }
@@ -297,7 +303,7 @@ pub fn StreetViewView(
                     img {
                         class: "sv__img",
                         src: "{src}",
-                        alt: "Letöltött Google Street View panoráma",
+                        alt: t("ui_streetview.panel.letoltott_google_street_view_panorama"),
                         draggable: "false",
                     }
                 } else {
@@ -305,7 +311,7 @@ pub fn StreetViewView(
                         iframe {
                             key: "{i}",
                             class: if view.front == i { "sv__frame is-front" } else { "sv__frame" },
-                            title: "Google Street View panoráma",
+                            title: t("ui_streetview.panel.google_street_view_panorama").to_string(),
                             src: view.frames[i].as_ref().map(|u| u.as_str().to_string()),
                             tabindex: if view.front == i { "0" } else { "-1" },
                             "referrerpolicy": "strict-origin-when-cross-origin",
@@ -315,12 +321,12 @@ pub fn StreetViewView(
                         }
                     }
                 }
-                if let (Some(t), Some(h)) = (title, hint) {
+                if let (Some(title_text), Some(h)) = (title, hint) {
                     div { class: "sv__msg", role: "status",
                         if status == PanelStatus::Checking {
                             div { class: "sv__scan", aria_hidden: "true" }
                         }
-                        div { class: "sv__msg-title", "{t}" }
+                        div { class: "sv__msg-title", "{title_text}" }
                         div { class: "sv__msg-hint", "{h}" }
                         if offers_download {
                             button {
@@ -328,7 +334,7 @@ pub fn StreetViewView(
                                 r#type: "button",
                                 onclick: move |_| on_download.call(()),
                                 Icon { name: IconName::Download, size: 14 }
-                                "Képek letöltése"
+                                {t("ui_streetview.panel.kepek_letoltese")}
                             }
                         }
                         if offers_settings {
@@ -337,7 +343,7 @@ pub fn StreetViewView(
                                 r#type: "button",
                                 onclick: move |_| on_open_settings.call(()),
                                 Icon { name: IconName::Settings, size: 14 }
-                                "Beállítások megnyitása"
+                                {t("ui_streetview.panel.beallitasok_megnyitasa")}
                             }
                         }
                     }
@@ -368,10 +374,13 @@ struct Session {
 fn prefetch_note(h: &PrefetchHandle) -> String {
     let p = h.progress();
     match p.stopped {
-        Some(_) => "Az előtöltés leállt".to_string(),
-        None => format!(
-            "Panoráma-azonosítók: {}/{} előtöltve",
-            p.ahead_ready, p.ahead_total
+        Some(_) => t("ui_streetview.panel.az_elotoltes_leallt").to_string(),
+        None => tf(
+            "ui_streetview.panel.panorama_azonositok_elotoltve",
+            &[
+                ("ready", &p.ahead_ready.to_string()),
+                ("total", &p.ahead_total.to_string()),
+            ],
         ),
     }
 }
@@ -774,7 +783,13 @@ pub fn StreetViewPanel(
                     .as_ref()
                     .and_then(|s| s.images.as_ref())
                     .filter(|st| !st.is_empty())
-                    .map(|st| format!("Offline Street View: {} kép", st.len()))
+                    .map(|st| {
+                        tn(
+                            "ui_streetview.panel.offline_street_view_kep",
+                            st.len() as i64,
+                            &[("count", &st.len().to_string())],
+                        )
+                    })
             })
         }
     };

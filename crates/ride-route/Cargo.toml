@@ -6,6 +6,7 @@ license.workspace = true
 description = "GPX / bikerouter import, route processing (resample, smooth, grade, climbs) and local persistence"
 
 [dependencies]
+ride-i18n = { workspace = true }
 ride-model = { workspace = true }
 # The ride log stores the segment (climb) times of a finished ride: the same computation the
 # engine uses live, so a stored time and the on-screen PR always agree.

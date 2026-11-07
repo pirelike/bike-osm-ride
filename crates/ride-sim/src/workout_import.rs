@@ -16,6 +16,7 @@
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use ride_i18n::{t, tf};
 use ride_model::{
     StepKind, StepMessage, StepTarget, Workout, WorkoutCategory, WorkoutStep, IMPORT_PREFIX,
 };
@@ -40,7 +41,7 @@ pub fn from_bytes(bytes: &[u8], source: &str) -> Result<Workout, String> {
         parse_xml(&text)?
     } else {
         return Err(
-            "Ismeretlen fájlformátum: sem XML (MyWhoosh/Zwift), sem JSON edzés nincs benne.".into(),
+            t("sim.workout_import.ismeretlen_fajlformatum_sem_xml_mywhoosh_zwift_sem_j").into(),
         );
     };
     build(draft, source)
@@ -146,9 +147,10 @@ fn parse_xml(text: &str) -> Result<Draft, String> {
         let event = match reader.read_event() {
             Ok(event) => event,
             Err(_) => {
-                return Err(
-                    "Az edzésfájl hibás vagy sérült (XML-hiba). Próbáld meg újra letölteni.".into(),
+                return Err(t(
+                    "sim.workout_import.az_edzesfajl_hibas_vagy_serult_xml_hiba_probald_meg_",
                 )
+                .into())
             }
         };
         match event {
@@ -213,7 +215,7 @@ fn parse_xml(text: &str) -> Result<Draft, String> {
 
     if draft.steps.is_empty() {
         return Err(
-            "A fájlban nincs felismerhető edzésblokk (SteadyState / Ramp / IntervalsT).".into(),
+            t("sim.workout_import.a_fajlban_nincs_felismerheto_edzesblokk_steadystate_").into(),
         );
     }
     Ok(draft)
@@ -313,9 +315,19 @@ fn step_from(element: &str, attributes: &[(String, String)]) -> Option<Vec<Draft
             let low = pct(number(attributes, "PowerLow")?);
             let high = pct(number(attributes, "PowerHigh")?);
             let (from, to, kind, name) = if element == "cooldown" {
-                (high, low, StepKind::Cooldown, "Levezetés")
+                (
+                    high,
+                    low,
+                    StepKind::Cooldown,
+                    t("sim.workout_import.levezetes"),
+                )
             } else {
-                (low, high, StepKind::Warmup, "Bemelegítés")
+                (
+                    low,
+                    high,
+                    StepKind::Warmup,
+                    t("sim.workout_import.bemelegites"),
+                )
             };
             Some(vec![DraftStep {
                 kind,
@@ -332,7 +344,10 @@ fn step_from(element: &str, attributes: &[(String, String)]) -> Option<Vec<Draft
             let to = pct(number(attributes, "PowerHigh")?);
             Some(vec![DraftStep {
                 kind: StepKind::Interval,
-                name: format!("Rámpa · {from:.0}→{to:.0}% FTP"),
+                name: tf(
+                    "sim.workout_import.rampa_from_0_to_0_ftp",
+                    &[("from", &format!("{from:.0}")), ("to", &format!("{to:.0}"))],
+                ),
                 duration_s: duration,
                 target: StepTarget::RampPct { from, to },
                 cadence,
@@ -343,9 +358,9 @@ fn step_from(element: &str, attributes: &[(String, String)]) -> Option<Vec<Draft
         "freeride" | "maxeffort" => Some(vec![DraftStep {
             kind: StepKind::Free,
             name: if element == "freeride" {
-                "Szabad".to_string()
+                t("sim.workout_import.szabad").to_string()
             } else {
-                "Maximális erő".to_string()
+                t("sim.workout_import.maximalis_ero").to_string()
             },
             duration_s: duration,
             target: StepTarget::Free,
@@ -372,7 +387,10 @@ fn step_from(element: &str, attributes: &[(String, String)]) -> Option<Vec<Draft
                 });
                 steps.push(DraftStep {
                     kind: StepKind::Recovery,
-                    name: format!("Kipihenő · {off_pct:.0}% FTP"),
+                    name: tf(
+                        "sim.workout_import.kipiheno_off_pct_0_ftp",
+                        &[("pct", &format!("{off_pct:.0}"))],
+                    ),
                     duration_s: off_s,
                     target: steady(off_pct),
                     cadence,
@@ -427,10 +445,12 @@ struct JsonMessage {
 
 fn parse_json(text: &str) -> Result<Draft, String> {
     let file: JsonFile = serde_json::from_str(text).map_err(|_| {
-        "Az edzés JSON nem olvasható (sérült vagy nem MyWhoosh-export).".to_string()
+        t("sim.workout_import.az_edzes_json_nem_olvashato_serult_vagy_nem_mywhoosh").to_string()
     })?;
     if file.steps.is_empty() {
-        return Err("A JSON nem tartalmaz edzésblokkot (WorkoutStepsArray üres).".into());
+        return Err(
+            t("sim.workout_import.a_json_nem_tartalmaz_edzesblokkot_workoutstepsarray_").into(),
+        );
     }
     let mut draft = Draft {
         name: file.name,
@@ -472,11 +492,18 @@ fn parse_json(text: &str) -> Result<Draft, String> {
             let to = pct(step.end_power);
             (
                 StepTarget::RampPct { from, to },
-                format!("Rámpa · {from:.0}→{to:.0}% FTP"),
+                tf(
+                    "sim.workout_import.rampa_from_0_to_0_ftp",
+                    &[("from", &format!("{from:.0}")), ("to", &format!("{to:.0}"))],
+                ),
                 StepKind::Interval,
             )
         } else if step.step_type.eq_ignore_ascii_case("E_FreeRide") {
-            (StepTarget::Free, "Szabad".to_string(), StepKind::Free)
+            (
+                StepTarget::Free,
+                t("sim.workout_import.szabad").to_string(),
+                StepKind::Free,
+            )
         } else {
             let value = pct(step.power);
             (
@@ -521,12 +548,16 @@ fn build(draft: Draft, source: &str) -> Result<Workout, String> {
         });
     }
     if steps.is_empty() {
-        return Err("Az edzés nem tartalmaz használható blokkot.".into());
+        return Err(t("sim.workout_import.az_edzes_nem_tartalmaz_hasznalhato_blokkot").into());
     }
     let total: u32 = steps.iter().map(|step| step.duration_s).sum();
     if total < MIN_TOTAL_S {
-        return Err(format!(
-            "Az edzés túl rövid ({total} s); legalább {MIN_TOTAL_S} s kell."
+        return Err(tf(
+            "sim.workout_import.az_edzes_tul_rovid_total_s_legalabb_min_total_s_s_ke",
+            &[
+                ("total", &total.to_string()),
+                ("min", &MIN_TOTAL_S.to_string()),
+            ],
         ));
     }
     let average = average_pct(&steps);
@@ -536,7 +567,8 @@ fn build(draft: Draft, source: &str) -> Result<Workout, String> {
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| name_from(source));
     let description = draft.description.trim().to_string();
-    let goal = first_sentence(&description).unwrap_or_else(|| "Importált edzés".to_string());
+    let goal = first_sentence(&description)
+        .unwrap_or_else(|| t("sim.workout_import.importalt_edzes").to_string());
     Ok(Workout {
         id: format!("{IMPORT_PREFIX}{:016x}", content_hash(&name, &steps)),
         name,
@@ -619,7 +651,7 @@ fn name_from(source: &str) -> String {
         .map_or(source, |(stem, _)| stem);
     let name = stem.trim();
     if name.is_empty() {
-        "Importált edzés".to_string()
+        t("sim.workout_import.importalt_edzes").to_string()
     } else {
         name.to_string()
     }

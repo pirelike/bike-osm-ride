@@ -1,5 +1,11 @@
 # Adatvédelem és hálózati forgalom
 
+> **Angolul / Spanyolul / Portugálul / Németül / Olaszul / Kínaiul:** [Privacy and network traffic](i18n/en/PRIVACY.md) ·
+> [Privacidad y tráfico de red](i18n/es/PRIVACY.md) · [Privacidade e tráfego de rede](i18n/pt/PRIVACY.md) ·
+> [Datenschutz und Netzwerkverkehr](i18n/de/PRIVACY.md) · [Privacy e traffico di rete](i18n/it/PRIVACY.md) ·
+> [隐私与网络流量](i18n/zh/PRIVACY.md)
+> (ugyanez a dokumentum angolul, spanyolul, portugálul, németül, olaszul és kínaiul).
+
 A bike-osm-ride-nak **nincs fiókja, nincs telemetriája, nincs elemzője és nincs hirdetése**. Az adataid (tekerések,
 beállítások, szenzoradatok) a saját gépeden maradnak; a program csak azt hívja meg a hálózaton, amihez te
 kérést adsz. Ez a lap pontosan felsorolja, mi mehet ki, és mi van a gépeden. Az állítások a forráskód alapján

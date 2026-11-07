@@ -25,15 +25,16 @@ use crate::error::{bounded, BleError};
 use crate::hexlog::HexLog;
 use crate::merge::{Field, Source};
 use crate::transport::GattPeripheral;
+use ride_i18n::{t, tf};
 
 /// Hungarian slot names (match the UI's device cards).
 pub fn kind_label(kind: DeviceKind) -> &'static str {
     match kind {
         DeviceKind::Trainer => "Trainer",
-        DeviceKind::HeartRate => "Pulzusmérő",
-        DeviceKind::PowerMeter => "Teljesítménymérő",
-        DeviceKind::Cadence => "Cadence-szenzor",
-        DeviceKind::Shifter => "Váltó",
+        DeviceKind::HeartRate => t("ble.link.pulzusmero"),
+        DeviceKind::PowerMeter => t("ble.link.teljesitmenymero"),
+        DeviceKind::Cadence => t("ble.link.kadenciaszenzor"),
+        DeviceKind::Shifter => t("ble.link.valto"),
     }
 }
 
@@ -371,14 +372,24 @@ where
         let started = Instant::now();
         let result = session.run(&p, &ctx, &mut stop).await;
         // whatever happened, do not leave a half-open link behind
-        let _ = bounded("lekapcsolódás", ctx.cfg.io_timeout, p.disconnect()).await;
+        let _ = bounded(
+            t("ble.link.lekapcsolodas"),
+            ctx.cfg.io_timeout,
+            p.disconnect(),
+        )
+        .await;
         if *stop.borrow() {
             break Final::Stopped;
         }
         let (why, rescan) = match result {
             Ok(SessionEnd::Stopped) => break Final::Stopped,
             Ok(SessionEnd::LinkLost(why)) => (why, true),
-            Err(e) if e.is_permanent() => break Final::Failed(format!("{label}: {e}")),
+            Err(e) if e.is_permanent() => {
+                break Final::Failed(tf(
+                    "ble.link.label_nem_sikerult_ujra_csatlakozni_why",
+                    &[("label", label), ("why", &e.to_string())],
+                ))
+            }
             Err(e) => (e.to_string(), e.is_link_lost()),
         };
         ctx.log.comment(&format!("{label}: {why}"));
@@ -387,12 +398,29 @@ where
         }
         attempt += 1;
         if attempt > max {
-            break Final::Failed(format!("{label}: nem sikerült (újra)csatlakozni ({why})"));
+            break Final::Failed(tf(
+                "ble.link.label_nem_sikerult_ujra_csatlakozni_why",
+                &[("label", label), ("why", &why)],
+            ));
         }
         let text = if ctx.was_connected() {
-            format!("{label}: a kapcsolat megszakadt, újracsatlakozás ({attempt}/{max})…")
+            tf(
+                "ble.link.label_a_kapcsolat_megszakadt_ujracsatlakozas_attempt",
+                &[
+                    ("label", label),
+                    ("attempt", &attempt.to_string()),
+                    ("max", &max.to_string()),
+                ],
+            )
         } else {
-            format!("{label}: a csatlakozás nem sikerült, újrapróbálom ({attempt}/{max})…")
+            tf(
+                "ble.link.label_a_csatlakozas_nem_sikerult_ujraprobalom_attemp",
+                &[
+                    ("label", label),
+                    ("attempt", &attempt.to_string()),
+                    ("max", &max.to_string()),
+                ],
+            )
         };
         ctx.notice(text);
         if rescan {

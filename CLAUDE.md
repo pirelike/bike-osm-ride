@@ -7,18 +7,32 @@ Runs on Windows, Linux, macOS and Android from one code base. Public repo
 
 ## Language
 
-- **Talk to the user in Hungarian.** All user-visible text in the app is Hungarian (UI, toasts, error
-  messages that can reach a toast, workout library, coach messages).
+- **Talk to the user in Hungarian.**
+- **Hungarian is the source language of the UI**, but the UI is multilingual: every user-visible
+  string is a key in `crates/ride-i18n/locales/hu.json` (`en`, `es`, `pt`, `de`, `it` and `zh` are complete; `en` is also
+  the pivot for further languages) and is looked up with `t()` / `tf()` / `tn()`. Never hard-code a
+  user-visible literal, and never build a sentence from fragments: translate full sentences,
+  placeholders included.
+- New or changed text: write it in Hungarian, run `node scripts/i18n/extract.mjs`, then translate
+  the new keys in every complete catalog. `cargo test -p ride-i18n --test catalogs` gates
+  placeholders, leading/trailing spaces, leftover Hungarian and forbidden words;
+  `node scripts/readme_shots.mjs --lang es --text` plus `node scripts/i18n/check_ui.mjs` scans the
+  *rendered* UI for text the extractor cannot see (it skips the crate-root `build.rs`, and Hungarian
+  words without an accent need the curated list).
 - Code, identifiers, comments, commit messages and developer docs are **English**.
 - Hungarian documents: `README.md`, `CHANGELOG.md`, `docs/USER_GUIDE.md`, `docs/PRIVACY.md`.
-  Everything else under `docs/` is English.
+  Everything else under `docs/` is English. Translation pipeline: `docs/I18N.md`.
+- The rider documents of each other language live in `docs/i18n/<code>/` (`en`, `es`, `pt`, `de`, `it`, `zh`; `README.md`,
+  `USER_GUIDE.md`, `PRIVACY.md`); the Hungarian ones link to them at the top, and
+  `docs/i18n/<code>/README.md` says the Hungarian `README.md` is authoritative. Keep both sides of
+  such a link when you edit one.
 
 ## Commands
 
 ```powershell
 cargo run -p ride-app                    # debug build + start (Windows: the exe needs WebView2Loader.dll beside it, build.rs copies it)
-cargo test --workspace                   # 1055 tests, 3 ignored (network / Bluetooth); all green on Windows GNU, 2026-11-05
-cargo clippy --workspace --all-targets   # clean on 2026-11-05; keep it that way
+cargo test --workspace                   # 1097 tests, 3 ignored (network / Bluetooth); all green on Windows GNU, 2026-11-06
+cargo clippy --workspace --all-targets   # clean on 2026-11-06; keep it that way
 cargo fmt --all -- --check
 node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a built debug exe, Node 22+)
 .\scripts\third_party_licenses.ps1       # regenerate THIRD_PARTY_LICENSES.md after a dependency change
@@ -120,7 +134,7 @@ times `RIDE_TIMESCALE`) goes into `RideEngine::step` with the latest merged `Sen
 
 ## Product rules the user decided
 
-- No 3D. Rust, not a web stack. UI language Hungarian. "Super modern" UI: the *head unit / printed race
+- No 3D. Rust, not a web stack. UI language Hungarian (source) plus English, Spanish, Portuguese, German, Italian and Chinese, all from catalogs. "Super modern" UI: the *head unit / printed race
   sheet* design, one accent colour, dark and light themes both first-class (`docs/DESIGN.md`).
 - Tiling layout "like a window manager, sizes adjustable"; separate layout with and without a workout.
 - **No Strava upload** (removed 2026-11-05): the API needs a paid subscription and a shared secret cannot ship in
@@ -158,6 +172,30 @@ app's own TCX were read), and the estimated watts against a real power meter (ch
 app's own physics), the **Android keep-screen-on flag and the Android backup (system save / open dialogs)** (written and
 type-checked against the `jni` crate on the host, never built into an APK or run on a phone), and the FTP suggestion against a
 real power meter (only synthetic watts). Do not claim otherwise.
+The **Portuguese (pt)** UI, workout library and rider documents were translated and checked with the
+catalog tests, the glossary/style files and a pass over the rendered screens; **no native speaker has
+reviewed them yet**, and the Android `values-pt` resources, the macOS `pt.lproj` strings and the
+packaging metadata were not built or run in this environment. Say so when the language comes up.
+The **German (de)** UI, workout library and rider documents were translated and checked with the
+catalog tests, the glossary/style files and a pass over the rendered screens; **no native speaker has
+reviewed them yet**. The Android resources need no German file (the only user-visible Android string is
+the product name), the macOS `de.lproj` strings were not built or run here, and the packaging metadata
+(`Dioxus.toml`) is single-language by design. Say so when the language comes up.
+The **Chinese (zh, Simplified Chinese / `zh-Hans`)** UI, workout library and rider documents (including
+a translated `CHANGELOG.md`) were translated and checked with the catalog tests, a rendered-screen scan
+(`check_ui.mjs`: 0 untranslated lines) and 412 × 860 / 1440 × 900 layout runs (no new horizontal overflow
+against the Hungarian source); **no native speaker has reviewed them yet**, and the review brief is
+`docs/i18n/zh/REVIEW_PROMPT.md`. The Android `values-zh` resources, the macOS `zh-Hans.lproj` strings and
+the Linux `Comment[zh]` entry were written but not built or run in this environment, and the packaging
+metadata (`Dioxus.toml`) is single-language by design. The Han glyphs come from a system font through
+`:lang(zh-Hans)`; the numbers stay Barlow Condensed. Say so when the language comes up.
+The **Italian (it)** UI, workout library and rider documents were translated and checked with the
+catalog tests, the glossary/style files and a pass over the rendered screens (412 × 860 and
+1440 × 900: one Italian-only overflow, the heart-rate header of the data table, fixed by the short
+tile label `FC`); **no native speaker has reviewed them yet**. The Android `values-it` resources, the
+macOS `it.lproj` strings and the Linux `Comment[it]` entry were written but not built or run in this
+environment, and the packaging metadata (`Dioxus.toml`) is single-language by design (the Italian
+text is a comment). Say so when the language comes up.
 Matrix: `docs/TESTING.md`.
 
 ## Docs: what to update when you change something

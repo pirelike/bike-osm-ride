@@ -2,6 +2,7 @@
 //! snapshot, pure route geometry lookups and a test fixture builder.
 
 use crate::*;
+use ride_i18n::t;
 use serde::{Deserialize, Serialize};
 
 /// Entry of the "recent routes" list on the welcome screen.
@@ -185,7 +186,7 @@ pub mod testing {
         let last = *points.last().unwrap();
         Route {
             id: "test".into(),
-            name: "Tesztútvonal".into(),
+            name: t("model.extras.tesztutvonal").into(),
             source: RouteSource::Demo,
             total_dist: last.dist,
             ascent,

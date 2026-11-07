@@ -26,6 +26,15 @@ android_main_activity = "android/MainActivity.kt"
 [bundle]
 identifier = "hu.borbelyhuba.bikeosmride"
 publisher = "bike-osm-ride"
+# `dx` has one description field, not one per language, so this stays the Hungarian source text
+# (the rider sees the language chosen inside the app). Translations for the store/package
+# metadata, kept here so they do not get lost:
+#   en: Virtual riding on GPX routes with a smart trainer.
+#   es: Pedaleo virtual en rutas GPX con un rodillo inteligente.
+#   pt: Pedalada virtual em percursos GPX com um rolo inteligente.
+#   de: Virtuelles Fahren auf GPX-Routen mit einem Smart-Trainer.
+#   zh: 使用智能骑行台在 GPX 路线上进行虚拟骑行。
+#   it: Pedalata virtuale su percorsi GPX con un rullo intelligente.
 short_description = "Virtuális tekerés GPX-útvonalakon okos trainerrel."
 icon = [
   "../../packaging/icons/32.png",
@@ -54,5 +63,13 @@ compile_sdk = 34
 
 [permissions]
 # Bluetooth LE for the trainer and the sensors; Android 11 and older also ask for location.
+# pt: Ligação de um rolo inteligente, de um monitor de pulso e de um manípulo Zwift.
+# de: Einen Smart-Trainer, einen Pulssensor und die Zwift-Schaltung verbinden.
+# zh: 连接智能骑行台、心率带和 Zwift 变速器。
+# it: Collegamento di un rullo intelligente, di un cardiofrequenzimetro e di un cambio Zwift.
 bluetooth = { description = "Okos trainer, pulzusmérő és Zwift váltó csatlakoztatása." }
+# pt: Necessária para a procura Bluetooth no Android 11 e anteriores.
+# de: Wird unter Android 11 und älter für die Bluetooth-Suche gebraucht.
+# zh: Android 11 及更早版本搜索蓝牙时需要。
+# it: Serve per la ricerca Bluetooth su Android 11 e versioni precedenti.
 location = { precision = "fine", description = "Android 11 és régebbi rendszeren a Bluetooth-kereséshez kell." }

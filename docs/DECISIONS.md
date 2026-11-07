@@ -149,6 +149,22 @@ No bulk prefetching (OSM policy). *(Some code comments still say CARTO.)*
 **U6. A Firefox panel for watching a series while riding, Windows only** (2026-11-01). Embedded as a Win32 child
 window of the installed Firefox with its own profile. · Cannot be drawn over; hidden during dialogs and drags.
 
+**U7. Hungarian is the source language; English and Spanish are complete, English is the pivot** (2026-11-06).
+Every user-visible string is a key in `crates/ride-i18n/locales/<code>.json`; the UI asks for it with
+`t`/`tf`/`tn`, and a missing key falls back to the source text. · Full sentences, never concatenated
+fragments: word order and case suffixes differ too much. The picker only offers a language whose catalog
+covers every source key, and `detect()` falls back to Hungarian rather than to English, so nobody meets a
+half-translated screen. Saved names (routes, rides) do not follow a language change: they are fixed when
+they are created, because renaming a stored route or ride behind the rider's back would be worse than a
+mixed-language list. English is the second source for any further language. · [`I18N.md`](I18N.md).
+
+**U8. The workout library is translated through a flat string map, not by hand** (2026-11-06).
+`assets/workouts.<code>.map.json` holds one translation per Hungarian string; `scripts/i18n/workouts.mjs`
+writes `assets/workouts.<code>.json`, and it refuses to write anything while a string is missing. · 2 065
+strings, and the same step name repeats in hundreds of workouts, so translating once per string is the
+only sane unit. A test proves the translation cannot change a duration, a target or a step count.
+The English map went through the same pipeline as the Spanish one.
+
 ## Services
 
 **V1. Street View with the user's own key; ids cached, images only on request** (2026-11-01). Google forbids storing

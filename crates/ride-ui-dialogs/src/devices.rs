@@ -10,6 +10,7 @@ use crate::helpers::{
     slot_connecting, slot_matches, slot_of, sorted_discovered, suggested_kind, SLOT_ORDER,
 };
 use crate::DeviceSlot;
+use ride_i18n::{t, tf};
 
 /// Scan, list discovered devices, connect/disconnect per kind (trainer, HR, power, cadence).
 /// Emits `SensorCommand`s (StartScan / StopScan / Connect / Disconnect).
@@ -34,16 +35,20 @@ pub fn DevicesDialog(
         .count();
     let found_count = found.len();
     let found_note = if scanning {
-        "A Bluetooth-környezet vizsgálata…".to_string()
+        t("ui_dialogs.devices.a_bluetooth_kornyezet_vizsgalata").to_string()
     } else if found_count == 0 {
-        "Indíts keresést a közeli eszközök felderítéséhez.".to_string()
+        t("ui_dialogs.devices.indits_keresest_a_kozeli_eszkozok_felderitesehez").to_string()
     } else {
-        format!("{found_count} találat – egy eszköz több szerepet is elláthat.")
+        tf(
+            "ui_dialogs.devices.found_count_talalat_egy_eszkoz_tobb_szerepet_is_ella",
+            &[("found_count", &found_count.to_string())],
+        )
+        .to_string()
     };
     let scan_label = if scanning {
-        "Keresés leállítása"
+        t("ui_dialogs.devices.kereses_leallitasa")
     } else {
-        "Keresés indítása"
+        t("ui_dialogs.devices.kereses_inditasa")
     };
     let scan_icon = if scanning {
         IconName::Stop
@@ -59,24 +64,24 @@ pub fn DevicesDialog(
     rsx! {
         Dialog {
             open: true,
-            title: "Eszközök".to_string(),
+            title: t("ui_dialogs.devices.eszkozok").to_string(),
             on_close,
             wide: true,
             foot: rsx! {
-                span { class: "dlg-foot__note", "Hardver nélkül a szimulált kerékpárossal is kipróbálhatod." }
+                span { class: "dlg-foot__note", {t("ui_dialogs.devices.hardver_nelkul_a_szimulalt_kerekparossal_is_kiprobal")} }
             },
             div { class: "dlg-devices",
                 div { class: "dlg-toolbar",
                     div { class: "dlg-toolbar__status",
                         if scanning {
                             span { class: "spinner" }
-                            span { class: "t-body", "Keresés folyamatban…" }
+                            span { class: "t-body", {t("ui_dialogs.devices.kereses_folyamatban")} }
                         } else {
                             span { class: "dot" }
-                            span { class: "t-body", "Indíthatod a keresést" }
+                            span { class: "t-body", {t("ui_dialogs.devices.indithatod_a_keresest")} }
                         }
-                        span { class: "t-caption", "{found_count} találat" }
-                        span { class: "t-caption", "{connected} csatlakoztatva" }
+                        span { class: "t-caption", {tf("ui_dialogs.devices.found_count_talalat", &[("found_count", &found_count.to_string())])} }
+                        span { class: "t-caption", {tf("ui_dialogs.devices.connected_count", &[("n", &connected.to_string())])} }
                     }
                     button {
                         class: scan_class,
@@ -111,13 +116,13 @@ pub fn DevicesDialog(
 
                 section { class: "dlg-found-sec",
                     div { class: "dlg-head",
-                        h3 { class: "dlg-head__title", "Talált eszközök" }
+                        h3 { class: "dlg-head__title", {t("ui_dialogs.devices.talalt_eszkozok")} }
                         span { class: "dlg-head__aside", "{found_note}" }
                     }
                     if found.is_empty() {
                         div { class: "dlg-empty",
-                            span { class: "dlg-empty__lead", "Nincs találat." }
-                            span { "Ellenőrizd, hogy be van kapcsolva a Bluetooth, majd indíts keresést." }
+                            span { class: "dlg-empty__lead", {t("ui_dialogs.devices.nincs_talalat")} }
+                            span { {t("ui_dialogs.devices.ellenorizd_hogy_be_van_kapcsolva_a_bluetooth_majd_in")} }
                         }
                     } else {
                         ul { class: "dlg-found-list",
@@ -153,7 +158,7 @@ fn SlotCard(
     let name_text = slot
         .and_then(|s| s.name)
         .filter(|name| !name.trim().is_empty())
-        .unwrap_or_else(|| "Nincs csatlakoztatott eszköz".to_string());
+        .unwrap_or_else(|| t("ui_dialogs.devices.nincs_csatlakoztatott_eszkoz").to_string());
     let tone = conn_tone(&state);
     let chip_class = format!("{} dlg-slot__chip", conn_chip_class(&state));
     let state_text = conn_label(&state);
@@ -161,9 +166,9 @@ fn SlotCard(
     let can_disconnect = matches!(state, ConnState::Connected | ConnState::Connecting);
     let busy = tone == "busy";
     let action_title = if shared {
-        "Az egész eszköz leválasztása (minden szerepével)"
+        t("ui_dialogs.devices.az_egesz_eszkoz_levalasztasa_minden_szerepevel")
     } else {
-        "Leválasztás"
+        t("ui_dialogs.devices.levalasztas")
     };
 
     rsx! {
@@ -173,7 +178,7 @@ fn SlotCard(
                 span { class: "dlg-slot__title", "{kind_label(kind)}" }
                 span { class: "dlg-slot__hint", "{kind_hint(kind)}" }
                 if shared {
-                    span { class: "tag", title: "Ugyanaz az eszköz több szerepet is ellát", "közös eszköz" }
+                    span { class: "tag", title: t("ui_dialogs.devices.ugyanaz_az_eszkoz_tobb_szerepet_is_ellat").to_string(), {t("ui_dialogs.devices.kozos_eszkoz")} }
                 }
             }
             div { class: "dlg-slot__body",
@@ -199,7 +204,7 @@ fn SlotCard(
                         title: "{action_title}",
                         onclick: move |_| on_command.call(SensorCommand::Disconnect(kind)),
                         Icon { name: IconName::Close, size: 13 }
-                        "Leválasztás"
+                        {t("ui_dialogs.devices.levalasztas")}
                     }
                 }
             }
@@ -238,9 +243,12 @@ fn FoundRow(
         .collect::<Vec<_>>()
         .join(", ");
     let connect_title = if roles.is_empty() {
-        "Csatlakozás".to_string()
+        t("ui_dialogs.devices.csatlakozas").to_string()
     } else {
-        format!("Csatlakozás – szerepek: {roles}")
+        tf(
+            "ui_dialogs.devices.csatlakozas_szerepek_roles",
+            &[("roles", &roles)],
+        )
     };
 
     rsx! {
@@ -250,7 +258,7 @@ fn FoundRow(
                 div { class: "dlg-found__line",
                     span { class: "dlg-found__name truncate", "{title}" }
                     if simulated {
-                        span { class: "tag tag--solid", "Szimulált" }
+                        span { class: "tag tag--solid", {t("ui_dialogs.devices.szimulalt")} }
                     }
                     for kind in device.kinds.iter().copied() {
                         span { class: "tag", key: "role-{kind_label(kind)}", "{kind_label(kind)}" }
@@ -271,17 +279,17 @@ fn FoundRow(
                 if connecting {
                     span { class: "dlg-found__wait", role: "status",
                         span { class: "spinner" }
-                        "Kapcsolódás…"
+                        {t("ui_dialogs.devices.kapcsolodas")}
                     }
                 } else if connected {
                     if let Some(kind) = suggested {
                         button {
                             class: "btn btn--ghost btn--sm",
                             r#type: "button",
-                            title: "Az egész eszköz leválasztása",
+                            title: t("ui_dialogs.devices.az_egesz_eszkoz_levalasztasa").to_string(),
                             onclick: move |_| on_command.call(SensorCommand::Disconnect(kind)),
                             Icon { name: IconName::Close, size: 13 }
-                            "Leválasztás"
+                            {t("ui_dialogs.devices.levalasztas")}
                         }
                     }
                 } else if let Some(kind) = suggested {
@@ -294,7 +302,7 @@ fn FoundRow(
                             move |_| on_command.call(SensorCommand::Connect { id: id.clone(), kind })
                         },
                         Icon { name: IconName::Bluetooth, size: 13 }
-                        "Csatlakozás"
+                        {t("ui_dialogs.devices.csatlakozas")}
                     }
                 }
                 if simulated {
@@ -304,7 +312,7 @@ fn FoundRow(
                                 class: "btn btn--ghost btn--sm",
                                 r#type: "button",
                                 key: "connect-{kind_label(kind)}",
-                                title: "Csatlakozás másik szerepként",
+                                title: t("ui_dialogs.devices.csatlakozas_masik_szerepkent").to_string(),
                                 onclick: {
                                     let id = device.id.clone();
                                     move |_| on_command.call(SensorCommand::Connect { id: id.clone(), kind })

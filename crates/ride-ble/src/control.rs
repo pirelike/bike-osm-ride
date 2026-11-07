@@ -20,6 +20,7 @@ use ftms::{encode_control_request, ControlOptions, ControlRequest};
 use ride_model::TrainerSim;
 
 use crate::parsers::{parse_cp_response, CpResult, MachineStatus};
+use ride_i18n::t;
 
 /// FTMS Control Point op codes (FTMS v1.0 table 4.15). Only the ones we ever send.
 pub mod op {
@@ -535,8 +536,7 @@ impl ControlSession {
         } else {
             self.phase = Phase::Detached;
             outs.push(Out::Notice(
-                "A trainer nem vezérelhető FTMS-en keresztül, ezért csak adatot olvasunk róla; az emelkedők nem hatnak az ellenállásra."
-                    .to_string(),
+                t("ble.control.a_trainer_nem_vezerelheto_ftms_en_keresztul_ezert_cs").to_string(),
             ));
         }
         outs
@@ -679,9 +679,9 @@ impl ControlSession {
                 if storm || just_granted {
                     self.keep_control_alive(now);
                     if self.resets.report() {
-                        outs.push(Out::StatusIgnored(
-                            "a trainer ismételten reset-állapotot jelez",
-                        ));
+                        outs.push(Out::StatusIgnored(t(
+                            "ble.control.a_trainer_ismetelten_reset_allapotot_jelez",
+                        )));
                     }
                 } else {
                     self.lose_control(now, false, &mut outs);
@@ -697,9 +697,9 @@ impl ControlSession {
                     self.device_blocked = false;
                     self.keep_control_alive(now);
                     if self.stops.report() {
-                        outs.push(Out::StatusIgnored(
-                            "a trainer ismételten leállt állapotot jelez",
-                        ));
+                        outs.push(Out::StatusIgnored(t(
+                            "ble.control.a_trainer_ismetelten_leallt_allapotot_jelez",
+                        )));
                     }
                     return outs;
                 }
@@ -707,7 +707,7 @@ impl ControlSession {
                 self.device_blocked = true;
                 self.warn(
                     now,
-                    "A trainert magán a készüléken állították le; amíg újra nem indítod a tekerést, nem avatkozunk bele.",
+                    t("ble.control.a_trainert_magan_a_keszuleken_allitottak_le_amig_ujr"),
                     &mut outs,
                 );
             }
@@ -717,7 +717,7 @@ impl ControlSession {
                     self.device_blocked = true;
                     self.warn(
                         now,
-                        "A trainer a biztonsági kulccsal leállt; ha újraindítod a tekerést, a vezérlés is folytatódik.",
+                        t("ble.control.a_trainer_a_biztonsagi_kulccsal_leallt_ha_ujraindito"),
                         &mut outs,
                     );
                 }
@@ -804,7 +804,7 @@ impl ControlSession {
                 } else if !self.silent {
                     self.warn(
                         now,
-                        "A trainer nem válaszolt időben egy vezérlőparancsra.",
+                        t("ble.control.a_trainer_nem_valaszolt_idoben_egy_vezerloparancsra"),
                         &mut outs,
                     );
                     if inf.intent == Intent::RequestControl {
@@ -972,8 +972,9 @@ impl ControlSession {
                     return None;
                 }
                 if self.caps.supports_sim == Some(false) {
-                    self.warn(now,
-                        "A trainer nem támogatja a terepszimulációt, ezért az emelkedők nem hatnak az ellenállásra.",
+                    self.warn(
+                        now,
+                        t("ble.control.a_trainer_nem_tamogatja_a_terepszimulaciot_ezert_az_"),
                         outs,
                     );
                     return None;
@@ -992,7 +993,7 @@ impl ControlSession {
                 if self.caps.supports_power_target == Some(false) {
                     self.warn(
                         now,
-                        "A trainer nem támogatja a célteljesítmény (ERG) módot.",
+                        t("ble.control.a_trainer_nem_tamogatja_a_celteljesitmeny_erg_modot"),
                         outs,
                     );
                     return None;
@@ -1079,8 +1080,9 @@ impl ControlSession {
             return;
         }
         if result == CpResult::ControlNotPermitted {
-            self.warn(now,
-                "A trainert most egy másik alkalmazás vezérli; zárd be, vagy bontsd benne a kapcsolatot a trainerrel.",
+            self.warn(
+                now,
+                t("ble.control.a_trainert_most_egy_masik_alkalmazas_vezerli_zard_be"),
                 outs,
             );
         }
@@ -1092,7 +1094,7 @@ impl ControlSession {
             self.phase = Phase::Refused;
             self.warn(
                 now,
-                "A trainer nem adta át a vezérlést, ezért csak adatot olvasunk róla.",
+                t("ble.control.a_trainer_nem_adta_at_a_vezerlest_ezert_csak_adatot_"),
                 outs,
             );
         } else {
@@ -1114,8 +1116,9 @@ impl ControlSession {
         }
         if self.reclaims > self.cfg.reclaim_limit {
             self.phase = Phase::Refused;
-            self.warn(now,
-                "Többször is elvesztettük a trainer vezérlését (talán egy másik alkalmazás miatt), ezért nem próbálkozunk tovább.",
+            self.warn(
+                now,
+                t("ble.control.tobbszor_is_elvesztettuk_a_trainer_vezerleset_talan_"),
                 outs,
             );
         } else {
@@ -1125,7 +1128,7 @@ impl ControlSession {
             if hostile {
                 self.warn(
                     now,
-                    "Elvesztettük a trainer vezérlését, megpróbáljuk visszaszerezni.",
+                    t("ble.control.elvesztettuk_a_trainer_vezerleset_megprobaljuk_vissz"),
                     outs,
                 );
             }
@@ -1148,15 +1151,16 @@ impl ControlSession {
             CpResult::OpCodeNotSupported => {
                 if intent == Intent::Sim {
                     self.caps.supports_sim = Some(false);
-                    self.warn(now,
-                        "A trainer nem támogatja a terepszimulációt, ezért az emelkedők nem hatnak az ellenállásra.",
+                    self.warn(
+                        now,
+                        t("ble.control.a_trainer_nem_tamogatja_a_terepszimulaciot_ezert_az_"),
                         outs,
                     );
                 } else {
                     self.caps.supports_power_target = Some(false);
                     self.warn(
                         now,
-                        "A trainer nem támogatja a célteljesítmény (ERG) módot.",
+                        t("ble.control.a_trainer_nem_tamogatja_a_celteljesitmeny_erg_modot"),
                         outs,
                     );
                 }
@@ -1164,7 +1168,7 @@ impl ControlSession {
             CpResult::InvalidParameter => {
                 self.warn(
                     now,
-                    "A trainer elutasította a megadott paramétereket.",
+                    t("ble.control.a_trainer_elutasitotta_a_megadott_parametereket"),
                     outs,
                 );
             }
@@ -1180,7 +1184,7 @@ impl ControlSession {
                 } else {
                     self.warn(
                         now,
-                        "A trainer nem tudta végrehajtani a vezérlőparancsot.",
+                        t("ble.control.a_trainer_nem_tudta_vegrehajtani_a_vezerloparancsot"),
                         outs,
                     );
                 }

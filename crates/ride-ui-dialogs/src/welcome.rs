@@ -3,6 +3,7 @@
 //! recent routes, in the same dialog frame as every other dialog.
 
 use dioxus::prelude::*;
+use ride_i18n::{t, tf};
 use ride_model::RecentRoute;
 use ride_ui_kit::format::{fmt_km, fmt_m};
 use ride_ui_kit::{Dialog, Icon, IconName, TextField};
@@ -39,12 +40,12 @@ pub fn RouteDialog(
     rsx! {
         Dialog {
             open: true,
-            title: "Útvonal".to_string(),
+            title: t("ui_dialogs.welcome.utvonal").to_string(),
             on_close,
             wide: true,
             foot: rsx! {
                 span { class: "dlg-foot__note",
-                    "A GPX-fájlt az ablakra húzva is megnyithatod (Ctrl+O). A betöltés után az ablak bezárul."
+                    {t("ui_dialogs.welcome.a_gpx_fajlt_az_ablakra_huzva_is_megnyithatod_ctrl_o_")}
                 }
             },
             RouteSheet {
@@ -64,7 +65,7 @@ pub fn RouteDialog(
                         r#type: "button",
                         onclick: move |_| on_review.call(()),
                         Icon { name: IconName::Gauge, size: 16 }
-                        "Mentett edzések áttekintése"
+                        {t("ui_dialogs.welcome.mentett_edzesek_attekintese")}
                     }
                 }
             }
@@ -98,9 +99,9 @@ fn RouteSheet(
         hint.clone()
     };
     let field_hint = if hint.is_none() {
-        "Érvényes bikerouter-link, betölthető.".to_string()
+        t("ui_dialogs.welcome.ervenyes_bikerouter_link_betoltheto").to_string()
     } else {
-        "A bikerouter.de „Megosztás” linkje tartalmazza az útvonalat (lonlats=…).".to_string()
+        t("ui_dialogs.welcome.a_bikerouter_de_megosztas_linkje_tartalmazza_az_utvo").to_string()
     };
     let can_import = hint.is_none() && !text.trim().is_empty() && !busy_now;
     let paste_message = paste_note.read().clone();
@@ -110,27 +111,27 @@ fn RouteSheet(
         div { class: "dlg-welcome",
             header { class: "dlg-hero",
                 p { class: "dlg-hero__lead",
-                    "Válassz GPX-fájlt, illessz be egy bikerouter-linket, vagy folytasd egy korábbi útvonallal."
+                    {t("ui_dialogs.welcome.valassz_gpx_fajlt_illessz_be_egy_bikerouter_linket_v")}
                 }
             }
 
-            section { class: "dlg-sources", aria_label: "Útvonal betöltése",
+            section { class: "dlg-sources", aria_label: t("ui_dialogs.welcome.utvonal_betoltese").to_string(),
                 button {
                     class: "dlg-source dlg-drop",
                     r#type: "button",
                     disabled: busy_now,
-                    "aria-label": "GPX-fájl kiválasztása",
+                    "aria-label": t("ui_dialogs.welcome.gpx_fajl_kivalasztasa"),
                     onclick: move |_| on_pick_file.call(()),
                     span { class: "dlg-source__num", "1" }
                     span { class: "dlg-source__text",
-                        span { class: "dlg-source__title", "GPX-fájl" }
+                        span { class: "dlg-source__title", {t("ui_dialogs.welcome.gpx_fajl")} }
                         span { class: "dlg-source__sub",
-                            "Húzd ide a fájlt, vagy válaszd ki a gépedről."
+                            {t("ui_dialogs.welcome.huzd_ide_a_fajlt_vagy_valaszd_ki_a_gepedrol")}
                         }
                     }
                     span { class: "dlg-source__go dlg-drop__go",
                         Icon { name: IconName::Folder, size: 16 }
-                        "GPX megnyitása"
+                        {t("ui_dialogs.welcome.gpx_megnyitasa")}
                     }
                 }
 
@@ -139,12 +140,12 @@ fn RouteSheet(
                     span { class: "dlg-source__text",
                         span { class: "dlg-source__title", "Bikerouter-link" }
                         span { class: "dlg-source__sub",
-                            "Tervezz útvonalat a bikerouter.de-n, és másold ide a megosztási linket."
+                            {t("ui_dialogs.welcome.tervezz_utvonalat_a_bikerouter_de_n_es_masold_ide_a_")}
                         }
                     }
                     div { class: "dlg-link",
                         TextField {
-                            label: "A megosztott link".to_string(),
+                            label: t("ui_dialogs.welcome.a_megosztott_link").to_string(),
                             value: text.clone(),
                             placeholder: "https://bikerouter.de/#map=…&lonlats=…".to_string(),
                             hint: field_hint,
@@ -160,7 +161,7 @@ fn RouteSheet(
                                 class: "btn btn--sm",
                                 r#type: "button",
                                 disabled: busy_now,
-                                title: "A vágólap tartalmának beillesztése",
+                                title: t("ui_dialogs.welcome.a_vagolap_tartalmanak_beillesztese").to_string(),
                                 onclick: move |_| {
                                     let mut eval = document::eval(
                                         "try { const t = await navigator.clipboard.readText(); dioxus.send(t); } \
@@ -173,13 +174,13 @@ fn RouteSheet(
                                                 paste_note.set(None);
                                             }
                                             _ => paste_note.set(Some(
-                                                "A vágólap nem olvasható. Illeszd be a linket ide a Ctrl+V-vel.".to_string(),
+                                                t("ui_dialogs.welcome.a_vagolap_nem_olvashato_illeszd_be_a_linket_ide_a_ct").to_string(),
                                             )),
                                         }
                                     });
                                 },
                                 Icon { name: IconName::Link, size: 14 }
-                                "Beillesztés"
+                                {t("ui_dialogs.welcome.beillesztes")}
                             }
                             button {
                                 class: "btn btn--sm",
@@ -192,7 +193,7 @@ fn RouteSheet(
                                     }
                                 },
                                 Icon { name: IconName::ChevronRight, size: 14 }
-                                "Útvonal betöltése"
+                                {t("ui_dialogs.welcome.utvonal_betoltese")}
                             }
                         }
                         if let Some(note) = paste_message {
@@ -207,19 +208,19 @@ fn RouteSheet(
                 div { class: "dlg-source",
                     span { class: "dlg-source__num", "3" }
                     span { class: "dlg-source__text",
-                        span { class: "dlg-source__title", "Bemutató útvonal" }
+                        span { class: "dlg-source__title", {t("ui_dialogs.welcome.bemutato_utvonal")} }
                         span { class: "dlg-source__sub",
-                            "Rövid, dombos budapesti kör a kipróbáláshoz, hardver nélkül is."
+                            {t("ui_dialogs.welcome.rovid_dombos_budapesti_kor_a_kiprobalashoz_hardver_n")}
                         }
                     }
                     button {
                         class: "btn dlg-source__go",
                         r#type: "button",
                         disabled: busy_now,
-                        title: "Rövid, dombos budapesti kör a kipróbáláshoz",
+                        title: t("ui_dialogs.welcome.rovid_dombos_budapesti_kor_a_kiprobalashoz").to_string(),
                         onclick: move |_| on_demo.call(()),
                         Icon { name: IconName::Compass, size: 14 }
-                        "Bemutató útvonal"
+                        {t("ui_dialogs.welcome.bemutato_utvonal")}
                     }
                 }
             }
@@ -227,7 +228,7 @@ fn RouteSheet(
             if busy_now {
                 div { class: "dlg-busy", role: "status",
                     span { class: "spinner" }
-                    span { class: "t-body", "Útvonal feldolgozása…" }
+                    span { class: "t-body", {t("ui_dialogs.welcome.utvonal_feldolgozasa")} }
                 }
             }
             if let Some(message) = error_now {
@@ -237,23 +238,23 @@ fn RouteSheet(
                 }
             }
 
-            section { class: "dlg-recents-sec", aria_label: "Legutóbbi útvonalak",
+            section { class: "dlg-recents-sec", aria_label: t("ui_dialogs.welcome.legutobbi_utvonalak").to_string(),
                 div { class: "dlg-head",
-                    h2 { class: "dlg-head__title", "Legutóbbi útvonalak" }
-                    span { class: "dlg-head__aside", "{recent_count} útvonal" }
+                    h2 { class: "dlg-head__title", {t("ui_dialogs.welcome.legutobbi_utvonalak")} }
+                    span { class: "dlg-head__aside", {tf("ui_dialogs.welcome.recent_count_utvonal", &[("recent_count", &recent_count.to_string())])} }
                 }
                 if recents_now.is_empty() {
                     div { class: "dlg-empty",
-                        span { class: "dlg-empty__lead", "Még nincs legutóbbi útvonal." }
-                        span { "Az itt megnyitott GPX-ek automatikusan ide kerülnek." }
+                        span { class: "dlg-empty__lead", {t("ui_dialogs.welcome.meg_nincs_legutobbi_utvonal")} }
+                        span { {t("ui_dialogs.welcome.az_itt_megnyitott_gpx_ek_automatikusan_ide_kerulnek")} }
                     }
                 } else {
                     div { class: "dlg-recents__head", aria_hidden: "true",
-                        span { "Útvonal" }
-                        span { "Táv" }
-                        span { "Szint" }
-                        span { "Megnyitva" }
-                        span { "Forrás" }
+                        span { {t("ui_dialogs.welcome.utvonal")} }
+                        span { {t("ui_dialogs.welcome.tav")} }
+                        span { {t("ui_dialogs.welcome.szint")} }
+                        span { {t("ui_dialogs.welcome.megnyitva")} }
+                        span { {t("ui_dialogs.about.forras")} }
                     }
                     ul { class: "dlg-recents",
                         for route in recents_now {
@@ -262,7 +263,7 @@ fn RouteSheet(
                                     class: "dlg-recent__open",
                                     r#type: "button",
                                     disabled: busy_now,
-                                    title: "Megnyitás",
+                                    title: t("ui_dialogs.welcome.megnyitas").to_string(),
                                     onclick: {
                                         let id = route.id.clone();
                                         move |_| on_open_recent.call(id.clone())
@@ -283,8 +284,8 @@ fn RouteSheet(
                                     class: "btn btn--ghost btn--icon btn--sm dlg-recent__del",
                                     r#type: "button",
                                     disabled: busy_now,
-                                    "aria-label": "Törlés a legutóbbi útvonalak közül",
-                                    title: "Törlés a legutóbbiak közül",
+                                    "aria-label": t("ui_dialogs.welcome.torles_a_legutobbi_utvonalak_kozul"),
+                                    title: t("ui_dialogs.welcome.torles_a_legutobbiak_kozul").to_string(),
                                     onclick: {
                                         let id = route.id.clone();
                                         move |_| on_delete_recent.call(id.clone())

@@ -13,6 +13,7 @@
 //! * `GET /maps/embed/v1/streetview?...` - a small HTML page that draws a fake street scene and
 //!   prints the pano id / heading it was asked for (so a screenshot shows what was loaded).
 
+use ride_i18n::t;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -386,13 +387,13 @@ fn embed_page(pano: &str, heading: &str, loc: &str, denied: bool) -> String {
     let h: f64 = heading.parse().unwrap_or(0.0);
     let shift = -((h % 360.0) / 360.0 * 100.0);
     let body = if denied {
-        "<div class=\"deny\">Ez az oldal nem tudta megfelelően betölteni a Google Térképet.</div>"
-            .to_string()
+        t("ui_streetview.mock.div_class_deny_ez_az_oldal_nem_tudta_megfeleloen_bet").to_string()
     } else {
         format!(
             "<div class=\"sky\"></div><div class=\"hills\"></div><div class=\"road\"></div>\
-             <div class=\"tag\">MOCK Street View<br>{}<br>irány {}°<br>{}</div>",
+             <div class=\"tag\">MOCK Street View<br>{}<br>{} {}°<br>{}</div>",
             esc(pano),
+            esc(t("ui_streetview.mock.irany")),
             esc(heading),
             esc(loc)
         )

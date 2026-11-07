@@ -55,10 +55,17 @@
   gap: var(--space-2);
 }
 
+/* One line of pairs. A pair that does not fit wraps onto a second line, which the fixed height
+   hides: a narrow header drops whole pairs from the right instead of cutting one in half (a
+   phone showed "A" for "Ablak 3.00 km" and "Követke" for "Következik"). */
 .profile-readout {
   flex: 1 1 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  align-content: flex-start;
+  row-gap: 8px;
+  height: 18px;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;

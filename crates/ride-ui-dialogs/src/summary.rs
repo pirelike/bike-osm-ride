@@ -10,6 +10,7 @@ use ride_ui_kit::palette::{hr_zone_name, hr_zone_var, power_zone_name, power_zon
 use ride_ui_kit::{Dialog, Icon, IconName};
 
 use crate::helpers::{fmt_date, fmt_if, hr_zone_bars, power_zone_bars, segment_rows, SegmentRow};
+use ride_i18n::t;
 
 /// End-of-ride summary: headline numbers, the ghost difference and the segment table, zone
 /// distribution bars, "Mentés TCX-ként", "Új útvonal". Closing is the title bar's × (the footer
@@ -37,7 +38,7 @@ pub fn SummaryDialog(
     rsx! {
         Dialog {
             open: true,
-            title: "Túra összegzése".to_string(),
+            title: t("ui_dialogs.summary.tura_osszegzese").to_string(),
             on_close,
             wide: true,
             foot: rsx! {
@@ -47,7 +48,7 @@ pub fn SummaryDialog(
                     disabled: !has_summary,
                     onclick: move |_| on_new_ride.call(()),
                     Icon { name: IconName::ChevronLeft, size: 14 }
-                    "Új útvonal"
+                    {t("ui_dialogs.summary.uj_utvonal")}
                 }
                 div { class: "dlg-foot__end",
                     button {
@@ -56,7 +57,7 @@ pub fn SummaryDialog(
                         disabled: !has_summary,
                         onclick: move |_| on_save_tcx.call(()),
                         Icon { name: IconName::Download, size: 14 }
-                        "Mentés TCX-ként"
+                        {t("ui_dialogs.summary.mentes_tcx_kent")}
                     }
                 }
             },
@@ -68,8 +69,8 @@ pub fn SummaryDialog(
                 }
             } else {
                 div { class: "dlg-empty",
-                    span { class: "dlg-empty__lead", "Még nincs összegzés." }
-                    span { "A túra befejezése után itt jelennek meg az adatok." }
+                    span { class: "dlg-empty__lead", {t("ui_dialogs.summary.meg_nincs_osszegzes")} }
+                    span { {t("ui_dialogs.summary.a_tura_befejezese_utan_itt_jelennek_meg_az_adatok")} }
                 }
             }
         }
@@ -104,42 +105,42 @@ fn SummaryBody(
         div { class: "dlg-summary",
             header { class: "dlg-summary__head",
                 div { class: "dlg-summary__names",
-                    span { class: "t-eyebrow", "Befejezett túra" }
+                    span { class: "t-eyebrow", {t("ui_dialogs.summary.befejezett_tura")} }
                     h3 { class: "dlg-summary__route", "{summary.route_name}" }
                 }
                 div { class: "dlg-summary__meta",
-                    span { class: "badge badge--ok", "Teljesítve" }
+                    span { class: "badge badge--ok", {t("ui_dialogs.summary.teljesitve")} }
                     span { class: "t-caption", "{headline}" }
                 }
             }
 
             // one ruled sheet: the first cell is the distance, 2 columns wide, everything else 1
             div { class: "cells cells--4",
-                Stat { wide: true, label: "Távolság".to_string(), value: fmt_km(summary.dist), unit: "km".to_string() }
-                Stat { label: "Idő".to_string(), value: fmt_duration(summary.elapsed_s), unit: "".to_string() }
-                Stat { label: "Szintemelkedés".to_string(), value: fmt_m(summary.ascent), unit: "m".to_string() }
-                Stat { label: "Átlagteljesítmény".to_string(), value: fmt_opt0(summary.avg_power_w), unit: "W".to_string() }
-                Stat { label: "Normalizált teljesítmény".to_string(), value: fmt_opt0(summary.normalized_power_w), unit: "W".to_string() }
-                Stat { label: "Intenzitás (IF)".to_string(), value: fmt_if(summary.intensity_factor), unit: "".to_string() }
+                Stat { wide: true, label: t("ui_dialogs.summary.tavolsag").to_string(), value: fmt_km(summary.dist), unit: "km".to_string() }
+                Stat { label: t("ui_dialogs.summary.ido").to_string(), value: fmt_duration(summary.elapsed_s), unit: "".to_string() }
+                Stat { label: t("ui_dialogs.summary.szintemelkedes").to_string(), value: fmt_m(summary.ascent), unit: "m".to_string() }
+                Stat { label: t("ui_dialogs.summary.atlagteljesitmeny").to_string(), value: fmt_opt0(summary.avg_power_w), unit: "W".to_string() }
+                Stat { label: t("ui_dialogs.summary.normalizalt_teljesitmeny").to_string(), value: fmt_opt0(summary.normalized_power_w), unit: "W".to_string() }
+                Stat { label: t("ui_dialogs.summary.intenzitas_if").to_string(), value: fmt_if(summary.intensity_factor), unit: "".to_string() }
                 Stat { label: "TSS".to_string(), value: fmt_opt0(summary.tss), unit: "".to_string() }
-                Stat { label: "Energia".to_string(), value: fmt_opt0(Some(summary.kcal)), unit: "kcal".to_string() }
-                Stat { label: "Átlagsebesség".to_string(), value: avg_speed_kmh, unit: "km/h".to_string() }
-                Stat { label: "Átlagpulzus".to_string(), value: fmt_opt0(summary.avg_hr), unit: "bpm".to_string() }
-                Stat { label: "Max. pulzus".to_string(), value: fmt_opt0(summary.max_hr), unit: "bpm".to_string() }
+                Stat { label: t("ui_dialogs.summary.energia").to_string(), value: fmt_opt0(Some(summary.kcal)), unit: "kcal".to_string() }
+                Stat { label: t("ui_dialogs.summary.atlagsebesseg").to_string(), value: avg_speed_kmh, unit: "km/h".to_string() }
+                Stat { label: t("ui_dialogs.summary.atlagpulzus").to_string(), value: fmt_opt0(summary.avg_hr), unit: "bpm".to_string() }
+                Stat { label: t("ui_dialogs.settings.max_pulzus").to_string(), value: fmt_opt0(summary.max_hr), unit: "bpm".to_string() }
             }
 
             // The comparison with the history: the ghost at the finish line and one row per
             // segment. A simulated ride shows the numbers but is marked as not counting.
             if simulated || ghost_delta.is_some() || !rows.is_empty() {
-                section { class: "dlg-compare", aria_label: "Összehasonlítás a korábbi menetekkel",
+                section { class: "dlg-compare", aria_label: t("ui_dialogs.summary.osszehasonlitas_a_korabbi_menetekkel").to_string(),
                     if simulated {
                         p { class: "dlg-compare__note",
-                            "Szimulált menet – nem számít PR-nak, és a szellemek közé sem kerül be."
+                            {t("ui_dialogs.summary.szimulalt_menet_nem_szamit_pr_nak_es_a_szellemek_koz")}
                         }
                     }
                     if let Some(delta) = ghost_delta {
                         div { class: "dlg-ghost",
-                            span { class: "dlg-ghost__label", "Szellemhez képest" }
+                            span { class: "dlg-ghost__label", {t("ui_dialogs.summary.szellemhez_kepest")} }
                             span {
                                 class: if delta < 0.0 { "dlg-ghost__value dlg-ghost__value--ahead" } else { "dlg-ghost__value dlg-ghost__value--behind" },
                                 "{fmt_delta_duration(delta)}"
@@ -148,8 +149,8 @@ fn SummaryBody(
                     }
                     if !rows.is_empty() {
                         div { class: "dlg-head",
-                            h4 { class: "dlg-head__title", "Szegmensek" }
-                            span { class: "dlg-head__aside", "Idő · korábbi PR" }
+                            h4 { class: "dlg-head__title", {t("ui_dialogs.summary.szegmensek")} }
+                            span { class: "dlg-head__aside", {t("ui_dialogs.summary.ido_korabbi_pr")} }
                         }
                         div { class: "dlg-segment",
                             for row in rows {
@@ -161,18 +162,18 @@ fn SummaryBody(
             } else if comparison.is_some() {
                 // The ride was compared, but there was nothing to compare it with: say so,
                 // otherwise the missing ghost looks like a bug.
-                section { class: "dlg-compare", aria_label: "Összehasonlítás a korábbi menetekkel",
+                section { class: "dlg-compare", aria_label: t("ui_dialogs.summary.osszehasonlitas_a_korabbi_menetekkel").to_string(),
                     p { class: "dlg-compare__note",
-                        "Ehhez az útvonalhoz még nincs korábbi menet, ezért nincs szellem-összehasonlítás. A következő menetnél már szellemként megy előtted ez a menet."
+                        {t("ui_dialogs.summary.ehhez_az_utvonalhoz_meg_nincs_korabbi_menet_ezert_ni")}
                     }
                 }
             }
 
             div { class: "dlg-zones",
-                section { class: "dlg-zonecard", aria_label: "Teljesítményzónák",
+                section { class: "dlg-zonecard", aria_label: t("ui_dialogs.summary.teljesitmenyzonak").to_string(),
                     div { class: "dlg-head",
-                        h4 { class: "dlg-head__title", "Teljesítményzónák" }
-                        span { class: "dlg-head__aside", "Mért idő" }
+                        h4 { class: "dlg-head__title", {t("ui_dialogs.summary.teljesitmenyzonak")} }
+                        span { class: "dlg-head__aside", {t("ui_dialogs.summary.mert_ido")} }
                     }
                     for bar in power_bars {
                         ZoneRow {
@@ -184,10 +185,10 @@ fn SummaryBody(
                         }
                     }
                 }
-                section { class: "dlg-zonecard", aria_label: "Pulzuszónák",
+                section { class: "dlg-zonecard", aria_label: t("ui_dialogs.summary.pulzuszonak").to_string(),
                     div { class: "dlg-head",
-                        h4 { class: "dlg-head__title", "Pulzuszónák" }
-                        span { class: "dlg-head__aside", "Mért idő" }
+                        h4 { class: "dlg-head__title", {t("ui_dialogs.summary.pulzuszonak")} }
+                        span { class: "dlg-head__aside", {t("ui_dialogs.summary.mert_ido")} }
                     }
                     for bar in hr_bars {
                         ZoneRow {
@@ -214,10 +215,10 @@ fn SegmentLine(row: SegmentRow) -> Element {
             if !row.range.is_empty() {
                 span { class: "dlg-segment__range", "{row.range}" }
             }
-            span { class: "dlg-segment__cell", aria_label: "Idő", "{row.time}" }
-            span { class: "dlg-segment__cell dlg-segment__cell--pr", aria_label: "Korábbi PR", "{row.previous}" }
+            span { class: "dlg-segment__cell", aria_label: t("ui_dialogs.summary.ido").to_string(), "{row.time}" }
+            span { class: "dlg-segment__cell dlg-segment__cell--pr", aria_label: t("ui_dialogs.summary.korabbi_pr").to_string(), "{row.previous}" }
             if row.is_pr {
-                span { class: "badge badge--ok", "Új PR!" }
+                span { class: "badge badge--ok", {t("ui_dialogs.summary.uj_pr")} }
             }
         }
     }

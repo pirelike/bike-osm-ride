@@ -1,0 +1,10 @@
+# Supported languages. One row per language; adding a language means adding a row here and a
+# `locales/<code>.json` file. The Rust source does not change. Fields are tab-separated.
+# code	self_name	html_lang	plural_rule	decimal	script	rtl
+hu	Magyar	hu	other-only	,	latin-ext	no
+en	English	en	one-other	.	latin	no
+es	Español	es	one-other	,	latin	no
+de	Deutsch	de	one-other	,	latin	no
+pt	Português	pt	one-other	,	latin	no
+it	Italiano	it	one-other	,	latin	no
+zh	简体中文	zh-Hans	other-only	.	cjk	no
