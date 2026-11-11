@@ -1065,23 +1065,34 @@ mod tests {
     #[test]
     fn exact_panel_minimums_do_not_invert_the_split_bounds() {
         use super::*;
+        let controls = PanelId::Controls;
+        let climb = PanelId::Climb;
+        let width = controls.min_size().0 + climb.min_size().0;
         let saved = ride_model::TileNode::Split {
             rows: false,
-            ratio: 68.0 / 96.0,
+            ratio: width / COLS,
             a: Box::new(ride_model::TileNode::Leaf {
-                panel: "map".into(),
+                panel: controls.key().into(),
             }),
             b: Box::new(ride_model::TileNode::Leaf {
                 panel: "profile".into(),
             }),
         };
         let mut dock = Dock::from_settings(Some(&saved));
-        dock.show(PanelId::Browser, None, Availability::default());
-        assert!(dock
-            .layout(Availability::default())
-            .tiles
-            .iter()
-            .any(|t| t.id == PanelId::Browser));
+        let availability = Availability::default();
+        dock.show(
+            climb,
+            Some(DropTarget {
+                onto: controls,
+                zone: Zone::Right,
+            }),
+            availability,
+        );
+        let layout = dock.layout(availability);
+        let tile = layout
+            .tile(climb)
+            .expect("climb panel fits next to controls");
+        assert!((tile.rect.w - climb.min_size().0).abs() < 1e-9);
     }
 
     use super::*;
