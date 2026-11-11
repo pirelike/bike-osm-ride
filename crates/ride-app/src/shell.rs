@@ -6,7 +6,7 @@
 //! ```
 //! The language is a printed race sheet: every panel is a flush rectangle drawn with 1 px rules,
 //! no blur, no shadows. Every panel has the same frame (a title bar to move it by, a close button,
-//! eight resize handles) and always sits on the grid, see `dock.rs`. A closed panel waits as a chip
+//! shared dividers for resizing) and always sits on the grid, see `dock.rs`. A closed panel waits as a chip
 //! in the top bar; pressing it puts the panel back, dragging it drops the panel wherever it is
 //! released. Nothing but the top bar is fixed: even the map is a panel. The route chooser, the
 //! workout picker, the devices and the settings are dialogs of one common size on top of the
@@ -34,6 +34,7 @@ use crate::browser;
 use crate::controller::Controller;
 use crate::dock::{self, PanelId, Workspace, CLICK_SLOP};
 use crate::gearbox;
+use crate::guard::guarded;
 use crate::state::{kind_label, AppState, DialogKind, DragOp};
 use ride_i18n::{t, tf};
 
@@ -283,7 +284,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 }
 
 /* full-window catcher while a drag runs: the panels below never see the pointer */
-.shell-dragcatcher { position: fixed; inset: 0; z-index: 60; background: transparent; }
+.dock-bar, .dock-divider, .shell-chip { touch-action: none; }
+.shell-dragcatcher { touch-action: none; position: fixed; inset: 0; z-index: 60; background: transparent; }
 .shell-dragcatcher[data-op="carry"] { cursor: grabbing; }
 .shell-dragcatcher[data-op="ns"] { cursor: ns-resize; }
 .shell-dragcatcher[data-op="ew"] { cursor: ew-resize; }
@@ -635,10 +637,22 @@ fn use_android_picker(ctl: Controller) {
     use_future(move || async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            if crate::android_picker::take_picker_error() {
+                ctl.st.toast(
+                    ride_ui_kit::ToastKind::Error,
+                    t("app.controller.review.a_fajlt_nem_sikerult_megnyitni"),
+                );
+            }
             if let Some(path) = crate::android_picker::take_picked() {
-                ctl.open_path(path);
+                ctl.open_picked_path(path);
             }
             // a backup zip: the copy in the cache is ours to delete once it has been read
+            if crate::android_picker::take_backup_picker_error() {
+                ctl.st.toast(
+                    ride_ui_kit::ToastKind::Error,
+                    t("app.controller.review.a_fajlt_nem_sikerult_megnyitni"),
+                );
+            }
             if let Some(path) = crate::android_picker::take_picked_backup() {
                 ctl.backup_restore_path(path, true);
             }
@@ -848,11 +862,15 @@ fn DragCatcher(op: DragOp) -> Element {
     // the tiling as it was when the drag started: every move is applied to it afresh
     let start_dock = use_hook(|| dock_sig.peek().clone());
 
-    let mut apply = move |x: f64, y: f64| {
+    let cancelled_dock = start_dock.clone();
+    let apply = move |x: f64, y: f64| {
         if !x.is_finite() || !y.is_finite() {
             return;
         }
         let work = *workspace.peek();
+        let Some(op) = *drag.peek() else {
+            return;
+        };
         match op {
             DragOp::Divider { divider } => {
                 let Some((cx, cy)) = work.cell_pos_unbounded(x, y) else {
@@ -897,11 +915,16 @@ fn DragCatcher(op: DragOp) -> Element {
             }
         }
     };
-    let mut finish = move |commit: bool| {
+    let finish = move |commit: bool| {
         let current = *drag.peek();
         drag.set(None);
         match current {
-            Some(DragOp::Divider { .. }) => ctl.save_dock(dock_sig.peek().clone(), true),
+            Some(DragOp::Divider { .. }) => {
+                if !commit {
+                    dock_sig.set(cancelled_dock.clone());
+                }
+                ctl.save_dock(dock_sig.peek().clone(), true);
+            }
             Some(DragOp::Carry {
                 id,
                 parked,
@@ -926,20 +949,48 @@ fn DragCatcher(op: DragOp) -> Element {
             _ => {}
         }
     };
+    use_drop(move || {
+        let _ = guarded("dock drag cleanup", || {
+            document::eval("window.__rideDockDragCleanup?.();")
+        });
+    });
     let cursor = drag_cursor(op);
     rsx! {
         div {
             class: "shell-dragcatcher",
             "data-op": "{cursor}",
             role: "presentation",
-            onmousemove: move |e: Event<MouseData>| {
-                let p = e.client_coordinates();
-                apply(p.x, p.y);
+            onmounted: move |_| {
+                // Touch has implicit capture on the pressed header/divider. Observe the
+                // document so the overlay receives the gesture without stealing that capture.
+                let eval = guarded("dock pointer bridge", || document::eval(r#"
+                    window.__rideDockDragCleanup?.();
+                    await new Promise(resolve => {
+                        const send = e => {
+                            if (!e.isPrimary) return;
+                            dioxus.send([e.type, e.clientX, e.clientY]);
+                        };
+                        const types = ['pointermove', 'pointerup', 'pointercancel'];
+                        types.forEach(t => document.addEventListener(t, send, true));
+                        window.__rideDockDragCleanup = () => {
+                            types.forEach(t => document.removeEventListener(t, send, true));
+                            delete window.__rideDockDragCleanup;
+                            resolve();
+                        };
+                    });
+                "#));
+                if let Ok(mut eval) = eval {
+                    let mut apply = apply.clone();
+                    let mut finish = finish.clone();
+                    spawn(async move {
+                        while let Ok((kind, x, y)) = eval.recv::<(String, f64, f64)>().await {
+                            if kind == "pointercancel" { finish(false); break; }
+                            apply(x, y);
+                            if kind == "pointerup" { finish(true); break; }
+                        }
+                    });
+                }
             },
-            onmouseup: move |_| finish(true),
-            // leaving the window ends a divider drag where it is, but a carried panel is not
-            // dropped anywhere
-            onmouseleave: move |_| finish(false),
         }
     }
 }
@@ -1086,7 +1137,7 @@ fn TopBar() -> Element {
                             &[("id", id.title())],
                         ).to_string(),
                         // a press starts the drag; the release decides between click and drop
-                        onmousedown: move |e: Event<MouseData>| {
+                        onpointerdown: move |e: PointerEvent| {
                             e.prevent_default();
                             let p = e.client_coordinates();
                             drag.set(Some(DragOp::Carry {
@@ -1310,7 +1361,7 @@ fn WorkArea() -> Element {
                     role: "separator",
                     "aria-orientation": if divider.axis == dock::Axis::Cols { "vertical" } else { "horizontal" },
                     style: "{divider_style(divider)}",
-                    onmousedown: move |e: Event<MouseData>| {
+                    onpointerdown: move |e: PointerEvent| {
                         e.prevent_default();
                         e.stop_propagation();
                         drag.set(Some(DragOp::Divider { divider }));
@@ -1542,7 +1593,7 @@ fn PanelFrame(id: PanelId, rect: dock::Rect, carried: bool, children: Element) -
     let title = id.title();
     let sv_on = st.settings.read().ui.streetview_enabled;
 
-    let start_carry = move |e: Event<MouseData>| {
+    let start_carry = move |e: PointerEvent| {
         e.prevent_default();
         let p = e.client_coordinates();
         drag.set(Some(DragOp::Carry {
@@ -1562,7 +1613,7 @@ fn PanelFrame(id: PanelId, rect: dock::Rect, carried: bool, children: Element) -
             "data-dragging": if carried { "true" } else { "false" },
             aria_label: "{title}",
             style: "{rect.style()}",
-            header { class: "dock-bar", onmousedown: start_carry,
+            header { class: "dock-bar", onpointerdown: start_carry,
                 span { class: "shell-grip", aria_hidden: "true",
                     i {}
                     i {}
@@ -1578,7 +1629,7 @@ fn PanelFrame(id: PanelId, rect: dock::Rect, carried: bool, children: Element) -
                         r#type: "button",
                         "aria-pressed": "{sv_on}",
                         title: t("app.shell.street_view_a_terkepen_kis_ablak_jobb_alul_cserelhet").to_string(),
-                        onmousedown: move |e: Event<MouseData>| e.stop_propagation(),
+                        onpointerdown: move |e: PointerEvent| e.stop_propagation(),
                         onclick: move |_| ctl.toggle_streetview(),
                         span { class: "dock-act__sq", aria_hidden: "true" }
                         "Street View"
@@ -1590,7 +1641,7 @@ fn PanelFrame(id: PanelId, rect: dock::Rect, carried: bool, children: Element) -
                     aria_label: tf("app.shell.title_bezarasa", &[("title", title)]).to_string(),
                     title: t("app.shell.bezaras_a_felso_savba_kerul").to_string(),
                     // the button must not start a drag
-                    onmousedown: move |e: Event<MouseData>| e.stop_propagation(),
+                    onpointerdown: move |e: PointerEvent| e.stop_propagation(),
                     onclick: move |_| ctl.hide_panel(id),
                     Icon { name: IconName::Close, size: 12 }
                 }
@@ -1898,7 +1949,7 @@ fn CompactGears() -> Element {
     let count = gearbox::gears().len();
     if st.shifter_connected() {
         return rsx! {
-            div { class: "compact-gears compact-gears--readout", role: "status", aria_label: "Fokozat: {index + 1}",
+            div { class: "compact-gears compact-gears--readout", role: "status", aria_label: tf("app.shell.gear_number", &[("n", &(index + 1).to_string())]),
                 span { class: "compact-gears__label", {t("app.shell.fokozat")} }
                 span { class: "compact-gears__num num", "{index + 1}" }
             }

@@ -48,6 +48,14 @@ fn stem_of(started_unix_s: f64) -> Option<String> {
     Some(format!("{seconds:.0}"))
 }
 
+/// Whether a record can be used: of the one version this build knows (a record of another version
+/// may mean something different: it is ignored rather than misread) and with a recording (a record
+/// without one is no use as a ghost either). The ride log, the index repair and the restore of a
+/// backup all ask this one question.
+pub(crate) fn usable_record(record: &RideRecord) -> bool {
+    record.version == ride_model::RIDE_RECORD_VERSION && !record.points.is_empty()
+}
+
 pub(crate) fn valid_stem(stem: &str) -> bool {
     !stem.is_empty()
         && stem.len() <= 20
@@ -62,6 +70,36 @@ impl Store {
     /// it is not an error. The segment times are computed here from `route` and the recording,
     /// so the caller only hands over the record.
     pub fn save_ride(&self, record: &RideRecord, route: &Route) -> io::Result<Option<RideMeta>> {
+        self.write_ride(record, route, None)
+    }
+
+    /// Rewrites the stored ride `stem` with an updated `record` (the watts estimated again): the
+    /// ride keeps its file name and its place in the index. [`Store::save_ride`] cannot do that,
+    /// it treats different bytes under the same start time as another ride and files them under
+    /// the next free second.
+    ///
+    /// An error when no ride is stored under `stem`; `Ok(None)` when the record is too short to keep.
+    pub fn replace_ride(
+        &self,
+        record: &RideRecord,
+        route: &Route,
+        stem: &str,
+    ) -> io::Result<Option<RideMeta>> {
+        if !valid_stem(stem) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                t("route.rides.ervenytelen_menet_kezdes_idobelyeg"),
+            ));
+        }
+        self.write_ride(record, route, Some(stem))
+    }
+
+    fn write_ride(
+        &self,
+        record: &RideRecord,
+        route: &Route,
+        replace: Option<&str>,
+    ) -> io::Result<Option<RideMeta>> {
         let Some(summary) = usable_summary(&record.summary) else {
             return Ok(None);
         };
@@ -71,36 +109,30 @@ impl Store {
             record.route_id.as_str()
         };
         let dir = route_dir(self, route_id).ok_or_else(store::invalid_id)?;
-        let stem = stem_of(summary.started_unix_s).ok_or_else(invalid_time)?;
-
-        let started_unix_s = summary.started_unix_s.round();
-        let (tss, mmp) = power_curve::index_numbers(record);
-        let start_dist = record.points.first().map_or(0.0, |p| p.dist).max(0.0);
-        let end_dist = summary.dist.max(0.0);
-        let total = route.total_dist.max(0.0);
-        let meta = RideMeta {
-            stem: stem.clone(),
-            started_unix_s,
-            elapsed_s: summary.elapsed_s,
-            start_dist,
-            end_dist,
-            complete: total > 0.0 && end_dist + COMPLETE_MARGIN_M >= total,
-            simulated: record.simulated,
-            segments: segments::segment_times(route, &record.points),
-            source: record.source,
-            power_estimated: record.power_estimated,
-            avg_power_w: finite_opt(summary.avg_power_w),
-            avg_hr: finite_opt(summary.avg_hr),
-            route_name: record.route_name.clone(),
-            tss,
-            mmp,
-        };
+        let base_stem = stem_of(summary.started_unix_s).ok_or_else(invalid_time)?;
 
         let record = sanitized(record);
         let json = serde_json::to_vec(&record).map_err(io::Error::other)?;
 
         let _guard = store::lock();
+        // Two rides that started in the same second (an import next to a live ride, two
+        // devices) must not overwrite each other: the second one takes the next free second.
+        // The very same ride saved again (identical bytes) keeps its stem.
+        let stem = match replace {
+            Some(stem) => {
+                if !dir.join(format!("{stem}.json")).is_file() {
+                    return Err(io::Error::from(io::ErrorKind::NotFound));
+                }
+                stem.to_string()
+            }
+            None => free_stem(&dir, &base_stem, &json).ok_or_else(invalid_time)?,
+        };
+        let Some(meta) = meta_of(&record, Some(route), stem.clone()) else {
+            return Ok(None);
+        };
         store::write_atomic(&dir.join(format!("{stem}.json")), &json)?;
+        // If the index write fails now, the record is not lost: `read_ride_index` adopts a
+        // record the index does not know.
         let mut index = self.read_ride_index(&dir);
         index.retain(|m| m.stem != meta.stem);
         index.push(meta.clone());
@@ -120,6 +152,13 @@ impl Store {
         list.retain(|meta| {
             valid_stem(&meta.stem) && dir.join(format!("{}.json", meta.stem)).is_file()
         });
+        // A repaired index (records adopted after a damaged or failed index write) is written
+        // back once, so the records are not parsed again on every listing.
+        if self.index_needs_repair(&dir) {
+            if let Ok(json) = serde_json::to_vec_pretty(&list) {
+                let _ = store::write_atomic(&dir.join(INDEX_FILE), &json);
+            }
+        }
         list.sort_by(|a, b| b.started_unix_s.total_cmp(&a.started_unix_s));
         list
     }
@@ -133,12 +172,7 @@ impl Store {
         let _guard = store::lock();
         let bytes = store::read_limited(&dir.join(format!("{stem}.json")))?;
         let record: RideRecord = serde_json::from_slice(&bytes).ok()?;
-        // a record from a newer version may mean something different: ignore it rather than
-        // misread it (a record without a recording is no use as a ghost either)
-        if record.version > ride_model::RIDE_RECORD_VERSION || record.points.is_empty() {
-            return None;
-        }
-        Some(record)
+        usable_record(&record).then_some(record)
     }
 
     /// Whether a ride with this start time is stored for the route (an import of the same file
@@ -243,7 +277,7 @@ impl Store {
             let todo: Vec<String> = self
                 .list_rides(&route_id)
                 .into_iter()
-                .filter(|meta| meta.mmp.is_none())
+                .filter(|meta| power_curve::stored_curve(meta).is_none())
                 .map(|meta| meta.stem)
                 .collect();
             let mut computed: Vec<Computed> = Vec::new();
@@ -263,7 +297,7 @@ impl Store {
             let mut index = self.read_ride_index(&dir);
             let mut changed = 0;
             for meta in &mut index {
-                if meta.mmp.is_some() {
+                if power_curve::stored_curve(meta).is_some() {
                     continue;
                 }
                 if let Some((_, tss, mmp)) = computed.iter().find(|(stem, _, _)| *stem == meta.stem)
@@ -286,11 +320,125 @@ impl Store {
         updated
     }
 
+    /// The index of one route folder, repaired: a record file the index does not list (the
+    /// index was damaged, or its write failed after the record had been written) is adopted
+    /// with a meta computed from the record, exactly as `save_ride` would have written it. A
+    /// damaged index therefore never hides the history, and the next save does not overwrite
+    /// it with a shorter list. The caller holds the store lock.
     pub(crate) fn read_ride_index(&self, dir: &std::path::Path) -> Vec<RideMeta> {
+        let mut index = self.read_index_file(dir).unwrap_or_default();
+        let orphans = orphan_stems(dir, &index);
+        if orphans.is_empty() {
+            return index;
+        }
+        let route = dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|id| self.load_recent_unlocked(id));
+        for stem in orphans {
+            let Some(record) = store::read_limited(&dir.join(format!("{stem}.json")))
+                .and_then(|bytes| serde_json::from_slice::<RideRecord>(&bytes).ok())
+            else {
+                continue;
+            };
+            if !usable_record(&record) {
+                continue;
+            }
+            if let Some(meta) = meta_of(&record, route.as_ref(), stem) {
+                index.push(meta);
+            }
+        }
+        index.sort_by(|a, b| b.started_unix_s.total_cmp(&a.started_unix_s));
+        index
+    }
+
+    /// The index file as written, `None` when it is missing or cannot be read.
+    fn read_index_file(&self, dir: &std::path::Path) -> Option<Vec<RideMeta>> {
         store::read_limited(&dir.join(INDEX_FILE))
             .and_then(|b| serde_json::from_slice::<Vec<RideMeta>>(&b).ok())
-            .unwrap_or_default()
+            .map(|entries| {
+                entries
+                    .into_iter()
+                    .filter(|m| power_curve::valid_timestamp(m.started_unix_s))
+                    .collect()
+            })
     }
+
+    /// The index file is unreadable or misses a record of the folder.
+    fn index_needs_repair(&self, dir: &std::path::Path) -> bool {
+        match self.read_index_file(dir) {
+            Some(index) => !orphan_stems(dir, &index).is_empty(),
+            None => dir.join(INDEX_FILE).exists() || !orphan_stems(dir, &[]).is_empty(),
+        }
+    }
+}
+
+/// The index line of a stored record: everything `choose_ghost` and the PRs need. `route` gives
+/// the segment times and whether the ride reached the end; without it (a repair whose route is
+/// no longer cached) the ride is listed without segments and as not complete.
+pub(crate) fn meta_of(
+    record: &RideRecord,
+    route: Option<&Route>,
+    stem: String,
+) -> Option<RideMeta> {
+    let summary = usable_summary(&record.summary)?;
+    let (tss, mmp) = power_curve::index_numbers(record);
+    let start_dist = record.points.first().map_or(0.0, |p| p.dist).max(0.0);
+    // `summary.dist` is the distance ridden; where the ride ended on the route is the last
+    // recorded point (the engine always records the finish line).
+    let end_dist = record
+        .points
+        .last()
+        .map(|p| p.dist)
+        .filter(|d| d.is_finite())
+        .unwrap_or(start_dist + summary.dist)
+        .max(0.0);
+    let total = route.map_or(0.0, |r| r.total_dist.max(0.0));
+    Some(RideMeta {
+        stem,
+        started_unix_s: summary.started_unix_s.round(),
+        elapsed_s: summary.elapsed_s,
+        start_dist,
+        end_dist,
+        complete: total > 0.0 && end_dist + COMPLETE_MARGIN_M >= total,
+        simulated: record.simulated,
+        segments: route.map_or_else(Vec::new, |r| segments::segment_times(r, &record.points)),
+        source: record.source,
+        power_estimated: record.power_estimated,
+        avg_power_w: finite_opt(summary.avg_power_w),
+        avg_hr: finite_opt(summary.avg_hr),
+        route_name: record.route_name.clone(),
+        tss,
+        mmp,
+    })
+}
+
+/// Record files of the folder that `index` does not list.
+fn orphan_stems(dir: &std::path::Path, index: &[RideMeta]) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter_map(|name| name.strip_suffix(".json").map(str::to_string))
+        .filter(|stem| valid_stem(stem) && !index.iter().any(|m| m.stem == *stem))
+        .collect()
+}
+
+/// The stem a new record is written under: `base` if it is free or holds these very bytes,
+/// else the next free second (a handful of tries; `None` past that).
+fn free_stem(dir: &std::path::Path, base: &str, json: &[u8]) -> Option<String> {
+    let first: u64 = base.parse().ok()?;
+    (0..60).map(|k| first + k).find_map(|seconds| {
+        let stem = seconds.to_string();
+        let path = dir.join(format!("{stem}.json"));
+        match std::fs::read(&path) {
+            Err(_) => Some(stem),
+            Ok(existing) if existing == json => Some(stem),
+            Ok(_) => None,
+        }
+    })
 }
 
 /// A stem with the TSS and the power curve computed for it (see `Store::backfill_analysis`).
@@ -371,6 +519,15 @@ fn sanitized(record: &RideRecord) -> RideRecord {
 /// Stores one ride in the default location (see [`Store::save_ride`]).
 pub fn save_ride(record: &RideRecord, route: &Route) -> io::Result<Option<RideMeta>> {
     Store::default_location().save_ride(record, route)
+}
+
+/// Rewrites a stored ride in the default location (see [`Store::replace_ride`]).
+pub fn replace_ride(
+    record: &RideRecord,
+    route: &Route,
+    stem: &str,
+) -> io::Result<Option<RideMeta>> {
+    Store::default_location().replace_ride(record, route, stem)
 }
 
 /// Newest first.
@@ -478,6 +635,7 @@ mod tests {
             source: ride_model::RideSource::Recorded,
             power_estimated: false,
             estimate: None,
+            measured_power: Vec::new(),
         }
     }
 
@@ -749,6 +907,63 @@ mod tests {
         // the index still lists the file (listing never reads whole records); it simply yields
         // no record, which is exactly what "no ghost" needs
         assert_eq!(store.list_rides("route-1").len(), 1);
+    }
+
+    #[test]
+    fn a_damaged_index_does_not_hide_the_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        store.save_recent(&route).unwrap();
+        store
+            .save_ride(&record(1_700_000_000.0, 200.0, 2_000.0, false), &route)
+            .unwrap();
+        std::fs::write(tmp.path().join("rides/route-1/index.json"), b"garbage").unwrap();
+        // listing adopts the record the index lost, with its segments and completion
+        let listed = store.list_rides("route-1");
+        assert_eq!(listed.len(), 1);
+        assert!(listed[0].complete);
+        // and the next save does not overwrite the history with a shorter list
+        store
+            .save_ride(&record(1_700_000_500.0, 200.0, 2_000.0, false), &route)
+            .unwrap();
+        assert_eq!(store.list_rides("route-1").len(), 2);
+        // the repaired index was written back
+        let index = store
+            .read_index_file(&tmp.path().join("rides/route-1"))
+            .unwrap();
+        assert_eq!(index.len(), 2);
+    }
+
+    #[test]
+    fn a_record_without_an_index_entry_is_adopted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        store
+            .save_ride(&record(1_700_000_000.0, 200.0, 2_000.0, false), &route)
+            .unwrap();
+        // what a failed index write after the record write leaves behind
+        std::fs::remove_file(tmp.path().join("rides/route-1/index.json")).unwrap();
+        assert_eq!(store.list_rides("route-1").len(), 1);
+        assert!(store.has_ride("route-1", 1_700_000_000.0));
+    }
+
+    #[test]
+    fn two_rides_in_the_same_second_are_both_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        let first = record(1_700_000_000.0, 200.0, 2_000.0, false);
+        let second = record(1_700_000_000.0, 300.0, 2_000.0, false);
+        let a = store.save_ride(&first, &route).unwrap().unwrap();
+        let b = store.save_ride(&second, &route).unwrap().unwrap();
+        assert_ne!(a.stem, b.stem);
+        assert_eq!(store.list_rides("route-1").len(), 2);
+        // the very same ride saved again keeps its file
+        let again = store.save_ride(&first, &route).unwrap().unwrap();
+        assert_eq!(again.stem, a.stem);
+        assert_eq!(store.list_rides("route-1").len(), 2);
     }
 
     #[test]

@@ -228,7 +228,7 @@ pub fn parse_link(link: &str) -> Result<BrouterRequest> {
         .split_whitespace()
         .collect();
     if cleaned.is_empty() {
-        return err("Illessz be egy bikerouter.de-linket.");
+        return err(t("app.controller.illessz_be_egy_bikerouter_linket"));
     }
     let (before, fragment) = match cleaned.split_once('#') {
         Some((b, f)) => (b.to_string(), Some(f.to_string())),

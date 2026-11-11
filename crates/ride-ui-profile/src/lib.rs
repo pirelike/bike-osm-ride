@@ -255,7 +255,7 @@ fn delta_tone(delta: f64) -> &'static str {
 
 /// Flat grade-coloured elevation profile with the rider marker, climb flags (category
 /// numeral; length and grade on wide climbs), a km ruler, hover read-out (distance / elevation
-/// / grade), click to seek (emits the distance in metres; the app ignores it while riding) and
+/// / grade), click to seek (emits the distance in metres; the app only acts on it before the start) and
 /// a Full / Look-ahead toggle (`on_mode`). In look-ahead mode the window starts slightly behind
 /// the rider and spans `lookahead_m`. With `on_view` the header also offers the switch to the
 /// workout view.
@@ -278,6 +278,7 @@ pub fn ElevationProfile(
     pages: Option<Pages>,
 ) -> Element {
     let mut hover = use_signal(|| None::<f64>);
+    let mut touch_input = use_signal(|| false);
     let width = use_signal(|| 0.0_f64);
     let mut mounted = use_signal(|| None::<Rc<MountedData>>);
 
@@ -486,7 +487,7 @@ pub fn ElevationProfile(
                         }
                         if let Some((name, left)) = live_segment.clone() {
                             Pair {
-                                label: format!("Szegmens: {name}"),
+                                label: tf("ui_profile.szegmens_name", &[("name", &name)]),
                                 value: fmt_km(left.max(0.0)),
                                 unit: t("ui_profile.km_hatra").to_string(),
                             }
@@ -549,18 +550,18 @@ pub fn ElevationProfile(
                 for (top , text) in grid.iter() {
                     div { key: "y-{top:.1}", class: "profile-ytick", style: "top: {pct_text(*top)}", "{text}" }
                 }
-                for seg in segment_bands.iter() {
+                for (index, seg) in segment_bands.iter().enumerate() {
                     div {
-                        key: "seg-{seg.left:.2}",
+                        key: "seg-{index}",
                         class: "profile-seg",
                         style: "left: {pct_text(seg.left)}; width: {pct_text(seg.width)}",
-                        title: "Szegmens: {seg.name}",
+                        title: tf("ui_profile.szegmens_name", &[("name", &seg.name)]),
                         span { class: "profile-seg-label", "{seg.name}" }
                     }
                 }
-                for (flag , top) in flags.iter() {
+                for (index, (flag , top)) in flags.iter().enumerate() {
                     div {
-                        key: "flag-{flag.left:.2}",
+                        key: "flag-{index}",
                         class: "profile-flag",
                         style: "left: {pct_text(flag.left)}; bottom: {pct_text(100.0 - *top)}; height: clamp(18px, {pct_text(*top)}, 28px); --c: {flag.color}; --ink: {flag.ink}",
                         div { class: "profile-flag-top",
@@ -634,26 +635,32 @@ pub fn ElevationProfile(
                 div {
                     class: if pages.is_some() { "profile-hit profile-hit--swipe" } else { "profile-hit" },
                     onpointerdown: move |event: PointerEvent| {
+                        touch_input.set(event.pointer_type() == "touch");
                         let p = event.client_coordinates();
                         swipe_from.set(Some((p.x, p.y)));
                         swiped.set(false);
                     },
-                    onpointercancel: move |_| swipe_from.set(None),
+                    onpointercancel: move |_| { swipe_from.set(None); hover.set(None); },
                     onpointerup: {
                         let pages = pages.clone();
                         move |event: PointerEvent| {
+                            hover.set(None);
                             let Some((x0, y0)) = swipe_from.take() else {
                                 return;
                             };
                             let p = event.client_coordinates();
-                            let turned = pages.as_ref().and_then(|pages| {
-                                let to = pages.step(swipe::swipe_step(p.x - x0, p.y - y0)?)?;
+                            let Some(pages) = pages.as_ref() else {
+                                return;
+                            };
+                            let Some(step) = swipe::swipe_step(p.x - x0, p.y - y0) else {
+                                return;
+                            };
+                            // A recognised swipe is never a tap, also on the first or last page
+                            // where it turns nothing: the click after it must not seek.
+                            swiped.set(true);
+                            hover.set(None);
+                            if let Some(to) = pages.step(step) {
                                 pages.on_page.call(to);
-                                Some(())
-                            });
-                            if turned.is_some() {
-                                swiped.set(true);
-                                hover.set(None);
                             }
                         }
                     },
@@ -662,7 +669,9 @@ pub fn ElevationProfile(
                         measure_width(mounted, width);
                     },
                     onmouseenter: move |_| measure_width(mounted, width),
+                    onpointermove: move |event: PointerEvent| { if event.pointer_type() == "mouse" { touch_input.set(false); } },
                     onmousemove: move |event: MouseEvent| {
+                        if *touch_input.peek() { return; }
                         let w = *width.peek();
                         if let Some(frac) = pointer_frac(event.element_coordinates().x, w) {
                             hover.set(Some(frac));
@@ -670,6 +679,7 @@ pub fn ElevationProfile(
                     },
                     onmouseleave: move |_| hover.set(None),
                     onclick: move |event: MouseEvent| {
+                        hover.set(None);
                         // the end of a swipe is not a tap on the profile
                         if swiped.take() {
                             return;
@@ -682,9 +692,9 @@ pub fn ElevationProfile(
                 }
             }
             div { class: "profile-ruler", "aria-hidden": "true",
-                for (flag , _top) in flags.iter() {
+                for (index, (flag , _top)) in flags.iter().enumerate() {
                     div {
-                        key: "bar-{flag.left:.2}",
+                        key: "bar-{index}",
                         class: "profile-climbbar",
                         style: "left: {pct_text(flag.left)}; width: {pct_text(flag.width)}; --c: {flag.color}",
                     }
@@ -759,14 +769,15 @@ pub fn LiveChart(
     };
 
     // The markup is rebuilt once per recorded second (the history signal changes then) and
-    // never on the 10 Hz ride ticks.
-    let geometry = use_memo(move || {
+    // never on the 10 Hz ride ticks. `metric` and the window are plain props: `use_reactive!`
+    // makes them dependencies too, so the curve follows the captions when they change.
+    let geometry = use_memo(use_reactive!(|metric, window| {
         let history = history.read().clone();
         let rider = rider.read().clone();
         let theme = *theme.read();
         let series = series::series_for(&history, metric, window);
         series::chart_geometry(&series, metric, &rider, theme, window)
-    });
+    }));
 
     let rider_v = rider.read().clone();
     let geo = geometry.read();

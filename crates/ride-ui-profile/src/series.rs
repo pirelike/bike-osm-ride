@@ -11,7 +11,6 @@ use std::fmt::Write as _;
 use ride_model::{RecordPoint, RiderSettings, Theme};
 use ride_ui_kit::format::{fmt_duration, fmt_opt0, fmt_speed_kmh};
 use ride_ui_kit::palette;
-use ride_ui_kit::IconName;
 
 use crate::geom;
 use crate::ChartMetric;
@@ -67,16 +66,6 @@ impl ChartMetric {
             ChartMetric::HeartRate => "bpm",
             ChartMetric::Cadence => "rpm",
             ChartMetric::Speed => "km/h",
-        }
-    }
-
-    /// Icon of the chart header.
-    pub fn icon(self) -> IconName {
-        match self {
-            ChartMetric::Power => IconName::Bolt,
-            ChartMetric::HeartRate => IconName::Heart,
-            ChartMetric::Cadence => IconName::Cadence,
-            ChartMetric::Speed => IconName::Gauge,
         }
     }
 
@@ -177,22 +166,6 @@ pub fn hr_zone(hr_bpm: f64, max_hr: f64) -> Option<u8> {
     })
 }
 
-/// Colour of a sample: the zone colour for power and heart rate, the accent for the
-/// metrics that have no zone.
-pub fn zone_color(metric: ChartMetric, value: f64, rider: &RiderSettings, theme: Theme) -> String {
-    match metric {
-        ChartMetric::Power => power_zone(value, rider.ftp_w).map_or_else(
-            || palette::accent_color(theme).to_string(),
-            |z| palette::power_zone_color(z, theme),
-        ),
-        ChartMetric::HeartRate => hr_zone(value, rider.max_hr).map_or_else(
-            || palette::accent_color(theme).to_string(),
-            |z| palette::hr_zone_color(z, theme),
-        ),
-        ChartMetric::Cadence | ChartMetric::Speed => palette::accent_color(theme).to_string(),
-    }
-}
-
 /// Zone badge of a value: `(zone, Hungarian name, CSS variable)`.
 pub fn zone_badge(
     metric: ChartMetric,
@@ -253,6 +226,10 @@ pub struct Series {
     pub v: Vec<Option<f64>>,
 }
 
+/// How many of the newest (1 Hz) samples [`Series::last_value`] looks at: a value older than
+/// that is a dropout, shown as "—".
+pub const FRESH_SAMPLES: usize = 3;
+
 impl Series {
     /// `true` when there is no sample to draw.
     pub fn is_empty(&self) -> bool {
@@ -264,9 +241,10 @@ impl Series {
         self.v.iter().filter(|v| v.is_some()).count()
     }
 
-    /// Last value of the window (`None` when the newest samples are missing).
+    /// Last value of the window: the newest of the last [`FRESH_SAMPLES`] samples, `None` when
+    /// they are all missing. A value from before a sensor dropout is not shown as live.
     pub fn last_value(&self) -> Option<f64> {
-        self.v.iter().rev().find_map(|v| *v)
+        self.v.iter().rev().take(FRESH_SAMPLES).find_map(|v| *v)
     }
 
     /// Value nearest to `t` (within half a sample interval), used by the hover read-out.
@@ -594,7 +572,7 @@ pub fn window_labels(window_s: f64) -> [String; 3] {
     [
         format!("−{}", fmt_duration(window_s)),
         format!("−{}", fmt_duration(window_s / 2.0)),
-        "most".to_string(),
+        t("ui_profile.most").to_string(),
     ]
 }
 
@@ -721,15 +699,6 @@ mod tests {
     #[test]
     fn zone_badges_are_named_and_coloured() {
         let rider = rider();
-        for theme in [Theme::Dark, Theme::Light] {
-            let color = zone_color(ChartMetric::Power, 235.0, &rider, theme);
-            assert_eq!(color, palette::power_zone_color(4, theme));
-            let color = zone_color(ChartMetric::HeartRate, 150.0, &rider, theme);
-            assert_eq!(color, palette::hr_zone_color(3, theme));
-            // cadence and speed have no zone: the accent colour
-            let color = zone_color(ChartMetric::Cadence, 90.0, &rider, theme);
-            assert_eq!(color, palette::accent_color(theme));
-        }
         let (zone, name, var) = zone_badge(ChartMetric::Power, Some(235.0), &rider).expect("zone");
         assert_eq!((zone, name, var), (4, "Küszöb", "var(--z4)"));
         let (zone, name, _) =
@@ -800,6 +769,14 @@ mod tests {
         assert_eq!(series.value_count(), 0);
         assert!(series.last_value().is_none());
         assert!(!series.is_empty(), "the time axis still exists");
+        // a dropout at the end: the value from before it is not live any more
+        let mut dropout = history.clone();
+        let n = dropout.len();
+        for p in &mut dropout[n - 10..] {
+            p.power_w = None;
+        }
+        let series = series_for(&dropout, ChartMetric::Power, 60.0);
+        assert!(series.last_value().is_none(), "{:?}", series.last_value());
         assert!(series_for(&[], ChartMetric::Power, 60.0).is_empty());
     }
 

@@ -247,7 +247,7 @@ mechanics (the 96 × 64 grid, drag, split, swap, park as chips, separate layouts
 [`UI.md`](UI.md); what matters visually:
 
 - **Top bar** 40 px (52 px on a phone): mark and name, the route chip with its length, the parked panels as chips,
-  then *Edzés · Útvonal · Eszközök (with status dots) · Beállítások*, theme, full screen, about. A *Frissítés* button
+  then *Edzés · Útvonal · Áttekintés · Eszközök (with status dots) · Beállítások*, theme, full screen, about. A *Frissítés* button
   appears when a newer release exists.
 - **Panels** share one frame: a 24 px title bar (a six-dot grip to carry it by, the title, optional action buttons such as
   *Street View*, a close ×) and a body; 1 px `--rule-strong` borders that coincide with the neighbours', no shadows,

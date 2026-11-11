@@ -64,7 +64,7 @@ impl BtlePeripheral {
             .characteristics()
             .into_iter()
             .find(|c| c.uuid == ch.uuid && c.service_uuid == ch.service)
-            .ok_or_else(|| BleError::Gatt("ismeretlen karakterisztika".into()))
+            .ok_or_else(|| BleError::Gatt(ride_i18n::t("ble.btle.unknown_characteristic").into()))
     }
 }
 

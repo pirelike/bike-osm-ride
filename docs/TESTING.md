@@ -1,13 +1,13 @@
 # Testing and verification
 
 What the automated tests cover, how to run them, and, just as important, what has **not** been verified on real
-hardware or against real services. Numbers measured on 2026-11-04 on the maintainer's Windows 11 machine
+hardware or against real services. Numbers measured on 2026-11-10 on the maintainer's Windows 11 machine
 (`stable-x86_64-pc-windows-gnu`, Rust 1.99.1).
 
 ## 1. Running
 
 ```powershell
-cargo test --workspace            # 1076 passed, 0 failed, 3 ignored
+cargo test --workspace --offline --locked  # 1205 passed, 0 failed, 3 ignored
 cargo clippy --workspace --all-targets   # clean, no warnings
 cargo fmt --all -- --check        # clean
 ```
@@ -19,18 +19,31 @@ and 50 tests across four crates go red although nothing is wrong (`ride-app` 10,
 
 | Crate | Passed | Of which in `tests/` |
 |---|---|---|
-| `ride-app` | 133 | |
-| `ride-ble` | 286 (+1 ignored) | |
-| `ride-model` | 20 | |
-| `ride-route` | 137 + 10 (+2 ignored) | `fixtures_pipeline.rs` |
-| `ride-sim` | 97 | |
-| `ride-ui-dialogs` | 63 | |
-| `ride-ui-hud` | 30 | |
-| `ride-ui-kit` | 53 | |
-| `ride-ui-map` | 40 + 6 | `render.rs` |
-| `ride-ui-profile` | 68 | |
-| `ride-ui-review` | 26 | |
-| `ride-ui-streetview` | 83 + 3 | `key_safety.rs`, `offline_flow.rs`, `panel_flow.rs` |
+| `ride-app` | 139 |  |
+| `ride-ble` | 309 (+1 ignored) |  |
+| `ride-i18n` | 35 | 27 |
+| `ride-model` | 25 |  |
+| `ride-route` | 181 (+2 ignored) | 24 |
+| `ride-sim` | 123 | 11 |
+| `ride-ui-dialogs` | 66 |  |
+| `ride-ui-hud` | 29 |  |
+| `ride-ui-kit` | 58 |  |
+| `ride-ui-map` | 49 | 7 |
+| `ride-ui-profile` | 70 |  |
+| `ride-ui-review` | 31 |  |
+| `ride-ui-streetview` | 90 | 3 |
+
+Total: **1205 passed, 0 failed, 3 ignored**; the command and table come from the same run
+(`scratch/bugs-fix-final-tests.log`).
+
+Windows WebView2 interaction regressions (isolated data directory, no public service calls):
+
+```powershell
+node scripts/ui_regressions.mjs --exe target/debug/bike-osm-ride.exe --out scratch/ui-regressions
+```
+
+This checks the 412 × 860 phone layout, touch tooltip release/cancel, subsequent mouse hover and
+freezing the current camera when the rider taps a following map. It writes a screenshot and JSON results.
 
 **Ignored tests** (they need something the CI runner does not have; run them by hand with `-- --ignored`):
 `ride-route`'s `live_bikerouter_share_link` (public BRouter server) and `live_open_meteo_fills_missing_elevation`

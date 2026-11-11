@@ -8,9 +8,9 @@ what is and is not known to work. Checked against the repository on 2026-11-04 (
 
 | | State |
 |---|---|
-| Builds in CI, installs, starts, phone layout | yes (the release workflow builds a signed-with-debug-key APK; layout checked at 412 × 860) |
+| Builds in CI, installs, starts, phone layout | yes (the release workflow requires the stable release keystore; layout checked at 412 × 860) |
 | System file picker for GPX | implemented through JNI; found and fixed by running the APK, see the 0.3.0 commit message |
-| Bluetooth (`btleplug` droidplug backend, runtime permissions) | implemented, **never confirmed with a real sensor or trainer** |
+| Bluetooth (`btleplug` droidplug backend, runtime permissions) | a rider reported (2026-11-08) finding a trainer and connecting it at the first try; **reconnecting after a disconnect was unreliable** (fixes for the app's own races are in, **not confirmed on a phone**; the droidplug stale-gatt problem is open, see [`BLUETOOTH.md`](BLUETOOTH.md) §7) |
 | Keep the screen on while riding | implemented (`wake.rs` → `MainActivity.setKeepScreenOn` → `FLAG_KEEP_SCREEN_ON`, on while `Riding`, off when paused or finished), **not yet confirmed on a device** |
 | Browser panel (Firefox) | not available |
 
@@ -137,13 +137,11 @@ symbols (`Java_dev_dioxus_main_*`) are visible (without it: `UnsatisfiedLinkErro
 (`cargo rustc -p ride-app --target x86_64-linux-android -- -C link-arg=-landroid -C link-arg=-llog -C link-arg=-lOpenSLES -C link-arg=-lc++abi -C link-arg=-Wl,--export-dynamic`,
 about 10 s), copy it over `libmain.so` and run `gradlew assembleDebug` in the generated project (about 5 s).
 
-**Signing.** Without a keystore the APK is signed with the debug key (`CN=Android Debug`): installable, but only over
-another debug-signed copy; going from debug-signed to a keystore-signed APK needs
-`adb uninstall hu.borbelyhuba.bikeosmride` first. The release workflow signs with the repository secrets
-`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` when present, else with the runner's
-debug key (what every release so far has done: no keystore secrets exist). An APK can only be updated in place by
-one signed with the same key; the in-app updater just opens the new APK in the browser and the system installer
-takes over.
+**Signing.** Local development builds may use the debug key (`CN=Android Debug`). The release workflow
+requires `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`; it fails when
+credentials are missing and never publishes a debug-signed fallback. Keep the same release key across
+versions to support updates in place. Moving from a debug-signed installation to a release-signed APK
+requires uninstalling the debug build first. The in-app updater opens the APK in the browser for the system installer.
 
 **Installing**: copy the APK to the phone and open it (allow installs from unknown sources), or
 `adb install -r <apk>`.

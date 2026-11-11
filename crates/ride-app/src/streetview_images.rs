@@ -67,10 +67,15 @@ fn respond_in(data_dir: &std::path::Path, path: &str) -> ImageResponse {
     let Some(file) = image_path(data_dir, &route_id, bucket) else {
         return ImageResponse::error(400);
     };
-    match std::fs::read(&file) {
-        Ok(bytes) if bytes.len() >= 4 && bytes.starts_with(&[0xFF, 0xD8, 0xFF]) => {
-            ImageResponse::jpeg(bytes)
-        }
+    use std::io::Read;
+    let bytes = std::fs::File::open(&file).and_then(|f| {
+        let mut bytes = Vec::new();
+        f.take(ride_ui_streetview::image::MAX_IMAGE_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)?;
+        Ok(bytes)
+    });
+    match bytes {
+        Ok(bytes) if ride_ui_streetview::image::is_jpeg(&bytes) => ImageResponse::jpeg(bytes),
         Ok(_) => ImageResponse::error(415),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => ImageResponse::error(404),
         Err(_) => ImageResponse::error(500),
@@ -84,7 +89,35 @@ pub fn register(config: Config) -> Config {
             responder.respond(ImageResponse::error(405).into_http());
             return;
         }
-        responder.respond(respond(request.uri().path()).into_http());
+        let path = request.uri().path().to_string();
+        let head = request.method() == Method::HEAD;
+        // Bound OS threads before spawning, so a request flood cannot exhaust them.
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static ACTIVE: AtomicUsize = AtomicUsize::new(0);
+        if ACTIVE
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < 4).then_some(n + 1)
+            })
+            .is_err()
+        {
+            responder.respond(ImageResponse::error(503).into_http());
+            return;
+        }
+        struct Permit;
+        impl Drop for Permit {
+            fn drop(&mut self) {
+                ACTIVE.fetch_sub(1, Ordering::Release);
+            }
+        }
+        let permit = Permit;
+        std::thread::spawn(move || {
+            let _permit = permit;
+            let mut response = respond(&path);
+            if head {
+                response.body = Cow::Borrowed(&[]);
+            }
+            responder.respond(response.into_http());
+        });
     })
 }
 
@@ -106,10 +139,11 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tmp");
         let file = image_path(tmp.path(), "svimgroute", 3).expect("path");
         std::fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
-        std::fs::write(&file, [0xFFu8, 0xD8, 0xFF, 0xE0, 1, 2]).expect("write");
+        let jpeg = ride_ui_streetview::mock::MOCK_JPEG;
+        std::fs::write(&file, jpeg).expect("write");
         let r = respond_in(tmp.path(), "/streetview/svimgroute/3.jpg");
         assert_eq!(r.status, 200);
-        assert_eq!(r.body.as_ref(), &[0xFFu8, 0xD8, 0xFF, 0xE0, 1, 2]);
+        assert_eq!(r.body.as_ref(), jpeg);
         let http = r.into_http();
         assert_eq!(http.headers()["Content-Type"], "image/jpeg");
         assert_eq!(http.headers()["Cache-Control"], "no-store");

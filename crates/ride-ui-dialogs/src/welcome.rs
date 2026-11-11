@@ -163,10 +163,17 @@ fn RouteSheet(
                                 disabled: busy_now,
                                 title: t("ui_dialogs.welcome.a_vagolap_tartalmanak_beillesztese").to_string(),
                                 onclick: move |_| {
-                                    let mut eval = document::eval(
+                                    // guarded: on Android the window may be gone, and a panic
+                                    // here would poison the UI runtime for every later tap
+                                    let Some(mut eval) = ride_ui_kit::try_eval(
                                         "try { const t = await navigator.clipboard.readText(); dioxus.send(t); } \
                                          catch (e) { dioxus.send(\"\"); }",
-                                    );
+                                    ) else {
+                                        paste_note.set(Some(
+                                            t("ui_dialogs.welcome.a_vagolap_nem_olvashato_illeszd_be_a_linket_ide_a_ct").to_string(),
+                                        ));
+                                        return;
+                                    };
                                     spawn(async move {
                                         match eval.recv::<String>().await {
                                             Ok(clip) if !clip.trim().is_empty() => {

@@ -412,6 +412,7 @@ pub fn StreetViewPanel(
     let mut pending = use_signal(|| None::<usize>);
     let mut load_id = use_signal(|| 0u64);
     let mut generation = use_signal(|| 0u64);
+    let mut probe = use_signal(|| None::<dioxus::core::Task>);
     let mut note = use_signal(|| None::<String>);
     let mut image = use_signal(|| None::<String>);
     // The live embed failed (network, quota): fall back to the downloaded images until it
@@ -436,6 +437,9 @@ pub fn StreetViewPanel(
         let rid = route_id.read().clone();
         let route_now = (*route.peek()).clone();
         *generation.write() += 1;
+        if let Some(task) = probe.take() {
+            task.cancel();
+        }
         session.set(None);
         planner.set(Planner::default());
         frames.set([None, None]);
@@ -457,7 +461,7 @@ pub fn StreetViewPanel(
             None
         };
         let has_images = images.as_ref().is_some_and(|s| !s.is_empty());
-        let persistent = persist || offline;
+        let persistent = persist;
         let cache = Arc::new(if persistent {
             PanoCache::persistent_default(&route_now.id)
         } else {
@@ -492,7 +496,13 @@ pub fn StreetViewPanel(
                 return;
             }
         };
-        let fetcher = ImageFetcher::from_settings_key(&key).ok();
+        let fetcher = match ImageFetcher::from_settings_key(&key) {
+            Ok(fetcher) => Some(fetcher),
+            Err(e) => {
+                status.set(PanelStatus::Error(e));
+                return;
+            }
+        };
         // A route whose images are (nearly) all downloaded needs no id lookups any more.
         let downloaded = images.as_ref().is_some_and(|st| {
             st.plan_len() > 0 && st.len().saturating_mul(10) >= st.plan_len().saturating_mul(9)
@@ -507,14 +517,17 @@ pub fn StreetViewPanel(
             )
         });
         status.set(PanelStatus::Checking);
-        if has_images {
+        if offline {
             // The embed needs the network even when every panorama id is cached, so probe it
             // with a metadata request (free of charge) and fall back to the downloaded images
             // while it fails; the probe repeats, so the live view returns with the network.
             let (client, route) = (client.clone(), Arc::clone(&route_now));
             let gen = *generation.peek();
-            spawn(async move {
+            probe.set(Some(spawn(async move {
                 loop {
+                    if *generation.peek() != gen {
+                        return;
+                    }
                     let (lat, lng, _) = bucket_point(&route, 0);
                     let reachable = match client.lookup(lat, lng, 50).await {
                         Ok(_) => true,
@@ -533,7 +546,7 @@ pub fn StreetViewPanel(
                     }
                     tokio::time::sleep(LIVE_PROBE_INTERVAL).await;
                 }
-            });
+            })));
         }
         session.set(Some(Session {
             client: Some(client),
@@ -705,14 +718,18 @@ pub fn StreetViewPanel(
 
     // Download toggle: starts the route download or cancels the running one.
     let mut toggle_download = move || {
-        if download_progress.peek().running {
+        if download_progress.peek().running
+            || session
+                .peek()
+                .as_ref()
+                .is_some_and(|s| s.download.as_ref().is_some_and(|h| h.is_running()))
+        {
             if let Some(s) = session.write().as_mut() {
                 s.download.take();
             }
             let mut p = download_progress;
             let mut next = *p.peek();
             next.running = false;
-            next.note();
             p.set(next);
             return;
         }
@@ -758,6 +775,11 @@ pub fn StreetViewPanel(
     };
 
     use_drop(move || {
+        if let Ok(mut task) = probe.try_write() {
+            if let Some(task) = task.take() {
+                task.cancel();
+            }
+        }
         if let Ok(mut s) = session.try_write() {
             *s = None;
         }

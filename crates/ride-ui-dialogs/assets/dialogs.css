@@ -39,8 +39,6 @@
   font: 400 var(--t-13)/1.45 var(--font-ui);
 }
 .dlg-empty__lead { font: 500 var(--t-13)/1.45 var(--font-ui); color: var(--text); }
-.dlg-empty__icon { align-self: center; color: var(--text-faint); }
-
 .dlg-hintline {
   display: flex;
   align-items: flex-start;
@@ -128,14 +126,6 @@
   gap: var(--space-2);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--rule);
-}
-.dlg-hero__kicker {
-  font: 500 var(--t-13)/1.2 var(--font-ui);
-  color: var(--text-dim);
-}
-.dlg-hero__title {
-  font: 600 var(--t-56)/1 var(--font-display);
-  color: var(--text);
 }
 .dlg-hero__lead {
   max-width: 56ch;
@@ -316,7 +306,7 @@
   min-width: 0;
 }
 
-/* the four slots: one ruled row each, same columns top to bottom */
+/* the role slots: one ruled row each, same columns top to bottom */
 .dlg-slots {
   display: flex;
   flex-direction: column;
@@ -1041,7 +1031,9 @@
 .dlg-table__licence {
   font-family: var(--font-num);
   font-size: var(--t-15);
-  white-space: nowrap;
+  /* a long licence name ("ODbL 1.0 + tile usage policy", a translated terms line) wraps instead of
+     pushing the table past a 412 px phone's dialog */
+  overflow-wrap: anywhere;
 }
 .dlg-about__licenses {
   margin: 0;
@@ -1054,17 +1046,6 @@
   color: var(--text-dim);
   white-space: pre-wrap;
 }
-.dlg-about__hook {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--rule);
-  font: 400 var(--t-13)/1.55 var(--font-ui);
-  color: var(--text-dim);
-}
-.dlg-about__hook-icon { flex: none; color: var(--text-faint); }
-
 /* ───────────────────────────── narrow windows ───────────────────────────── */
 
 @media (max-width: 900px) {

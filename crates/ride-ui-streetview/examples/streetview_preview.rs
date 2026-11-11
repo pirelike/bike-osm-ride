@@ -221,8 +221,8 @@ fn page_props(ctx: &Ctx, theme: Theme) -> PageProps {
             ctx.ok(true, "MOCK475040_190620", Some(note)),
         ),
         ("Nincs kulcs, kompakt".to_string(), small_none),
+        ("Nincs lefedettség, nagy".to_string(), large_none),
     ];
-    let _ = (theme, large_none);
     PageProps {
         theme,
         shots,

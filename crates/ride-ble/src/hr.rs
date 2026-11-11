@@ -1,8 +1,9 @@
 //! Heart rate straps (Heart Rate Service 0x180D, Measurement 0x2A37).
 //!
 //! Pattern notes (iron-heart, MIT, see NOTICE.md): subscribe to the measurement
-//! characteristic only, treat a silent stream as a dead link (the watchdog in
-//! `sensor.rs`), and tolerate straps that stop notifying when they lose skin contact.
+//! characteristic only, treat a silent stream as a dead link (the `sensor_watchdog` of
+//! `HubConfig`, checked in the dialogue loop of `multi.rs`), and tolerate straps that stop
+//! notifying when they lose skin contact.
 
 use std::time::Instant;
 

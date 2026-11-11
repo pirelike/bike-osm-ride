@@ -44,6 +44,12 @@ pub struct RideRecord {
     /// The parameters of that estimate (`None` when the power was measured).
     #[serde(default)]
     pub estimate: Option<EstimateParams>,
+    /// Half-open index ranges `[from, to)` into `points` whose watts were measured although the
+    /// rest of the ride was estimated (an import whose file had power for a part of the ride).
+    /// Estimating again leaves these samples alone. Empty for a fully measured or fully estimated
+    /// ride, and for a record written before this field existed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub measured_power: Vec<[u32; 2]>,
 }
 
 /// Where a stored ride came from.
@@ -299,6 +305,7 @@ mod tests {
             source: RideSource::Imported,
             power_estimated: true,
             estimate: None,
+            measured_power: Vec::new(),
         };
         let mut value = serde_json::to_value(&record).unwrap();
         let object = value.as_object_mut().unwrap();
@@ -309,6 +316,18 @@ mod tests {
         assert_eq!(old.source, RideSource::Recorded);
         assert!(!old.power_estimated);
         assert_eq!(old.estimate, None);
+        assert!(old.measured_power.is_empty());
+
+        // the measured seconds of a partly estimated ride survive a round trip; an empty list
+        // is not written at all, so a fully measured record stays byte for byte as it was
+        let mut partly = record.clone();
+        partly.measured_power = vec![[30, 40]];
+        let json = serde_json::to_string(&partly).unwrap();
+        let back: RideRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.measured_power, vec![[30, 40]]);
+        assert!(!serde_json::to_string(&record)
+            .unwrap()
+            .contains("measured_power"));
     }
 
     #[test]

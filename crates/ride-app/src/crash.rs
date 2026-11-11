@@ -33,6 +33,7 @@ static LOG: OnceLock<Option<PathBuf>> = OnceLock::new();
 /// for the banner. Call this first thing in `main`; the previous hook still runs afterwards, so a
 /// console build keeps printing to stderr as before.
 pub fn install() {
+    let _ = log_path();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         record_raw(&describe(info));
@@ -92,16 +93,19 @@ fn record_raw(text: &str) {
     SEQ.fetch_add(1, Ordering::Relaxed);
     eprintln!("[ride-app] {text}");
     let line = format!("{text}\n");
-    log_to_logcat(&line);
     if let Some(path) = log_path() {
         append(path, &line);
     }
+    log_to_logcat(&line);
 }
 
 /// `<data>/crash.log`, created on first use.
 fn log_path() -> Option<&'static Path> {
     LOG.get_or_init(|| {
+        #[cfg(not(test))]
         let dir = crate::paths::data_dir();
+        #[cfg(test)]
+        let dir = std::env::temp_dir().join(format!("bike-osm-ride-tests-{}", std::process::id()));
         std::fs::create_dir_all(&dir).ok()?;
         Some(dir.join("crash.log"))
     })
@@ -129,36 +133,22 @@ fn append(path: &Path, text: &str) {
 /// is already going down.
 #[cfg(target_os = "android")]
 fn log_to_logcat(text: &str) {
-    // `ndk_context::android_context()` panics once the activity has released the context, and a
-    // panic inside the panic hook would abort the process for good: keep the whole path fallible.
-    let _ = std::panic::catch_unwind(|| log_to_logcat_with_context(text));
-}
-
-#[cfg(target_os = "android")]
-fn log_to_logcat_with_context(text: &str) {
-    use jni::objects::JValue;
-
-    let context = ndk_context::android_context();
-    // SAFETY: the pointer comes from the NDK context the webview runtime set up, and it stays
-    // valid for the whole life of the process.
-    let Ok(vm) = (unsafe { jni::JavaVM::from_raw(context.vm().cast()) }) else {
-        return;
-    };
-    let Ok(mut env) = vm.attach_current_thread() else {
-        return;
-    };
-    let (Ok(tag), Ok(message)) = (
-        env.new_string("bike-osm-ride"),
-        env.new_string(text.trim_end()),
-    ) else {
-        return;
-    };
-    let _ = env.call_static_method(
-        "android/util/Log",
-        "e",
-        "(Ljava/lang/String;Ljava/lang/String;)I",
-        &[JValue::Object(&tag), JValue::Object(&message)],
-    );
+    // liblog works even after the activity/JVM context has been destroyed. A nested panic
+    // inside a panic hook aborts before catch_unwind can run, so never use ndk_context here.
+    #[link(name = "log")]
+    extern "C" {
+        fn __android_log_write(
+            priority: i32,
+            tag: *const std::ffi::c_char,
+            text: *const std::ffi::c_char,
+        ) -> i32;
+    }
+    if let Ok(message) = std::ffi::CString::new(text.replace('\0', " ")) {
+        // SAFETY: both C strings are NUL terminated and live for the duration of the call.
+        unsafe {
+            __android_log_write(6, c"bike-osm-ride".as_ptr(), message.as_ptr());
+        }
+    }
 }
 
 #[cfg(not(target_os = "android"))]

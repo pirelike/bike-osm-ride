@@ -3,8 +3,9 @@
 //!
 //! A segment *is* a climb ([`Route::climbs`]): the climb detection is deterministic for a given
 //! route, so the index of the climb identifies the segment inside that route. The stored key
-//! quantises the foot and the summit to 10 m (`"430-1130"`): a metre of jitter in a re-processed
-//! route must not lose the history.
+//! quantises the foot and the summit to 10 m (`"430-1130"`), and keys are matched with one
+//! quantum of tolerance on each end ([`same_segment`], [`best_for`]): a metre of jitter in a
+//! re-processed route that happens to cross a rounding boundary must not lose the history.
 //!
 //! Rules:
 //! * a segment time is only recorded when the ride went through the *whole* climb (from before
@@ -14,7 +15,9 @@
 //! * `Imported` rides (a GPX / TCX of another app, projected onto the route) are the same: an
 //!   outdoor ride with coasting and traffic stops is not comparable with a trainer ride;
 //! * the "Best" ghost is the fastest *complete*, non-simulated ride that started at the route
-//!   start; the "Last" ghost is simply the most recent ride of the route.
+//!   start; the "Last" ghost is the most recent ride of the route that started there. A ride
+//!   started by a seek is never a ghost: the engine aligns the ghost at the rider's start
+//!   ([`crate::ghost::COVER_EPS_M`]), so it could not be replayed from the start line.
 
 use std::collections::HashMap;
 
@@ -27,13 +30,40 @@ pub const KEY_QUANTUM_M: f64 = 10.0;
 
 /// How far a recorded ride may fall short of a climb end and still count as having ridden it
 /// (metres): the integration stops a few centimetres before the end of the route.
-const REACHED_EPS_M: f64 = 1.0;
+pub(crate) const REACHED_EPS_M: f64 = 1.0;
 
 /// Stable key of a climb inside its route: `start-end` in 10 m steps.
 pub fn segment_key(climb: &Climb) -> String {
     let start = (climb.start_dist / KEY_QUANTUM_M).round();
     let end = (climb.end_dist / KEY_QUANTUM_M).round();
     format!("{start:.0}-{end:.0}")
+}
+
+/// The two keys name the same climb: each end within one quantum (a re-processed route moved a
+/// foot from 434.9 m to 435.1 m, which rounds to the next 10 m).
+pub fn same_segment(a: &str, b: &str) -> bool {
+    fn ends(key: &str) -> Option<(i64, i64)> {
+        let (start, end) = key.split_once('-')?;
+        let (start, end) = (start.parse::<i64>().ok()?, end.parse::<i64>().ok()?);
+        (start >= 0 && end >= start).then_some((start, end))
+    }
+    match (ends(a), ends(b)) {
+        (Some((s1, e1)), Some((s2, e2))) => s1.abs_diff(s2) <= 1 && e1.abs_diff(e2) <= 1,
+        _ => false,
+    }
+}
+
+/// The best time of the segment `key` in a [`best_times`] map, tolerating key jitter.
+pub fn best_for<'a>(
+    best: &'a HashMap<String, (f64, String)>,
+    key: &str,
+) -> Option<&'a (f64, String)> {
+    best.get(key).or_else(|| {
+        best.iter()
+            .filter(|(candidate, _)| same_segment(candidate, key))
+            .map(|(_, value)| value)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+    })
 }
 
 /// Times of the climbs that `points` rode through completely.
@@ -67,6 +97,11 @@ pub fn segment_times(route: &Route, points: &[RecordPoint]) -> Vec<SegmentTime> 
     out
 }
 
+/// The ride started on the start line, where the engine can align it as a ghost.
+fn from_the_start(meta: &RideMeta) -> bool {
+    meta.start_dist.is_finite() && meta.start_dist <= crate::ghost::COVER_EPS_M
+}
+
 /// Rides that may become a PR or a ghost: neither simulated nor imported.
 fn counts_for_records(meta: &RideMeta) -> bool {
     !meta.simulated && meta.source != RideSource::Imported
@@ -84,12 +119,18 @@ pub fn best_times(metas: &[RideMeta]) -> HashMap<String, (f64, String)> {
             if !(segment.time_s.is_finite() && segment.time_s > 0.0) {
                 continue;
             }
-            let better = match best.get(&segment.key) {
+            // A ride stored under a jittered key of the same climb competes for the same PR.
+            let key = best
+                .keys()
+                .find(|known| same_segment(known, &segment.key))
+                .cloned()
+                .unwrap_or_else(|| segment.key.clone());
+            let better = match best.get(&key) {
                 Some((time, _)) => segment.time_s < *time,
                 None => true,
             };
             if better {
-                best.insert(segment.key.clone(), (segment.time_s, meta.stem.clone()));
+                best.insert(key, (segment.time_s, meta.stem.clone()));
             }
         }
     }
@@ -100,8 +141,8 @@ pub fn best_times(metas: &[RideMeta]) -> HashMap<String, (f64, String)> {
 ///
 /// * `Route` — not a stored ride at all: the route's own timeline (`Route::timeline`, from the
 ///   GPX `<time>` stamps) is replayed instead, see `Track::from_route`;
-/// * `Last` — the most recent ride of the route (simulated rides included: the rider asked for
-///   the last thing they rode);
+/// * `Last` — the most recent ride of the route that started at its beginning (simulated rides
+///   included: the rider asked for the last thing they rode);
 /// * `Best` — the smallest elapsed time among the complete, non-simulated rides that started at
 ///   the beginning of the route (a ride started by a seek cannot be compared fairly). When the
 ///   route has no complete ride yet, the non-simulated ride that got the furthest is replayed:
@@ -112,13 +153,16 @@ pub fn choose_ghost(metas: &[RideMeta], mode: GhostMode) -> Option<&RideMeta> {
         GhostMode::Off | GhostMode::Route => None,
         GhostMode::Last => metas
             .iter()
-            .filter(|meta| meta.started_unix_s.is_finite() && meta.source != RideSource::Imported)
+            .filter(|meta| {
+                meta.started_unix_s.is_finite()
+                    && meta.source != RideSource::Imported
+                    && from_the_start(meta)
+            })
             .max_by(|a, b| a.started_unix_s.total_cmp(&b.started_unix_s)),
         GhostMode::Best => {
             let usable = metas.iter().filter(|meta| {
                 counts_for_records(meta)
-                    && meta.start_dist.is_finite()
-                    && meta.start_dist < 50.0
+                    && from_the_start(meta)
                     && meta.elapsed_s.is_finite()
                     && meta.elapsed_s > 0.0
             });
@@ -194,6 +238,18 @@ mod tests {
             segments: vec![],
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn a_metre_across_a_rounding_boundary_keeps_the_history() {
+        let a = segment_key(&climb(434.9, 1_130.0));
+        let b = segment_key(&climb(435.1, 1_130.0));
+        assert_ne!(a, b, "the keys themselves differ");
+        assert!(same_segment(&a, &b));
+        assert!(!same_segment(&a, &segment_key(&climb(600.0, 1_130.0))));
+        let mut best = HashMap::new();
+        best.insert(a.clone(), (100.0, "1".to_string()));
+        assert_eq!(best_for(&best, &b).map(|v| v.0), Some(100.0));
     }
 
     #[test]
@@ -366,8 +422,8 @@ mod tests {
         );
         assert_eq!(
             choose_ghost(&all, GhostMode::Last).map(|m| m.stem.as_str()),
-            Some("seeked"),
-            "the most recent ride, whatever it is"
+            Some("partial"),
+            "the most recent ride that can be replayed from the start line (not the seeked one)"
         );
         assert_eq!(
             choose_ghost(&all, GhostMode::Best).map(|m| m.stem.as_str()),

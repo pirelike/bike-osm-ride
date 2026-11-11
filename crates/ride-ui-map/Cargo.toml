@@ -3,6 +3,8 @@ name = "ride-ui-map"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "Pure-Rust slippy map (tiles via the app's tile proxy), route layer, rider marker"
 
 [dependencies]

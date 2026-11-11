@@ -7,8 +7,8 @@
 //!
 //! Layout: `<data dir>/streetview/img/<route id>/<bucket>.jpg` plus `manifest.json` with the
 //! panorama id, the heading and the capture time of every image. The bucket size is chosen
-//! per route ([`step_for`]): 75 m for a short route, coarser (up to 250 m) for a long one, so
-//! one route never needs more than [`MAX_IMAGES`] requests. `manifest.json` records the step
+//! per route ([`step_for`]): 75 m for a short route, coarser for a long one, so
+//! one route never needs more than [`MAX_IMAGES`] + 1 requests. `manifest.json` records the step
 //! so lookups stay stable if the policy ever changes.
 //!
 //! Retention: an image is used for [`IMAGE_TTL_S`] (30 days, the caching window of the
@@ -35,7 +35,7 @@ use ride_i18n::t;
 pub const IMAGE_DIR: &str = "img";
 /// Closest spacing of downloaded images, metres.
 pub const STEP_MIN_M: f64 = 75.0;
-/// Coarsest spacing, metres (long routes).
+/// Historical spacing ceiling, retained for callers; long routes may use larger steps.
 pub const STEP_MAX_M: f64 = 250.0;
 /// Images one route may keep. 900 × 640 × 640 JPEG is roughly 45–110 MB.
 pub const MAX_IMAGES: usize = 900;
@@ -55,7 +55,7 @@ pub fn step_for(total_dist: f64) -> f64 {
         return STEP_MIN_M;
     }
     let raw = total_dist / MAX_IMAGES as f64;
-    let clamped = raw.clamp(STEP_MIN_M, STEP_MAX_M);
+    let clamped = raw.max(STEP_MIN_M);
     (clamped / 5.0).ceil() * 5.0
 }
 
@@ -64,7 +64,7 @@ pub fn plan_len(total_dist: f64, step_m: f64) -> usize {
     if !total_dist.is_finite() || total_dist < 0.0 || !step_m.is_finite() || step_m <= 0.0 {
         return 0;
     }
-    let n = (total_dist / step_m).floor() as i64 + 1;
+    let n = ((total_dist / step_m).floor() as i64).saturating_add(1);
     n.clamp(0, MAX_IMAGES as i64 + 1) as usize
 }
 
@@ -201,6 +201,7 @@ impl ImageStore {
     /// created until the first image is written, so an unused store never touches the disk.
     pub fn open(data_dir: &Path, route_id: &str, total_dist: f64) -> Option<ImageStore> {
         let dir = route_dir(data_dir, route_id)?;
+        prune_dir(&dir);
         let (step_m, entries) = Self::load(&dir, route_id, total_dist);
         Some(ImageStore {
             route_id: route_id.to_string(),
@@ -236,7 +237,8 @@ impl ImageStore {
         if parsed.version != FORMAT_VERSION
             || parsed.route_id != route_id
             || !parsed.step_m.is_finite()
-            || !(STEP_MIN_M..=STEP_MAX_M).contains(&parsed.step_m)
+            || parsed.step_m < STEP_MIN_M
+            || parsed.step_m < default_step
         {
             return (default_step, BTreeMap::new());
         }
@@ -291,7 +293,7 @@ impl ImageStore {
 
     /// Fresh entry of a bucket (the file was verified when the store was opened).
     pub fn get(&self, bucket: u32) -> Option<ImageEntry> {
-        self.lock().entries.get(&bucket).cloned()
+        self.get_at(bucket, now_unix())
     }
 
     pub fn get_at(&self, bucket: u32, now: u64) -> Option<ImageEntry> {
@@ -413,6 +415,52 @@ impl Drop for ImageStore {
     }
 }
 
+/// Remove expired images and their manifest entries, including stores not opened this run.
+fn prune_dir(dir: &Path) {
+    let path = dir.join(MANIFEST_NAME);
+    let now = now_unix();
+    let mut manifest = std::fs::metadata(&path)
+        .ok()
+        .filter(|m| m.is_file() && m.len() <= MAX_MANIFEST_BYTES)
+        .and_then(|_| std::fs::read(&path).ok())
+        .and_then(|bytes| serde_json::from_slice::<Manifest>(&bytes).ok());
+    if let Some(m) = &mut manifest {
+        let before = m.entries.len();
+        m.entries.retain(|bucket, entry| {
+            if entry.fresh(now) {
+                return true;
+            }
+            let _ = std::fs::remove_file(dir.join(format!("{bucket}.jpg")));
+            false
+        });
+        if before != m.entries.len() {
+            if let Ok(bytes) = serde_json::to_vec(m) {
+                let _ = write_atomic(&path, &bytes);
+            }
+        }
+    }
+    // Orphaned files have no capture timestamp; their mtime bounds retention instead.
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_none_or(|ext| ext != "jpg") {
+                continue;
+            }
+            if !entry.file_type().is_ok_and(|t| t.is_file()) {
+                continue;
+            }
+            let old = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age.as_secs() >= IMAGE_TTL_S);
+            if old {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
 /// Storage used by the downloaded images, for the settings dialog.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ImageOverview {
@@ -429,9 +477,10 @@ pub fn overview(data_dir: &Path) -> ImageOverview {
     };
     for entry in rd.flatten() {
         let dir = entry.path();
-        if !dir.is_dir() {
+        if !entry.file_type().is_ok_and(|t| t.is_dir()) {
             continue;
         }
+        prune_dir(&dir);
         o.routes += 1;
         if let Ok(files) = std::fs::read_dir(&dir) {
             for f in files.flatten() {
@@ -509,11 +558,12 @@ mod tests {
         // 100 km: 111.1 m raw -> 115 m
         assert_eq!(step_for(100_000.0), 115.0);
         // very long routes: capped at 200 m
-        assert_eq!(step_for(1_000_000.0), STEP_MAX_M);
+        assert!(step_for(1_000_000.0) > STEP_MAX_M);
         // one route never needs more than the cap of images
         for total in [0.0, 500.0, 24_000.0, 100_000.0, 250_000.0, 1e7] {
             let step = step_for(total);
             assert!(plan_len(total, step) <= MAX_IMAGES + 1, "{total} {step}");
+            assert!(bucket_of(total, step) < plan_len(total, step) as u32);
         }
     }
 

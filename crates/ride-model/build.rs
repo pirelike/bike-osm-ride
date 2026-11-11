@@ -24,9 +24,14 @@ fn main() {
                 continue;
             };
             // `workouts.json` is the source; `workouts.<code>.json` is a translation.
+            // `workouts.<code>.map.json` is a generator file of the translation pipeline, not a
+            // catalogue: a code never contains a dot.
             let Some(code) = stem.strip_prefix("workouts.") else {
                 continue;
             };
+            if code.contains('.') {
+                continue;
+            }
             entries.push((code.to_string(), slash(&path)));
         }
     }

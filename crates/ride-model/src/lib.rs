@@ -8,7 +8,6 @@
 //! (5.0 == 5 %), degrees for lat/lon/heading. Display conversion (km/h, h:mm:ss)
 //! belongs to the UI layer only.
 
-use ride_i18n::t;
 use serde::{Deserialize, Serialize};
 
 mod extras;
@@ -271,7 +270,9 @@ pub struct UiSettings {
     /// The virtual gearbox (shift keys + the gear panel) is on; it changes the resistance the
     /// trainer is asked for.
     pub virtual_gears: bool,
-    /// The selected virtual gear, `0` = the easiest (clamped to the gearbox size by the app).
+    /// The selected virtual gear, `0` = the easiest. A value past the gearbox ([`GEAR_UNSET`],
+    /// the default, or one saved with a larger gearbox) means "not chosen yet": the app then
+    /// starts in the gearbox's neutral gear instead of clamping to the hardest one.
     pub gear: u8,
     /// The user's own Google Maps Platform API key (Maps Embed API + Street View Static API
     /// enabled). Stored in the local settings file only; never sent anywhere except to Google.
@@ -299,6 +300,9 @@ pub struct UiSettings {
     /// large screens. Use [`UiSettings::text_scale`], which keeps it in range.
     pub text_scale: f64,
 }
+
+/// [`UiSettings::gear`] before the rider has shifted: out of range on purpose.
+pub const GEAR_UNSET: u8 = u8::MAX;
 
 /// Range of [`UiSettings::text_scale`].
 pub const TEXT_SCALE_MIN: f64 = 0.8;
@@ -394,10 +398,11 @@ impl std::fmt::Debug for UiSettings {
             .field("gear", &self.gear)
             .field(
                 "google_maps_key",
+                // Log text, not UI: language-independent, and the key itself never appears.
                 &if self.google_maps_key.is_empty() {
-                    t("model.ures")
+                    "<empty>"
                 } else {
-                    "<elrejtve>"
+                    "<redacted>"
                 },
             )
             .field("streetview_cache_panos", &self.streetview_cache_panos)
@@ -433,7 +438,7 @@ impl Default for UiSettings {
             streetview_enabled: false,
             streetview_large: false,
             virtual_gears: false,
-            gear: 255,
+            gear: GEAR_UNSET,
             google_maps_key: String::new(),
             streetview_cache_panos: false,
             streetview_offline: true,
@@ -539,6 +544,8 @@ pub enum SensorCommand {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SensorEvent {
     Discovered(Vec<DeviceInfo>),
+    /// All sibling roles affected by a deliberate disconnect (before their State events).
+    Disconnecting(Vec<DeviceKind>),
     State {
         kind: DeviceKind,
         state: ConnState,
@@ -671,7 +678,7 @@ mod ui_settings_debug_tests {
         s.ui.google_maps_key = "AIzaSECRETKEY123".into();
         let text = format!("{s:?} {s:#?} {:?}", s.ui);
         assert!(!text.contains("AIzaSECRETKEY123"), "{text}");
-        assert!(text.contains("elrejtve"));
+        assert!(text.contains("<redacted>"), "{text}");
     }
 
     #[test]

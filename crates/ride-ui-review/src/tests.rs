@@ -195,6 +195,7 @@ fn record(started: f64, speed: f64, estimated: bool) -> Arc<RideRecord> {
         },
         power_estimated: estimated,
         estimate: estimated.then(|| profile_params(&RiderSettings::default())),
+        measured_power: Vec::new(),
     })
 }
 
@@ -458,38 +459,6 @@ fn the_desktop_sections_are_titled_panels() {
 fn without_a_cursor_the_legend_shows_the_window_mean() {
     let html = render(two_rides());
     assert!(html.contains("Ø "), "a mean instead of a dash");
-}
-
-#[test]
-fn the_window_value_is_the_mean_and_the_final_time_difference() {
-    let a =
-        DistSeries::from_points(&record(1_790_000_000.0, 8.0, false).points, GRID_M).map(Arc::new);
-    let b =
-        DistSeries::from_points(&record(1_790_100_000.0, 10.0, false).points, GRID_M).map(Arc::new);
-    let rides: Vec<Arc<DistSeries>> = [a, b].into_iter().flatten().collect();
-    assert_eq!(rides.len(), 2);
-    let cadence = chart::window_value(&rides, 0, chart::Metric::Cadence, 500.0, 3_500.0);
-    assert!(
-        cadence.is_some_and(|v| (v - 86.0).abs() < 0.5),
-        "{cadence:?}"
-    );
-    let speed = chart::window_value(&rides, 1, chart::Metric::Speed, 500.0, 3_500.0);
-    assert!(speed.is_some_and(|v| (v - 36.0).abs() < 0.5), "{speed:?}");
-    // the faster ride is ahead at the end of the window: a negative difference
-    let delta = chart::window_value(&rides, 1, chart::Metric::Delta, 500.0, 3_500.0);
-    assert!(delta.is_some_and(|d| d < -50.0), "{delta:?}");
-    assert_eq!(
-        chart::window_value(&rides, 0, chart::Metric::Delta, 500.0, 3_500.0),
-        Some(0.0)
-    );
-    assert_eq!(
-        chart::window_value(&rides, 5, chart::Metric::Power, 0.0, 1.0),
-        None
-    );
-    assert_eq!(
-        chart::window_value(&rides, 0, chart::Metric::Power, 3_000.0, 1_000.0),
-        None
-    );
 }
 
 #[test]

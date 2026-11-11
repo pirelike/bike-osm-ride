@@ -6,7 +6,7 @@ declared in the crate metadata are marked; the map and route data sources are
 attributed in the README Licenc section and in the app about dialog, and vendored
 or ported source files are described in [`NOTICE.md`](NOTICE.md).
 
-Packages: **639**. Without a declared licence field: **0**.
+Packages: **640**. Without a declared licence field: **0**.
 
 | Crate | Version | Licence | Repository |
 |---|---|---|---|
@@ -251,6 +251,7 @@ Packages: **639**. Without a declared licence field: **0**.
 | jni-sys | 0.4.1 | MIT OR Apache-2.0 | <https://github.com/jni-rs/jni-sys> |
 | jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 | <https://github.com/jni-rs/jni-sys> |
 | jobserver | 0.1.35 | MIT OR Apache-2.0 | <https://github.com/rust-lang/jobserver-rs> |
+| jpeg-decoder | 0.3.2 | MIT OR Apache-2.0 | <https://github.com/image-rs/jpeg-decoder> |
 | js-sys | 0.3.107 | MIT OR Apache-2.0 | <https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys> |
 | keyboard-types | 0.7.0 | MIT OR Apache-2.0 | <https://github.com/pyfisch/keyboard-types> |
 | konst | 0.2.20 | Zlib | <https://github.com/rodrimati1992/konst/> |

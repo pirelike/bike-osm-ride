@@ -24,6 +24,17 @@ use ride_i18n::t;
 
 /// The file the picker returned, until the shell takes it.
 static PICKED: Mutex<Option<PathBuf>> = Mutex::new(None);
+static PICK_ERROR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+static BACKUP_PICK_ERROR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn take_backup_picker_error() -> bool {
+    BACKUP_PICK_ERROR.swap(false, std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn take_picker_error() -> bool {
+    PICK_ERROR.swap(false, std::sync::atomic::Ordering::Relaxed)
+}
 /// The backup zip the rider picked (already copied into the cache), until the shell takes it.
 static PICKED_BACKUP: Mutex<Option<PathBuf>> = Mutex::new(None);
 /// How saving a backup ended: `ok`, `cancel` or `error`, until the shell takes it.
@@ -93,7 +104,7 @@ pub fn request_ble_permissions() {
 /// Keeps the screen on (`true`) or lets the system time it out again (`false`). Android drops the
 /// flag together with the window, so nothing has to be released when the app goes away.
 pub fn set_keep_screen_on(on: bool) -> Result<(), String> {
-    call_activity_with("setKeepScreenOn", "(Z)V", &[Arg::Bool(on)])
+    call_activity_with("setKeepScreenOn", "(Z)Z", &[Arg::Bool(on)])
 }
 
 /// The app's private files folder as the activity reports it (`getFilesDir().getAbsolutePath()`),
@@ -180,8 +191,18 @@ fn call_activity_unguarded(method: &str, signature: &str, args: &[Arg]) -> Resul
 
     let result = env
         .call_method(&activity, method, signature, &values)
-        .map(|_| ())
-        .map_err(|err| err.to_string());
+        .map_err(|err| err.to_string())
+        .and_then(|value| {
+            if signature.ends_with(")Z") {
+                match value.z() {
+                    Ok(true) => Ok(()),
+                    Ok(false) => Err(t("app.wake.screen_flag_failed").into()),
+                    Err(e) => Err(e.to_string()),
+                }
+            } else {
+                Ok(())
+            }
+        });
     // A Java exception (no picker app, a refused permission dialog) must not travel on.
     if env.exception_check().unwrap_or(false) {
         let _ = env.exception_describe();
@@ -225,6 +246,10 @@ pub unsafe extern "system" fn Java_dev_dioxus_main_MainActivity_onPicked(
     let Some(text) = (unsafe { native_text(env, path) }) else {
         return;
     };
+    if text == "error" {
+        PICK_ERROR.store(true, std::sync::atomic::Ordering::Relaxed);
+        return;
+    }
     if text.is_empty() {
         return;
     }
@@ -249,6 +274,10 @@ pub unsafe extern "system" fn Java_dev_dioxus_main_MainActivity_onBackupPicked(
     let Some(text) = (unsafe { native_text(env, path) }) else {
         return;
     };
+    if text == "error" {
+        BACKUP_PICK_ERROR.store(true, std::sync::atomic::Ordering::Relaxed);
+        return;
+    }
     if text.is_empty() {
         return;
     }
@@ -301,7 +330,10 @@ mod tests {
                 "MainActivity.kt must declare `{declared}`"
             );
             assert!(
-                RUST.contains(symbol),
+                RUST.split("#[cfg(test)]")
+                    .next()
+                    .unwrap_or_default()
+                    .contains(&format!("pub unsafe extern \"system\" fn {symbol}(")),
                 "the JNI symbol {symbol} has to match the Kotlin method"
             );
         }

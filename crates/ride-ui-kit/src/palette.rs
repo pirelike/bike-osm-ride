@@ -513,10 +513,24 @@ mod tests {
                     b,
                     "center of bucket {b} lies inside it"
                 );
-                assert_eq!(
-                    grade_bucket_color(b, theme),
-                    grade_color(grade_bucket_center(b), theme)
-                );
+            }
+            // The design's bucket colours, pinned: a change to the scale shows up here instead of
+            // passing a test that restates the implementation. Above 12.5 % the ramp is at its
+            // end colour, so the two steepest buckets share it.
+            let pinned: [&str; GRADE_BUCKETS] = match theme {
+                Theme::Dark => [
+                    "#5591de", "#6c94c6", "#8195ad", "#8e959b", "#97948e", "#9b9488", "#ad9e7e",
+                    "#dab55a", "#f8b52e", "#fa9829", "#f87831", "#f3513d", "#d83252", "#c01a5e",
+                    "#c01a5e",
+                ],
+                Theme::Light => [
+                    "#3274c4", "#507bb0", "#6a809b", "#7a838b", "#86857f", "#8a857a", "#9a8b6f",
+                    "#c19a46", "#db9600", "#dd7d00", "#dc611a", "#d83f2e", "#b72040", "#990247",
+                    "#990247",
+                ],
+            };
+            for (b, want) in pinned.iter().enumerate() {
+                assert_eq!(grade_bucket_color(b, theme), *want, "{theme:?} bucket {b}");
             }
         }
     }
@@ -539,11 +553,10 @@ mod tests {
         assert_eq!(climb_category_label(None), "Emelkedő");
     }
 
+    /// The surface the charts are drawn on: the `--bg-1` token itself, so the contrast gates
+    /// follow a change of the token instead of measuring against a stale copy.
     fn chart_surface(theme: Theme) -> Rgb {
-        match theme {
-            Theme::Dark => hex_of("#1a1916"),
-            Theme::Light => hex_of("#f8f5ec"),
-        }
+        hex_of(css_vars(theme).get("--bg-1").expect("--bg-1 defined"))
     }
 
     #[test]

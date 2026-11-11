@@ -247,13 +247,7 @@ pub fn elevation_frac(ele: f64, lo: f64, hi: f64) -> f64 {
     ((ele - lo) / (hi - lo)).clamp(0.0, 1.0)
 }
 
-/// Interior horizontal grid values of the elevation axis (endpoints excluded, so the
-/// topmost label never sits under the transport controls docked over the profile).
-pub fn grid_values(lo: f64, hi: f64) -> Vec<f64> {
-    grid_values_n(lo, hi, 7)
-}
-
-/// [`grid_values`] with at most `max_steps` intervals between the axis ends (a small chart gets
+/// Interior horizontal grid values, at most `max_steps` intervals (a small chart gets
 /// two or three hairlines, not seven).
 pub fn grid_values_n(lo: f64, hi: f64, max_steps: usize) -> Vec<f64> {
     let (lo, hi) = sane_span(lo, hi);
@@ -725,12 +719,21 @@ pub fn ruler_steps(span_m: f64) -> (f64, f64) {
         }
     }
     if !found {
-        while span / major > RULER_MAX_MAJORS as f64 {
-            major *= 2.0;
+        // past the table the same 1-2-2.5-5 series goes on, a decade at a time
+        let mut decade = 100_000.0;
+        'search: loop {
+            for factor in [1.0, 2.0, 2.5, 5.0] {
+                major = decade * factor;
+                if span / major <= RULER_MAX_MAJORS as f64 || !major.is_finite() {
+                    break 'search;
+                }
+            }
+            decade *= 10.0;
         }
     }
-    let minor = if matches!(major as u64, 200 | 2_000 | 20_000) {
-        // 2, 20, 200 ...: four sub-steps (0.5, 5, 50 ...)
+    // a step of 2, 20, 200, 2 000 km ... is split in four (0.5, 5, 50 ...), every other in five
+    let mantissa = major / 10f64.powf(major.log10().floor());
+    let minor = if (mantissa - 2.0).abs() < 1e-9 {
         major / 4.0
     } else {
         major / 5.0
@@ -942,7 +945,7 @@ mod tests {
 
     #[test]
     fn grid_values_are_interior_and_readable() {
-        let values = grid_values(75.0, 225.0);
+        let values = grid_values_n(75.0, 225.0, 7);
         assert!(!values.is_empty());
         assert!(values.len() <= 12);
         for v in &values {
@@ -953,13 +956,13 @@ mod tests {
             assert!(w[1] > w[0]);
             assert!(((w[1] - w[0]) - (values[1] - values[0])).abs() < 1e-9);
         }
-        assert!(grid_values(f64::NAN, f64::NAN).len() <= 12);
+        assert!(grid_values_n(f64::NAN, f64::NAN, 7).len() <= 12);
         // a small chart gets two or three hairlines, never a stack of seven
         for (lo, hi) in [(0.0, 280.0), (80.0, 140.0), (0.0, 110.0), (0.0, 18.0)] {
             let few = grid_values_n(lo, hi, 3);
             assert!(few.len() <= 2, "{lo}..{hi}: {few:?}");
             assert!(!few.is_empty(), "{lo}..{hi}");
-            assert!(few.len() <= grid_values(lo, hi).len());
+            assert!(few.len() <= grid_values_n(lo, hi, 7).len());
         }
         assert_eq!(grid_values_n(0.0, 280.0, 3), vec![100.0, 200.0]);
     }
@@ -1416,6 +1419,26 @@ mod tests {
         assert_eq!(labelled, ["1.5", "2.0", "2.5", "3.0", "3.5", "4.0"]);
         // a 2 km step is divided by four (0.5 km), 2.5 and 5 km by five
         assert_eq!(ruler_steps(14_000.0), (2_000.0, 500.0));
+        // past the table: still the 1-2-2.5-5 series, and a 200 km step splits in four
+        for span in [600_000.0, 1_500_000.0, 9_000_000.0] {
+            let (major, minor) = ruler_steps(span);
+            let mantissa = major / 10f64.powf(major.log10().floor());
+            assert!(
+                [1.0, 2.0, 2.5, 5.0]
+                    .iter()
+                    .any(|m| (mantissa - m).abs() < 1e-9),
+                "{span}: major {major}"
+            );
+            let parts = if (mantissa - 2.0).abs() < 1e-9 {
+                4.0
+            } else {
+                5.0
+            };
+            assert!(
+                (major / minor - parts).abs() < 1e-9,
+                "{span}: {major}/{minor}"
+            );
+        }
         assert_eq!(ruler_steps(18_000.0), (2_500.0, 500.0));
         // long and short routes never exceed the numeral budget or the tick cap
         for span in [

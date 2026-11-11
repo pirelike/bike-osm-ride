@@ -3,5 +3,5 @@
      user-visible strings in the Android resources (the runtime permission prompts are the
      system's own text). -->
 <resources>
-    <string name="app_name">bike-osm-ride</string>
+    <string name="app_name">BikeOsmRide</string>
 </resources>

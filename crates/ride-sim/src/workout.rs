@@ -59,19 +59,18 @@ impl WorkoutSession {
     }
 
     /// `(index, start_s, step)` of the step containing the current time. At the end the last
-    /// step is returned (clamped).
-    fn current(&self) -> (usize, f64, &ride_model::WorkoutStep) {
+    /// step is returned (clamped); `None` only for a workout without steps.
+    fn current(&self) -> Option<(usize, f64, &ride_model::WorkoutStep)> {
         let mut start = 0.0;
         let last = self.workout.steps.len().saturating_sub(1);
         for (i, step) in self.workout.steps.iter().enumerate() {
             let end = start + f64::from(step.duration_s);
             if self.elapsed_s < end || i == last {
-                return (i, start, step);
+                return Some((i, start, step));
             }
             start = end;
         }
-        // only reachable for an empty workout, which validation rejects
-        (0, 0.0, &self.workout.steps[last])
+        None
     }
 
     /// The coaching message due in the last [`MESSAGE_SHOW_S`] seconds (the latest one when
@@ -119,7 +118,7 @@ impl WorkoutSession {
         if self.is_finished() {
             return None;
         }
-        let (_, start, step) = self.current();
+        let (_, start, step) = self.current()?;
         let elapsed_in_step = (self.elapsed_s - start).clamp(0.0, f64::from(step.duration_s));
         step.target
             .watts_at(elapsed_in_step, f64::from(step.duration_s), rider.ftp_w)
@@ -129,7 +128,30 @@ impl WorkoutSession {
     pub fn progress(&self, rider: &RiderSettings) -> WorkoutProgress {
         let total = self.total_s().max(1.0);
         let finished = self.is_finished();
-        let (index, start, step) = self.current();
+        let Some((index, start, step)) = self.current() else {
+            // a workout without steps (the loaders reject it, but the session must not panic)
+            return WorkoutProgress {
+                workout_id: self.workout.id.clone(),
+                workout_name: self.workout.name.clone(),
+                step_index: 0,
+                step_count: 0,
+                step_name: String::new(),
+                step_kind: StepKind::Free,
+                target_w: None,
+                ftp_pct: None,
+                cadence: None,
+                step_elapsed_s: 0.0,
+                step_remaining_s: 0.0,
+                step_progress: 1.0,
+                total_elapsed_s: 0.0,
+                total_remaining_s: 0.0,
+                progress: 1.0,
+                finished: true,
+                next_step_name: None,
+                next_target_w: None,
+                message: None,
+            };
+        };
         let step_len = f64::from(step.duration_s).max(1.0);
         let elapsed_in_step = if finished {
             step_len
@@ -168,31 +190,35 @@ impl WorkoutSession {
             message: self.coach_message(),
         }
     }
-
-    /// One step of the profile for the picker's preview: `(step kind, duration, target %FTP)`.
-    pub fn preview(&self, rider: &RiderSettings) -> Vec<(StepKind, f64, Option<f64>)> {
-        self.workout
-            .steps
-            .iter()
-            .map(|s| {
-                (
-                    s.kind,
-                    f64::from(s.duration_s),
-                    s.target.pct_at(
-                        f64::from(s.duration_s) * 0.5,
-                        f64::from(s.duration_s),
-                        rider.ftp_w,
-                    ),
-                )
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ride_model::{StepTarget, WorkoutCategory, WorkoutStep};
+
+    #[test]
+    fn a_workout_without_steps_does_not_panic() {
+        let workout = Workout {
+            id: "empty".into(),
+            name: "empty".into(),
+            category: WorkoutCategory::Test,
+            goal: String::new(),
+            description: String::new(),
+            ftp_pct: 0,
+            duration_min: 0,
+            tags: vec![],
+            sources: vec![],
+            steps: vec![],
+        };
+        let mut session = WorkoutSession::new(Arc::new(workout));
+        session.advance(10.0);
+        let rider = RiderSettings::default();
+        assert_eq!(session.target_w(&rider), None);
+        let progress = session.progress(&rider);
+        assert!(progress.finished);
+        assert_eq!(progress.step_count, 0);
+    }
 
     fn rider(ftp: f64) -> RiderSettings {
         RiderSettings {
@@ -313,18 +339,13 @@ mod tests {
     }
 
     #[test]
-    fn reset_starts_over_and_preview_covers_every_step() {
+    fn reset_starts_over() {
         let mut s = WorkoutSession::new(workout());
         s.advance(90.0);
         s.reset();
         assert_eq!(s.elapsed_s(), 0.0);
         let p = s.progress(&rider(200.0));
         assert_eq!(p.step_index, 0);
-        let preview = s.preview(&rider(200.0));
-        assert_eq!(preview.len(), 2);
-        assert_eq!(preview[0].0, StepKind::Interval);
-        assert_eq!(preview[0].1, 60.0);
-        assert_eq!(preview[1].2, Some(95.0));
     }
 
     #[test]

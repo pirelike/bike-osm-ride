@@ -12,7 +12,7 @@ bike-osm-ride **没有账户、没有遥测、没有分析工具，也没有广�
 
 | 地址 | 何时 | 发送什么 | 备注 |
 |---|---|---|---|
-| `tile.openstreetmap.org` | 当地图请求瓦片时 | 瓦片坐标（zoom、x、y）以及 User-Agent 中的程序名（`bike-osm-ride/0.1 (desktop app)`） | 本地缓存 30 天；没有批量预取（遵循 OSM 瓦片政策） |
+| `tile.openstreetmap.org` | 当地图请求瓦片时 | 瓦片坐标（zoom、x、y）以及 User-Agent 中的程序名（`bike-osm-ride/0.1 (desktop app)`） | 地图瓦片在 30 天内有效；过期的离线副本可保留最长 90 天，总计最多 512 MiB。启动时和使用期间每小时清理一次。 |
 | `brouter.de` | 当你粘贴 bikerouter 链接时 | 从链接解析出的点（经度、纬度）、配置文件和避让选项 | 路线由他们的服务器计算 |
 | `api.open-meteo.com` | 仅当 GPX 中没有可用的海拔数据时 | 路线采样点的坐标（每次请求最多 100 个） | CC BY 4.0，非商业使用 |
 | `api.github.com` | 启动五秒后 | 查询最新版本，`User-Agent: bike-osm-ride/<版本>` | 失败时静默；**设置中无法关闭** |

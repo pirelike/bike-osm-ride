@@ -3,6 +3,8 @@ name = "ride-ui-streetview"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "Google Street View panel (own API key): metadata lookups, panorama-id cache, planner, prefetcher and the double-buffered embed panel"
 
 [dependencies]
@@ -13,6 +15,7 @@ ride-ui-kit = { workspace = true }
 dioxus = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+jpeg-decoder = { version = "0.3.2", default-features = false }
 tokio = { workspace = true }
 # Same stack as ride-route: rustls only, no native-tls / OpenSSL.
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }

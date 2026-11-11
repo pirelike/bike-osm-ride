@@ -64,6 +64,7 @@ impl ControllerKind {
 pub fn advertised_type(manufacturer: &[u8]) -> Option<u8> {
     match manufacturer {
         [0x4A, 0x09, kind, ..] => Some(*kind),
+        [0x4A, 0x09] => None,
         [first, ..] => Some(*first),
         [] => None,
     }
@@ -144,8 +145,8 @@ mod tests {
         assert_eq!(advertised_type(&[0x4A, 0x09, 9, 0x01]), Some(9));
         assert_eq!(
             advertised_type(&[0x4A, 0x09]),
-            Some(0x4A),
-            "too short: first byte"
+            None,
+            "company id without a payload"
         );
         assert_eq!(advertised_type(&[]), None);
     }

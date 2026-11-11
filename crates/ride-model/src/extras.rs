@@ -62,6 +62,29 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
 
+/// Longitude interpolation along the short way round: a segment across the antimeridian
+/// (179.9999 to -179.9999) must not sweep through 0.
+fn lerp_lon(a: f64, b: f64, t: f64) -> f64 {
+    let d = (b - a + 540.0).rem_euclid(360.0) - 180.0;
+    let lon = a + d * t;
+    if lon > 180.0 {
+        lon - 360.0
+    } else if lon < -180.0 {
+        lon + 360.0
+    } else {
+        lon
+    }
+}
+
+/// A distance clamped to `0..=total`; NaN (which `clamp` passes through) counts as the start.
+fn clamp_dist(d: f64, total: f64) -> f64 {
+    if d.is_nan() {
+        0.0
+    } else {
+        d.clamp(0.0, total.max(0.0))
+    }
+}
+
 /// Initial great-circle bearing from point 1 to point 2, degrees clockwise from north.
 pub fn bearing_deg(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let (p1, p2) = (lat1.to_radians(), lat2.to_radians());
@@ -77,11 +100,8 @@ impl Route {
         if self.points.is_empty() {
             return 0;
         }
-        let d = d.clamp(0.0, self.total_dist);
-        match self
-            .points
-            .binary_search_by(|p| p.dist.partial_cmp(&d).unwrap_or(std::cmp::Ordering::Less))
-        {
+        let d = clamp_dist(d, self.total_dist);
+        match self.points.binary_search_by(|p| p.dist.total_cmp(&d)) {
             Ok(i) => i,
             Err(0) => 0,
             Err(i) => i - 1,
@@ -105,7 +125,7 @@ impl Route {
                 heading_deg: 0.0,
             };
         }
-        let d = d.clamp(0.0, self.total_dist);
+        let d = clamp_dist(d, self.total_dist);
         let i = self.index_at(d).min(n - 2);
         let (a, b) = (self.points[i], self.points[i + 1]);
         let span = b.dist - a.dist;
@@ -117,7 +137,7 @@ impl Route {
         RoutePosition {
             dist: d,
             lat: lerp(a.lat, b.lat, t),
-            lon: lerp(a.lon, b.lon, t),
+            lon: lerp_lon(a.lon, b.lon, t),
             ele: lerp(a.ele, b.ele, t),
             grade: lerp(a.grade, b.grade, t),
             heading_deg: bearing_deg(a.lat, a.lon, b.lat, b.lon),
@@ -226,6 +246,23 @@ mod tests {
         );
         assert_eq!(r.locate(-10.0).dist, 0.0);
         assert!((r.locate(1e9).dist - r.total_dist).abs() < 1e-9);
+    }
+
+    #[test]
+    fn locate_clamps_nan_to_the_start() {
+        let r = testing::straight_route(&[(1000.0, 5.0)], 100.0);
+        let p = r.locate(f64::NAN);
+        assert_eq!(p.dist, 0.0);
+        assert!(p.lat.is_finite() && p.lon.is_finite() && p.ele.is_finite());
+        assert_eq!(r.index_at(f64::NAN), 0);
+    }
+
+    #[test]
+    fn longitude_interpolates_across_the_antimeridian() {
+        assert!((lerp_lon(179.9, -179.9, 0.5).abs() - 180.0).abs() < 1e-9);
+        assert!((lerp_lon(179.9, -179.9, 0.25) - 179.95).abs() < 1e-9);
+        assert!((lerp_lon(-179.9, 179.9, 0.25) + 179.95).abs() < 1e-9);
+        assert!((lerp_lon(10.0, 20.0, 0.5) - 15.0).abs() < 1e-9);
     }
 
     #[test]

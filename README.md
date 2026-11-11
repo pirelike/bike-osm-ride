@@ -89,8 +89,8 @@ A fájlnevekben a `<verzió>` helyén a kiadás száma áll (például `0.3.0`).
 | **Android 7+** | `bike-osm-ride-<verzió>-android.apk` | másold a telefonra és nyisd meg (engedélyezni kell az ismeretlen forrásból való telepítést), vagy `adb install -r` |
 
 A program **magától szól**, ha új kiadás van: a felső sávban megjelenik a *Frissítés* gomb (Windowson és AppImage-ként
-önmagát cseréli, a többi platformon a kiadás oldalát nyitja meg). Az Android-csomag hibakeresési (debug) kulccsal van
-aláírva, ezért két kiadás között előfordulhat, hogy előbb el kell távolítani a régit.
+önmagát cseréli, a többi platformon a kiadás oldalát nyitja meg). Az Android-kiadáshoz állandó kiadási aláírókulcs szükséges; a kiadási folyamat hiányzó kulccsal megáll.
+Egy régi debug-aláírt változatot a kiadási APK telepítése előtt el kell távolítani.
 
 ## Gyors kezdés
 
@@ -264,7 +264,7 @@ Szándékosan csak megengedő (permissive) licencű kódot használunk fel. Az e
 | [virtual-cog](https://github.com/pymmog/virtual-cog) | Unlicense (közkincs) | Zwift Click/Play és Zwift Hub BLE-protokoll (átírva Rustra): a `ride-ble` `zwift` modulja, részletek a [`NOTICE.md`](NOTICE.md)-ben |
 | [`p256`](https://github.com/RustCrypto/elliptic-curves), [`hkdf`](https://github.com/RustCrypto/KDFs), [`sha2`](https://github.com/RustCrypto/hashes), [`aes`](https://github.com/RustCrypto/block-ciphers), [`ccm`](https://github.com/RustCrypto/AEADs) (RustCrypto) | MIT / Apache-2.0 | a Zwift Click kulcscseréje (ECDH P-256, HKDF-SHA256) és az AES-CCM titkosítás |
 | [Mozilla Firefox](https://www.mozilla.org/firefox/) | MPL-2.0 (a program **nem tartalmazza**, a gépre telepített példányt indítja) | a Böngésző panel: a telepített Firefox ablakát építjük be, külön profillal |
-| [Dioxus](https://dioxuslabs.com), [btleplug](https://github.com/deviceplug/btleplug), [tokio](https://tokio.rs), [quick-xml](https://github.com/tafia/quick-xml) és a többi Rust-függőség | főleg MIT / Apache-2.0 | a teljes, automatikusan generált lista (638 csomag): [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) |
+| [Dioxus](https://dioxuslabs.com), [btleplug](https://github.com/deviceplug/btleplug), [tokio](https://tokio.rs), [quick-xml](https://github.com/tafia/quick-xml) és a többi Rust-függőség | főleg MIT / Apache-2.0 | a teljes, automatikusan generált lista: [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) |
 
 Csak **hivatkozásként** (kód átvétele nélkül) szolgált: a `rouleur` nevű, nyílt forrású Martin-féle implementáció egyik
 kidolgozott példájának számértéke a fizika tesztjében, az [`nrenner/brouter-web`](https://github.com/nrenner/brouter-web) (MIT) a
@@ -277,8 +277,8 @@ használtuk fel, mert az az egész programot copyleft hatálya alá vonná; a ku
 [`docs/PRIOR_ART.md`](docs/PRIOR_ART.md).
 
 **Licenc-audit (2026-11-04, `cargo metadata --filter-platform`, normál és build-függőségek).** A külső (crates.io) crate-ek
-száma platformonként: Windows (GNU) 396, Linux 458, macOS (Apple Silicon) 400, Android (aarch64) 449. Közöttük **nincs
-GPL, AGPL vagy LGPL, és ismeretlen licenc sincs**; a megengedő licencek: MIT, Apache-2.0, BSD, ISC, Zlib, Unicode, CC0,
+száma platformonként: Windows (GNU) 396, Linux 458, macOS (Apple Silicon) 400, Android (aarch64) 449. A listában nincs ismeretlen licenc; az `r-efi` LGPL-t is felsoroló OR-licencéből
+a megengedő MIT vagy Apache-2.0 választható. Nem használunk kötelező GPL/AGPL/LGPL licencű kódot; a megengedő licencek: MIT, Apache-2.0, BSD, ISC, Zlib, Unicode, CC0,
 Unlicense és hasonlók.
 
 **Az egyetlen copyleft típus az MPL-2.0**, amely **fájlszintű**, és a crate-eket módosítás nélkül, a crates.io-ról vesszük (nem

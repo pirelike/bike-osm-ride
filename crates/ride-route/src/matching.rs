@@ -14,6 +14,7 @@
 use ride_model::Route;
 
 use crate::activity::ActivitySample;
+use crate::geo;
 use crate::{err, Result};
 use ride_i18n::{t, tf};
 
@@ -121,10 +122,37 @@ pub fn match_to_route(samples: &[ActivitySample], route: &Route) -> Result<Match
     let mut offsets: Vec<f64> = Vec::new();
     let mut last: Option<(f64, f64)> = None; // (distance, sample time) of the last match
     let mut off_route = 0usize;
+    // Before the first match every sample needs a scan of the whole route. A failed scan says
+    // how far the route is (`off`): a sample that moved less than `off - TOLERANCE_M` from
+    // there cannot be on it, so no new scan is needed until the rider got that far. Without
+    // this a file of another route costs samples × route points.
+    let mut missed: Option<(f64, f64, f64)> = None; // (lat, lon, offset) of the last failed scan
+    let most_off = samples.len() - samples.len() / 2;
 
     for sample in samples {
+        if off_route > most_off {
+            // fewer than half of the samples can match now: the verdict is already known
+            dist.push(None);
+            off_route += 1;
+            continue;
+        }
         let found = match last {
-            None => first_match(route, sample.lat, sample.lon),
+            None => {
+                let pointless = missed.is_some_and(|(lat, lon, off)| {
+                    // 1 % and a metre of slack for the flat projection of `nearest`
+                    geo::haversine_m(lat, lon, sample.lat, sample.lon)
+                        < off * 0.99 - TOLERANCE_M - 1.0
+                });
+                if pointless {
+                    None
+                } else {
+                    let found = first_match(route, sample.lat, sample.lon);
+                    if let Some((_, off)) = found.filter(|&(_, off)| off > TOLERANCE_M) {
+                        missed = Some((sample.lat, sample.lon, off));
+                    }
+                    found
+                }
+            }
             Some((last_dist, last_time)) => {
                 let gap = (sample.time - last_time).max(0.0);
                 let lo_d = (last_dist - MAX_BACKTRACK_M).max(0.0);

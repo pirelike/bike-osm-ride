@@ -28,7 +28,14 @@ use dioxus::desktop::Config;
 use ride_model::MapStyle;
 use tokio::sync::{Mutex as AsyncMutex, Semaphore};
 
-pub const USER_AGENT: &str = "bike-osm-ride/0.1 (desktop app)";
+#[cfg(target_os = "android")]
+pub const USER_AGENT: &str = concat!("bike-osm-ride/", env!("CARGO_PKG_VERSION"), " (Android)");
+#[cfg(not(target_os = "android"))]
+pub const USER_AGENT: &str = concat!(
+    "bike-osm-ride/",
+    env!("CARGO_PKG_VERSION"),
+    " (desktop app)"
+);
 pub const CACHE_TTL: Duration = Duration::from_secs(30 * 24 * 3600);
 pub const MAX_CONCURRENT: usize = 6;
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -119,6 +126,7 @@ pub struct TileService {
     failures: Mutex<HashMap<PathBuf, Instant>>,
     offline_until: Mutex<Option<Instant>>,
     tmp_counter: AtomicU64,
+    last_prune: Mutex<Instant>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -146,6 +154,7 @@ impl TileService {
             failures: Mutex::new(HashMap::new()),
             offline_until: Mutex::new(None),
             tmp_counter: AtomicU64::new(0),
+            last_prune: Mutex::new(Instant::now()),
         }
     }
 
@@ -158,11 +167,27 @@ impl TileService {
             }),
             None => Box::new(ride_ui_map::upstream_url),
         };
-        Self::new(crate::paths::tiles_dir(), upstream, CACHE_TTL)
+        let root = crate::paths::tiles_dir();
+        let cleanup_root = root.clone();
+        std::thread::spawn(move || prune_cache(&cleanup_root));
+        Self::new(root, upstream, CACHE_TTL)
     }
 
     /// Answers a request for `path` (the URL path, e.g. `/dark/14/8923/5701.png`).
     pub async fn respond(&self, path: &str) -> TileResponse {
+        let prune = {
+            let mut last = lock(&self.last_prune);
+            if last.elapsed() >= Duration::from_secs(3600) {
+                *last = Instant::now();
+                true
+            } else {
+                false
+            }
+        };
+        if prune {
+            let root = self.root.clone();
+            tokio::task::spawn_blocking(move || prune_cache(&root));
+        }
         let Some((style, z, x, y)) = ride_ui_map::parse_tile_path(path) else {
             return TileResponse::error(400);
         };
@@ -196,21 +221,22 @@ impl TileService {
         let flight = self.flight_lock(&path);
         let result = {
             let _turn = flight.lock().await;
-            match read_cached(&path, self.ttl).await {
+            let result = match read_cached(&path, self.ttl).await {
                 Some((bytes, true)) => Ok(bytes),
                 // The request we waited for may just have failed: do not retry right away.
                 _ if self.network_paused(&path) => Err(FetchError::Skipped),
                 _ => self.download_and_store(&path, style, z, x, y).await,
+            };
+            if let Err(err) = &result {
+                self.remember_failure(&path, err);
             }
+            result
         };
         self.release_flight(&path, flight);
 
         match result {
             Ok(bytes) => Ok(bytes),
-            Err(err) => {
-                self.remember_failure(&path, &err);
-                stale.ok_or(err)
-            }
+            Err(err) => stale.ok_or(err),
         }
     }
 
@@ -246,11 +272,17 @@ impl TileService {
         {
             return Err(FetchError::BadBody);
         }
-        let bytes = response.bytes().await.map_err(|_| FetchError::Transport)?;
+        let mut response = response;
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_| FetchError::Transport)? {
+            if chunk.len() > MAX_TILE_BYTES.saturating_sub(bytes.len()) {
+                return Err(FetchError::BadBody);
+            }
+            bytes.extend_from_slice(&chunk);
+        }
         if bytes.len() > MAX_TILE_BYTES || !is_png(&bytes) {
             return Err(FetchError::BadBody);
         }
-        let bytes = bytes.to_vec();
         if let Err(err) = self.write_atomic(path, &bytes).await {
             // Not fatal: the tile is still shown, it is just not cached.
             eprintln!(
@@ -266,7 +298,7 @@ impl TileService {
             tokio::fs::create_dir_all(dir).await?;
         }
         let n = self.tmp_counter.fetch_add(1, Ordering::Relaxed);
-        let tmp = path.with_extension(format!("tmp{}-{n}", std::process::id()));
+        let tmp = path.with_extension(format!("png.{}.{n}.tmp", std::process::id()));
         tokio::fs::write(&tmp, bytes).await?;
         if let Err(err) = tokio::fs::rename(&tmp, path).await {
             let _ = tokio::fs::remove_file(&tmp).await;
@@ -329,6 +361,61 @@ impl TileService {
     }
 }
 
+/// Bound disk use to 512 MiB and 90 days; keep recent stale tiles for offline fallback.
+fn prune_cache(root: &Path) {
+    fn collect(dir: &Path, depth: u8, files: &mut Vec<(SystemTime, u64, PathBuf)>) {
+        if depth > 4 {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                collect(&entry.path(), depth + 1, files);
+            } else if kind.is_file()
+                && entry
+                    .file_name()
+                    .to_str()
+                    .is_some_and(|name| name.ends_with(".tmp") || name.contains(".tmp"))
+            {
+                if entry
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.elapsed().ok())
+                    .is_some_and(|age| age > Duration::from_secs(86400))
+                {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            } else if kind.is_file() && entry.path().extension().is_some_and(|ext| ext == "png") {
+                if let Ok(m) = entry.metadata() {
+                    if let Ok(t) = m.modified() {
+                        files.push((t, m.len(), entry.path()));
+                    }
+                }
+            }
+        }
+    }
+    let mut files = Vec::new();
+    collect(root, 0, &mut files);
+    files.sort_by_key(|(t, _, _)| *t);
+    let mut total: u64 = files.iter().map(|(_, size, _)| size).sum();
+    for (time, size, path) in files {
+        if (total > 512 * 1024 * 1024
+            || time
+                .elapsed()
+                .is_ok_and(|age| age > Duration::from_secs(90 * 86400)))
+            && std::fs::remove_file(path).is_ok()
+        {
+            total = total.saturating_sub(size);
+        }
+    }
+}
+
 pub fn style_dir(style: MapStyle) -> &'static str {
     match style {
         MapStyle::Dark => "dark",
@@ -337,9 +424,9 @@ pub fn style_dir(style: MapStyle) -> &'static str {
     }
 }
 
-/// `<root>/<style>/<z>/<x>/<y>.png`
-pub fn cache_path(root: &Path, style: MapStyle, z: u8, x: u32, y: u32) -> PathBuf {
-    root.join(style_dir(style))
+/// Every display style uses the same OSM source tile; styling is applied in the UI.
+pub fn cache_path(root: &Path, _style: MapStyle, z: u8, x: u32, y: u32) -> PathBuf {
+    root.join("osm")
         .join(z.to_string())
         .join(x.to_string())
         .join(format!("{y}.png"))
@@ -602,7 +689,7 @@ mod tests {
         assert_eq!(
             p,
             PathBuf::from("C:/d/tiles")
-                .join("dark")
+                .join("osm")
                 .join("14")
                 .join("8923")
                 .join("5701.png")
@@ -631,7 +718,7 @@ mod tests {
         // Outside the tile grid: transparent tile, nothing fetched, nothing cached.
         let out = svc.respond("/dark/3/9/0.png").await;
         assert_eq!(out, TileResponse::transparent());
-        assert!(!dir.path().join("dark").exists());
+        assert!(!dir.path().join("osm").exists());
     }
 
     #[tokio::test]

@@ -83,6 +83,14 @@ fn run_js(script: String) {
     }
 }
 
+/// `document::eval` for a script whose answer is needed, with the same protection as
+/// [`run_js`]: `None` (instead of a panic leaving the event handler) when there is no renderer or
+/// no live window.
+pub fn try_eval(script: &str) -> Option<document::Eval> {
+    try_consume_context::<Rc<dyn document::Document>>()?;
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| document::eval(script))).ok()
+}
+
 // ───────────────────────────── Icon ─────────────────────────────
 
 /// Inline SVG icon, `currentColor`, 24×24 viewBox, 2 px square-capped stroke, scaled to `size` px.
@@ -479,6 +487,8 @@ pub fn NumberField(
     #[props(default = false)] row: bool,
 ) -> Element {
     let mut draft = use_signal(|| None::<String>);
+    // the label is tied to its input: a click on it focuses the field, a screen reader names it
+    let input_id = format!("kit-num-{}", use_hook(next_uid));
     let shown = draft
         .read()
         .clone()
@@ -519,9 +529,10 @@ pub fn NumberField(
 
     rsx! {
         div { class,
-            label { class: "field__label", "{label}" }
+            label { class: "field__label", r#for: "{input_id}", "{label}" }
             div { class: "field__control",
                 input {
+                    id: "{input_id}",
                     r#type: "number",
                     min: "{min}",
                     max: "{max}",
@@ -689,21 +700,26 @@ pub fn ToastHost(
 fn ToastItem(toast: Toast, on_dismiss: EventHandler<u64>, auto_dismiss_ms: u64) -> Element {
     let mut hovered = use_signal(|| false);
     let id = toast.id;
-    let total = auto_dismiss_ms.saturating_mul(toast.kind.linger());
-    use_future(move || async move {
-        // no timer without a tokio runtime (SSR previews, tests): the toast then stays until dismissed
-        if total == 0 || tokio::runtime::Handle::try_current().is_err() {
-            return;
-        }
-        let tick = 100u64;
-        let mut left = total;
-        while left > 0 {
-            tokio::time::sleep(Duration::from_millis(tick)).await;
-            if !*hovered.peek() {
-                left = left.saturating_sub(tick);
+    let mut total = use_reactive((&auto_dismiss_ms, &toast.kind), |(ms, kind)| {
+        ms.saturating_mul(kind.linger())
+    });
+    use_future(move || {
+        let total = total();
+        async move {
+            // no timer without a tokio runtime (SSR previews, tests): the toast then stays until dismissed
+            if total == 0 || tokio::runtime::Handle::try_current().is_err() {
+                return;
             }
+            let tick = 100u64;
+            let mut left = total;
+            while left > 0 {
+                tokio::time::sleep(Duration::from_millis(tick)).await;
+                if !*hovered.peek() {
+                    left = left.saturating_sub(tick);
+                }
+            }
+            on_dismiss.call(id);
         }
-        on_dismiss.call(id);
     });
     let live = if toast.kind == ToastKind::Error {
         "alert"
@@ -827,7 +843,7 @@ mod tests {
         assert!(FONTS_CSS.contains("font-family:\"Barlow Condensed\""));
         assert!(FONTS_CSS.contains("font-family:\"Barlow\""));
         assert!(
-            !FONTS_CSS.contains("http://") && !FONTS_CSS.contains("https://url"),
+            FONTS_CSS.matches("url(").count() == FONTS_CSS.matches("url(data:").count(),
             "fonts must be embedded, not fetched"
         );
         assert!(CSS.starts_with("/* Barlow"), "fonts come first in CSS");
@@ -964,6 +980,53 @@ mod tests {
         let sels: Vec<&str> = rules.iter().map(|(s, _)| s.as_str()).collect();
         assert!(sels.contains(&"a") && sels.contains(&"b"), "{sels:?}");
         assert!(rules.iter().any(|(s, d)| s == "a" && d.len() == 2));
+    }
+
+    /// The token source lints itself like its consumers do: colours live only in the `:root`
+    /// theme blocks (as tokens), and every `var(--x)` it uses is defined there.
+    #[test]
+    fn kit_css_keeps_colours_in_tokens_and_uses_only_defined_ones() {
+        let mut defined = std::collections::BTreeSet::new();
+        for (_, decls) in css_rules(KIT_CSS) {
+            for (k, _) in decls {
+                if k.starts_with("--") {
+                    defined.insert(k);
+                }
+            }
+        }
+        for (sel, decls) in css_rules(KIT_CSS) {
+            let token_block = sel.trim_start().starts_with(":root");
+            for (k, v) in &decls {
+                if !token_block && !k.starts_with("--") {
+                    let lower = v.to_ascii_lowercase();
+                    let hex = lower
+                        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '#'))
+                        .any(|tok| {
+                            tok.strip_prefix('#').is_some_and(|h| {
+                                matches!(h.len(), 3 | 4 | 6 | 8)
+                                    && h.chars().all(|c| c.is_ascii_hexdigit())
+                            })
+                        });
+                    assert!(
+                        !hex && !lower.contains("rgb(") && !lower.contains("hsl("),
+                        "{sel}: hard-coded colour in `{k}: {v}`"
+                    );
+                }
+                let mut rest = v.as_str();
+                while let Some(at) = rest.find("var(--") {
+                    let name: String = rest[at + 4..]
+                        .chars()
+                        .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+                        .collect();
+                    let has_fallback = rest[at + 4 + name.len()..].trim_start().starts_with(',');
+                    assert!(
+                        defined.contains(&name) || has_fallback,
+                        "{sel}: `{k}` uses the undefined token {name}"
+                    );
+                    rest = &rest[at + 4..];
+                }
+            }
+        }
     }
 
     #[test]

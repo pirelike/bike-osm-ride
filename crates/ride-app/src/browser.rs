@@ -50,20 +50,30 @@ pub fn firefox_path() -> Option<PathBuf> {
 
 #[cfg(windows)]
 mod imp {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
     use std::path::Path;
-    use std::process::Command;
     use std::sync::Mutex;
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob,
+        JobObjectExtendedLimitInformation, SetInformationJobObject,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    use windows_sys::Win32::System::Threading::{
+        CreateProcessW, OpenProcess, ResumeThread, TerminateProcess, CREATE_SUSPENDED,
+        PROCESS_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, STARTUPINFOW,
+    };
 
     use windows_sys::Win32::Foundation::{HWND, LPARAM, POINT, RECT, TRUE};
     use windows_sys::Win32::Graphics::Gdi::{CreateRectRgn, MapWindowPoints, SetWindowRgn};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetClassNameW, GetParent, GetWindowLongPtrW, GetWindowRect, IsWindow,
-        IsWindowVisible, PostMessageW, SetParent, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-        GWL_EXSTYLE, GWL_STYLE, HWND_TOP, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_SHOWWINDOW,
-        SW_HIDE, SW_RESTORE, SW_SHOWNA, WM_CLOSE, WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPSIBLINGS,
-        WS_DLGFRAME, WS_EX_APPWINDOW, WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_WINDOWEDGE,
-        WS_MAXIMIZE, WS_MAXIMIZEBOX, WS_MINIMIZE, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
-        WS_THICKFRAME, WS_VISIBLE,
+        EnumWindows, GetClassNameW, GetParent, GetWindowLongPtrW, GetWindowRect,
+        GetWindowThreadProcessId, IsWindow, IsWindowVisible, PostMessageW, SetParent,
+        SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE, HWND_TOP,
+        SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOWNA, WM_CLOSE,
+        WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPSIBLINGS, WS_DLGFRAME, WS_EX_APPWINDOW,
+        WS_EX_CLIENTEDGE, WS_EX_DLGMODALFRAME, WS_EX_WINDOWEDGE, WS_MAXIMIZE, WS_MAXIMIZEBOX,
+        WS_MINIMIZE, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME, WS_VISIBLE,
     };
 
     use super::Slot;
@@ -75,6 +85,30 @@ mod imp {
         user_pref(\"browser.shell.checkDefaultBrowser\", false);\n\
         user_pref(\"browser.startup.homepage_override.mstone\", \"ignore\");\n\
         user_pref(\"datareporting.policy.dataSubmissionPolicyBypassNotification\", true);\n";
+
+    // A suspended launcher joins this job before it can create children. Only these
+    // processes belong to the panel; unrelated Firefox windows are never touched.
+    static JOB: Mutex<Option<OwnedHandle>> = Mutex::new(None);
+
+    fn owns_window(hwnd: HWND) -> bool {
+        let job = JOB.lock().unwrap_or_else(|p| p.into_inner());
+        let Some(job) = job.as_ref() else {
+            return false;
+        };
+        let mut pid = 0;
+        // SAFETY: window query and an owned process query handle, closed on every path.
+        unsafe {
+            GetWindowThreadProcessId(hwnd, &mut pid);
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if process.is_null() {
+                return false;
+            }
+            let process = OwnedHandle::from_raw_handle(process);
+            let mut inside = 0;
+            IsProcessInJob(process.as_raw_handle(), job.as_raw_handle(), &mut inside) != 0
+                && inside != 0
+        }
+    }
 
     /// The docked Firefox window, once there is one.
     static DOCKED: Mutex<Option<isize>> = Mutex::new(None);
@@ -100,7 +134,10 @@ mod imp {
             // SAFETY: `lparam` is the pointer to the Vec below, alive for the whole EnumWindows call.
             let found = unsafe { &mut *(lparam as *mut Vec<isize>) };
             // SAFETY: plain window queries on a handle EnumWindows just handed out.
-            if unsafe { IsWindowVisible(hwnd) } != 0 && class_of(hwnd) == "MozillaWindowClass" {
+            if unsafe { IsWindowVisible(hwnd) } != 0
+                && class_of(hwnd) == "MozillaWindowClass"
+                && owns_window(hwnd)
+            {
                 found.push(hwnd as isize);
             }
             TRUE
@@ -119,14 +156,75 @@ mod imp {
         // skip the first-run pages.
         std::fs::write(profile.join("chrome").join("userChrome.css"), USER_CHROME)?;
         std::fs::write(profile.join("user.js"), USER_PREFS)?;
-        Command::new(exe)
-            .arg("-no-remote")
-            .arg("-profile")
-            .arg(profile)
-            .arg("-new-window")
-            .arg("about:home")
-            .spawn()
-            .map(|_| ())
+        let wide = |p: &Path| {
+            p.as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect::<Vec<_>>()
+        };
+        let executable = wide(exe);
+        let mut command = format!(
+            "\"{}\" -no-remote -profile \"{}\" -new-window about:home",
+            exe.display(),
+            profile.display()
+        )
+        .encode_utf16()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+        let mut owner = JOB.lock().unwrap_or_else(|p| p.into_inner());
+        if owner.is_some() {
+            return Err(std::io::Error::other("Firefox panel already running"));
+        }
+        // SAFETY: all buffers and structs live through the Win32 calls. Owned handles
+        // close on failure; the process is resumed only after it is attached to the job.
+        unsafe {
+            let raw = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if raw.is_null() {
+                return Err(std::io::Error::last_os_error());
+            }
+            let job = OwnedHandle::from_raw_handle(raw);
+            let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if SetInformationJobObject(
+                raw,
+                JobObjectExtendedLimitInformation,
+                &limits as *const _ as *const _,
+                std::mem::size_of_val(&limits) as u32,
+            ) == 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            let mut startup: STARTUPINFOW = std::mem::zeroed();
+            startup.cb = std::mem::size_of_val(&startup) as u32;
+            let mut info: PROCESS_INFORMATION = std::mem::zeroed();
+            if CreateProcessW(
+                executable.as_ptr(),
+                command.as_mut_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                CREATE_SUSPENDED,
+                std::ptr::null(),
+                std::ptr::null(),
+                &startup,
+                &mut info,
+            ) == 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            let process = OwnedHandle::from_raw_handle(info.hProcess);
+            let thread = OwnedHandle::from_raw_handle(info.hThread);
+            if AssignProcessToJobObject(raw, process.as_raw_handle()) == 0 {
+                let error = std::io::Error::last_os_error();
+                TerminateProcess(process.as_raw_handle(), 1);
+                return Err(error);
+            }
+            if ResumeThread(thread.as_raw_handle()) == u32::MAX {
+                return Err(std::io::Error::last_os_error());
+            }
+            *owner = Some(job);
+        }
+        Ok(())
     }
 
     pub fn is_docked() -> bool {
@@ -314,6 +412,19 @@ mod imp {
 
     /// Asks Firefox to close (it restores its tabs the next time) and forgets the window.
     pub fn close() {
+        for hwnd in firefox_windows() {
+            // SAFETY: these are windows whose owning process belongs to our job.
+            unsafe {
+                PostMessageW(hwnd as HWND, WM_CLOSE, 0, 0);
+            }
+        }
+        if let Some(job) = JOB.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            std::thread::spawn(move || {
+                // Allow Firefox to save its profile before enforcing full tree cleanup.
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                drop(job);
+            });
+        }
         if let Ok(mut placed) = PLACED.lock() {
             *placed = None;
         }

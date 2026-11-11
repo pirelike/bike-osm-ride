@@ -216,7 +216,7 @@ impl RideCore {
 
     /// Selects (or clears) the workout. Ignored during a ride; the caller reports why.
     pub fn set_workout(&mut self, workout: Option<Arc<Workout>>, now: Instant) -> Output {
-        if self.state != RideState::Riding {
+        if !matches!(self.state, RideState::Riding | RideState::Paused) {
             self.workout = workout;
             let selected = self.workout.clone();
             self.call(|e| e.set_workout(selected));
@@ -237,17 +237,18 @@ impl RideCore {
         self.call(|e| e.set_ghost(ghost));
     }
 
-    /// Creates an engine for `route`. A previous ride is stopped first (its transition and
-    /// the neutral grade are part of the returned output).
+    /// Creates an engine for `route`. Active rides must be finished explicitly first.
     pub fn load(
         &mut self,
         route: Arc<Route>,
         rider: RiderSettings,
         now: Instant,
     ) -> Result<Output, String> {
-        let mut commands = Vec::new();
         if matches!(self.state, RideState::Riding | RideState::Paused) {
-            commands.extend(self.stop_commands());
+            return Err(ride_i18n::t(
+                "app.controller.tekeres_kozben_nem_lehet_utvonalat_valtani_elobb_fej",
+            )
+            .into());
         }
         self.rider = rider.clone();
         let engine = guarded("RideEngine::new", || RideEngine::new(route, rider))?;
@@ -263,7 +264,6 @@ impl RideCore {
         let snapshot = self.call(|e| e.snapshot());
         let mut out = self.output(snapshot, now);
         out.history = Some(Vec::new());
-        out.commands.splice(0..0, commands);
         Ok(out)
     }
 
@@ -391,6 +391,7 @@ impl RideCore {
                 RideState::Riding => {
                     commands.push(SensorCommand::TrainerStart);
                     self.gate.reset();
+                    self.target_gate.reset();
                 }
                 RideState::Paused => commands.push(SensorCommand::TrainerPause),
                 RideState::Finished => {
@@ -443,6 +444,8 @@ impl RideCore {
         let failure = failure.or_else(|| self.failure.take());
         let (snapshot, transition) = if self.engine.is_none() && self.state != RideState::Empty {
             let from = self.state;
+            commands.clear();
+            commands.extend(self.stop_commands());
             self.state = RideState::Empty;
             (live_snapshot(&self.sample), Some((from, RideState::Empty)))
         } else {
@@ -470,6 +473,7 @@ impl RideCore {
     /// Re-sends the simulation parameters on the next tick (a trainer just connected).
     pub fn resend_simulation(&mut self) {
         self.gate.reset();
+        self.target_gate.reset();
     }
 }
 
@@ -622,6 +626,29 @@ mod tests {
         assert_eq!(out.snapshot.state, RideState::Ready);
         assert_eq!(out.transition, Some((RideState::Empty, RideState::Ready)));
         (core, now)
+    }
+
+    #[test]
+    fn late_route_load_preserves_a_running_or_paused_ride() {
+        let (mut core, now) = loaded(&[(2000.0, 5.0)]);
+        core.start(1_700_000_000.0, now);
+        for state in [RideState::Riding, RideState::Paused] {
+            if state == RideState::Paused {
+                core.pause(now);
+            }
+            let before = core.tick(0.1, 1_700_000_001.0, now).snapshot;
+            assert!(core
+                .load(
+                    Arc::new(straight_route(&[(500.0, 0.0)], 100.0)),
+                    rider(),
+                    now
+                )
+                .is_err());
+            assert_eq!(core.state(), state);
+            let after = core.tick(0.0, 1_700_000_001.0, now).snapshot;
+            assert_eq!(after.elapsed_s, before.elapsed_s);
+            assert_eq!(after.dist, before.dist);
+        }
     }
 
     #[test]
@@ -895,6 +922,17 @@ mod tests {
                 },
             ],
         })
+    }
+
+    #[test]
+    fn workout_selection_cannot_diverge_while_paused() {
+        let (mut core, now) = loaded(&[(3000.0, 4.0)]);
+        core.set_workout(Some(workout()), now);
+        core.start(1.0, now);
+        core.pause(now + Duration::from_secs(1));
+        let out = core.set_workout(None, now + Duration::from_secs(2));
+        assert!(core.workout().is_some());
+        assert!(out.snapshot.workout.is_some());
     }
 
     #[test]

@@ -38,6 +38,9 @@ pub struct DistSeries {
     pub ele: Vec<f64>,
 }
 
+/// Longest grid of one ride: 1 000 km at 10 m steps.
+const MAX_GRID_SAMPLES: usize = 100_000;
+
 impl DistSeries {
     /// The recording on the grid; `None` when it covers less than one step of distance.
     pub fn from_points(points: &[RecordPoint], step_m: f64) -> Option<Self> {
@@ -59,10 +62,12 @@ impl DistSeries {
         };
         let first = (track.start_dist() / step_m).ceil();
         let last = (track.end_dist() / step_m).floor();
-        if last < first {
+        if !(first.is_finite() && last.is_finite()) || last < first {
             return None;
         }
-        let n = (last - first) as usize + 1;
+        // A record claiming a distance no ride covers (a hand-edited file) must not ask for
+        // gigabytes: past the cap the grid simply ends.
+        let n = ((last - first).min(MAX_GRID_SAMPLES as f64 - 1.0) as usize) + 1;
         let mut out = Self {
             step_m,
             start_dist: first * step_m,
@@ -129,7 +134,7 @@ impl DistSeries {
     /// (centred, missing values skipped). Time and elevation are untouched.
     pub fn smoothed(&self, window_m: f64) -> Self {
         let half = if window_m.is_finite() && window_m > 0.0 {
-            (window_m / self.step_m / 2.0).round() as usize
+            ((window_m / self.step_m / 2.0).round() as usize).min(self.len())
         } else {
             0
         };
@@ -140,7 +145,7 @@ impl DistSeries {
         let average = |values: &dyn Fn(usize) -> Option<f64>| -> Vec<Option<f64>> {
             (0..n)
                 .map(|i| {
-                    let (lo, hi) = (i.saturating_sub(half), (i + half).min(n - 1));
+                    let (lo, hi) = (i.saturating_sub(half), i.saturating_add(half).min(n - 1));
                     let (sum, count) = (lo..=hi)
                         .filter_map(values)
                         .fold((0.0, 0usize), |(s, c), v| (s + v, c + 1));
@@ -274,8 +279,16 @@ pub fn section_stats(points: &[RecordPoint], d0: f64, d1: f64) -> Option<Section
             ascent_m += up;
         }
     }
-    let normalized_power_w = if power.len() >= MIN_NP_SAMPLES {
-        normalized_power(power.iter().copied())
+    let normalized_power_w = if time_s >= MIN_NP_SAMPLES as f64 && !power.is_empty() {
+        let origin = inside[0].t;
+        let rebased: Vec<_> = inside
+            .iter()
+            .map(|p| RecordPoint {
+                t: p.t - origin,
+                ..**p
+            })
+            .collect();
+        normalized_power(crate::power_curve::dense_power(&rebased))
     } else {
         None
     };
@@ -323,6 +336,16 @@ mod tests {
             }
         }
         out
+    }
+
+    #[test]
+    fn an_absurd_distance_cannot_ask_for_a_huge_grid() {
+        let mut points = ride(10.0, 100.0, None);
+        if let Some(last) = points.last_mut() {
+            last.dist = 1e12;
+        }
+        let s = DistSeries::from_points(&points, GRID_M).unwrap();
+        assert!(s.len() <= MAX_GRID_SAMPLES);
     }
 
     #[test]

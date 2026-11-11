@@ -113,27 +113,33 @@ pub fn detect(points: &[RoutePoint]) -> Vec<Climb> {
 /// Lowest point within `SNAP_M` of the run start (not before `floor`, not past the run end).
 fn snap_foot(points: &[RoutePoint], run_start: usize, run_end: usize, floor: usize) -> usize {
     let d0 = points[run_start].dist;
-    let lo = (floor..=run_start)
-        .find(|&i| points[i].dist >= d0 - SNAP_M)
-        .unwrap_or(run_start);
-    let hi = (run_start..=run_end)
-        .rev()
-        .find(|&i| points[i].dist <= d0 + SNAP_M)
-        .unwrap_or(run_start);
+    let lo = first_at_or_after(points, floor, run_start, d0 - SNAP_M);
+    let hi = last_at_or_before(points, run_start, run_end, d0 + SNAP_M);
     pick_extreme(points, lo, hi, run_start, false)
 }
 
 /// Highest point within `SNAP_M` of the run end (not before `start`, not past `ceil`).
 fn snap_summit(points: &[RoutePoint], run_end: usize, start: usize, ceil: usize) -> usize {
     let d1 = points[run_end].dist;
-    let lo = (start..=run_end)
-        .find(|&i| points[i].dist >= d1 - SNAP_M)
-        .unwrap_or(run_end);
-    let hi = (run_end..=ceil)
-        .rev()
-        .find(|&i| points[i].dist <= d1 + SNAP_M)
-        .unwrap_or(run_end);
+    let lo = first_at_or_after(points, start, run_end, d1 - SNAP_M);
+    let hi = last_at_or_before(points, run_end, ceil, d1 + SNAP_M);
     pick_extreme(points, lo, hi, run_end, true)
+}
+
+/// First index in `from..=to` whose distance is at least `dist` (`to` when there is none).
+/// Binary search: a scan from `from` would walk the whole stretch of rejected runs in front of
+/// every new run.
+fn first_at_or_after(points: &[RoutePoint], from: usize, to: usize, dist: f64) -> usize {
+    let window = &points[from..=to];
+    from + window
+        .partition_point(|p| p.dist < dist)
+        .min(window.len() - 1)
+}
+
+/// Last index in `from..=to` whose distance is at most `dist` (`from` when there is none).
+fn last_at_or_before(points: &[RoutePoint], from: usize, to: usize, dist: f64) -> usize {
+    let window = &points[from..=to];
+    from + window.partition_point(|p| p.dist <= dist).saturating_sub(1)
 }
 
 /// Index in `lo..=hi` with the lowest (or highest) elevation; among near-ties

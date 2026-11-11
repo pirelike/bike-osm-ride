@@ -9,13 +9,13 @@
 A bike-osm-ride-nak **nincs fiókja, nincs telemetriája, nincs elemzője és nincs hirdetése**. Az adataid (tekerések,
 beállítások, szenzoradatok) a saját gépeden maradnak; a program csak azt hívja meg a hálózaton, amihez te
 kérést adsz. Ez a lap pontosan felsorolja, mi mehet ki, és mi van a gépeden. Az állítások a forráskód alapján
-készültek (2026-11-04, 0.3.0-s verzió).
+készültek (2026-11-10, 0.5.0-s forráshivatkozások).
 
 ## Mi megy ki a gépedről, és mikor
 
 | Cím | Mikor | Mit kap | Megjegyzés |
 |---|---|---|---|
-| `tile.openstreetmap.org` | amikor a térkép csempéket kér | a csempe koordinátái (zoom, x, y) és a program neve a User-Agentben (`bike-osm-ride/0.1 (desktop app)`) | helyben, 30 napig gyorsítótárazva; tömeges előtöltés nincs (az OSM csempe-szabályzata miatt) |
+| `tile.openstreetmap.org` | amikor a térkép csempéket kér | a csempe koordinátái (zoom, x, y) és a program neve a User-Agentben (`bike-osm-ride/<verzió> (desktop app vagy Android)`) | 30 napos frissesség; offline tartalékként legfeljebb 90 napig / összesen 512 MiB-ig a lemezen (induláskor és használat közben óránként takarítva); tömeges előtöltés nincs (az OSM csempe-szabályzata miatt) |
 | `brouter.de` | ha bikerouter-linket illesztesz be | a linkből kiolvasott pontok (hosszúság, szélesség), a profil és az elkerülők | az útvonalat az ő szerverük számolja |
 | `api.open-meteo.com` | csak ha a GPX-ben nincs használható magasságadat | az útvonal mintapontjainak koordinátái (kérésenként legfeljebb 100) | CC BY 4.0, nem kereskedelmi használatra |
 | `api.github.com` | induláskor, öt másodperc múlva | a legfrissebb kiadás lekérdezése, `User-Agent: bike-osm-ride/<verzió>` | csendben elhallgat, ha nem sikerül; **a beállításokban nem kapcsolható ki** |

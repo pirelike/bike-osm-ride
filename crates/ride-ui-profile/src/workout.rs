@@ -81,10 +81,13 @@ fn watts(pct: f64, ftp_w: f64) -> f64 {
     pct * ftp_w / 100.0
 }
 
+/// Most ticks the time ruler draws (the km ruler's `RULER_MAX_TICKS` too).
+const MAX_TIME_TICKS: usize = 96;
+
 /// Target text of a block: `250 W`, `180→260 W` for a ramp, `szabad` for a free step.
 fn block_target(block: &Block, ftp_w: f64) -> String {
     if block.zone == 0 {
-        return "szabad".to_string();
+        return t("ui_profile.szabad_cel").to_string();
     }
     let (a, b) = (
         watts(block.from, ftp_w).round(),
@@ -112,6 +115,7 @@ pub fn WorkoutProfile(
     pages: Option<Pages>,
 ) -> Element {
     let mut hover = use_signal(|| None::<f64>);
+    let mut touch_input = use_signal(|| false);
     let width = use_signal(|| 0.0_f64);
     let mut mounted = use_signal(|| None::<Rc<MountedData>>);
 
@@ -181,15 +185,25 @@ pub fn WorkoutProfile(
         .collect();
 
     // time ruler
-    let step = tick_step(span, *width.read());
+    let mut step = tick_step(span, *width.read());
     let mut ticks: Vec<(f64, f64, Option<String>)> = Vec::new();
-    let minor = if step <= 120.0 {
+    let mut minor = if step <= 120.0 {
         step / 2.0
     } else {
         step / 5.0
     };
+    // a very long workout (an import of hundreds of blocks) gets coarser ticks, never thousands
+    while (t1 - t0) / minor > MAX_TIME_TICKS as f64 && minor.is_finite() {
+        if minor < step {
+            minor = step;
+        } else {
+            step *= 2.0;
+            minor = step;
+        }
+    }
     let mut tick = (t0 / minor).ceil() * minor;
-    while tick <= t1 + 1e-6 {
+    // bounded like the km ruler: a long imported workout must not render thousands of ticks
+    while tick <= t1 + 1e-6 && ticks.len() < MAX_TIME_TICKS {
         let major = (tick / step).round() * step;
         let label = ((tick - major).abs() < 1e-6).then(|| fmt_hm_text(tick));
         ticks.push((tick, x_pct(tick), label));
@@ -330,14 +344,16 @@ pub fn WorkoutProfile(
                 div {
                     class: if pages.is_some() { "profile-hit profile-hit--readonly profile-hit--swipe" } else { "profile-hit profile-hit--readonly" },
                     onpointerdown: move |event: PointerEvent| {
+                        touch_input.set(event.pointer_type() == "touch");
                         let p = event.client_coordinates();
                         swipe_from.set(Some((p.x, p.y)));
                         swiped.set(false);
                     },
-                    onpointercancel: move |_| swipe_from.set(None),
+                    onpointercancel: move |_| { swipe_from.set(None); hover.set(None); },
                     onpointerup: {
                         let pages = pages.clone();
                         move |event: PointerEvent| {
+                            hover.set(None);
                             let Some((x0, y0)) = swipe_from.take() else {
                                 return;
                             };
@@ -358,7 +374,9 @@ pub fn WorkoutProfile(
                         measure_width(mounted, width);
                     },
                     onmouseenter: move |_| measure_width(mounted, width),
+                    onpointermove: move |event: PointerEvent| { if event.pointer_type() == "mouse" { touch_input.set(false); } },
                     onmousemove: move |event: MouseEvent| {
+                        if *touch_input.peek() { return; }
                         let w = *width.peek();
                         if let Some(frac) = pointer_frac(event.element_coordinates().x, w) {
                             hover.set(Some(frac));

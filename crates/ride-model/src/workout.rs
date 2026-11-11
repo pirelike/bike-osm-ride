@@ -481,8 +481,12 @@ pub struct Workout {
 }
 
 impl Workout {
+    /// Sum of the step lengths. Saturates: an imported or hand-edited file can carry any
+    /// `duration_s`, and an overflow must not panic in the picker.
     pub fn total_seconds(&self) -> u32 {
-        self.steps.iter().map(|s| s.duration_s).sum()
+        self.steps
+            .iter()
+            .fold(0u32, |sum, s| sum.saturating_add(s.duration_s))
     }
 
     /// This workout came from an imported file, not from the embedded library.
@@ -502,6 +506,9 @@ impl Workout {
         if self.steps.iter().any(|s| s.duration_s < 5) {
             return Err(t("model.workout.tul_rovid_lepes").into());
         }
+        if self.steps.len() > 80 {
+            return Err(t("model.workout.tul_sok_lepes").into());
+        }
         if self.total_seconds() != self.duration_min.saturating_mul(60) {
             return Err(tf(
                 "model.workout.lepes_osszeg_perc",
@@ -510,9 +517,6 @@ impl Workout {
                     ("minutes", &self.duration_min.to_string()),
                 ],
             ));
-        }
-        if self.steps.len() > 80 {
-            return Err(t("model.workout.tul_sok_lepes").into());
         }
         if let Some(bad) = self.tags.iter().find(|t| WorkoutTag::from_id(t).is_none()) {
             return Err(tf("model.workout.ismeretlen_cimke_bad", &[("bad", bad)]));
@@ -576,10 +580,12 @@ pub struct WorkoutProgress {
     pub message: Option<CoachMessage>,
 }
 
+/// Entries stay raw JSON until each is parsed on its own: one malformed workout must cost that
+/// workout, not the whole library.
 #[derive(Deserialize)]
 struct LibraryFile {
     schema_version: u32,
-    workouts: Vec<Workout>,
+    workouts: Vec<serde_json::Value>,
 }
 
 /// The workout library (embedded at build time and validated once).
@@ -608,6 +614,7 @@ impl WorkoutLibrary {
         let mut workouts: Vec<Workout> = file
             .workouts
             .into_iter()
+            .filter_map(|value| serde_json::from_value::<Workout>(value).ok())
             .filter(|w| w.validate().is_ok())
             .collect();
         // The picker's "everything" view groups by category in its own order, then by name.
@@ -645,12 +652,29 @@ impl WorkoutLibrary {
         if let Some(lib) = guard.get(code) {
             return lib;
         }
-        let text = generated::WORKOUT_CATALOGS
-            .iter()
-            .find(|(candidate, _)| *candidate == code)
-            .map(|(_, text)| *text)
-            .unwrap_or_default();
-        let lib: &'static WorkoutLibrary = Box::leak(Box::new(WorkoutLibrary::from_json(text)));
+        let parse = |code: &str| {
+            let text = generated::WORKOUT_CATALOGS
+                .iter()
+                .find(|(candidate, _)| *candidate == code)
+                .map(|(_, text)| *text)
+                .unwrap_or_default();
+            WorkoutLibrary::from_json(text)
+        };
+        let mut parsed = parse(code);
+        // A translation that lost its entries (a schema slip in a catalogue edit) must not leave
+        // the picker empty: the Hungarian source is the fallback, as for a missing language.
+        if code != "hu" {
+            let source = parse("hu");
+            if parsed.len() < source.len() {
+                eprintln!(
+                    "workout library {code}: {} entries instead of {}, using the source",
+                    parsed.len(),
+                    source.len()
+                );
+                parsed = source;
+            }
+        }
+        let lib: &'static WorkoutLibrary = Box::leak(Box::new(parsed));
         guard.insert(code, lib);
         lib
     }
@@ -780,57 +804,109 @@ mod tests {
         assert_eq!(WorkoutLibrary::embedded().len(), entries);
     }
 
-    /// The Spanish library is generated from the Hungarian one through a flat string map, so the
-    /// structure must be identical: a translation may never change a duration, a target or a tag.
+    /// Every translated library is generated from the Hungarian one through a flat string map,
+    /// so the structure must be identical: a translation may never change a duration, a target,
+    /// a tag or a message's timing. The catalogues are parsed directly (not through `embedded`,
+    /// whose fallback to the source would hide a broken file).
     #[test]
-    fn a_translated_library_keeps_the_structure_and_loses_the_hungarian_letters() {
+    fn every_translated_library_keeps_the_structure_and_loses_the_hungarian_letters() {
         let hungarian = WorkoutLibrary::embedded();
-        let spanish = ride_i18n::with_lang(ride_i18n::Lang::ES, WorkoutLibrary::embedded);
-        assert_eq!(spanish.len(), hungarian.len(), "workout count");
-        // The library is sorted by category and then by *name*, so the two orders differ once the
-        // names are translated: pair the entries by id.
-        let by_id: std::collections::HashMap<&str, &Workout> =
-            spanish.all().iter().map(|w| (w.id.as_str(), w)).collect();
-        for hu in hungarian.all() {
-            let es = *by_id
-                .get(hu.id.as_str())
-                .unwrap_or_else(|| panic!("{} is missing from the Spanish library", hu.id));
-            assert_eq!(hu.id, es.id);
-            assert_eq!(hu.steps.len(), es.steps.len(), "{}: step count", hu.id);
-            for (a, b) in hu.steps.iter().zip(es.steps.iter()) {
-                assert_eq!(a.duration_s, b.duration_s, "{}: duration", hu.id);
-                assert_eq!(a.cadence, b.cadence, "{}: cadence", hu.id);
-                assert_eq!(
-                    a.messages.len(),
-                    b.messages.len(),
-                    "{}: message count",
-                    hu.id
-                );
-            }
-            for text in [&es.name, &es.goal, &es.description] {
-                assert!(
-                    !text.contains(['ő', 'ű', 'Ő', 'Ű']),
-                    "{}: Hungarian letters left in {text}",
-                    es.id
-                );
-            }
-            for step in &es.steps {
-                assert!(
-                    !step.name.contains(['ő', 'ű', 'Ő', 'Ű']),
-                    "{}: Hungarian letters left in {}",
-                    es.id,
-                    step.name
-                );
-                for message in &step.messages {
+        let translations: Vec<_> = generated::WORKOUT_CATALOGS
+            .iter()
+            .filter(|(code, _)| *code != "hu")
+            .collect();
+        assert!(
+            translations.len() >= 6,
+            "{} translations",
+            translations.len()
+        );
+        for (code, text) in translations {
+            let lib = WorkoutLibrary::from_json(text);
+            assert_eq!(lib.len(), hungarian.len(), "{code}: workout count");
+            // The library is sorted by category and then by *name*, so the orders differ once the
+            // names are translated: pair the entries by id.
+            let by_id: std::collections::HashMap<&str, &Workout> =
+                lib.all().iter().map(|w| (w.id.as_str(), w)).collect();
+            for hu in hungarian.all() {
+                let tr = *by_id
+                    .get(hu.id.as_str())
+                    .unwrap_or_else(|| panic!("{code}: {} is missing", hu.id));
+                let id = &hu.id;
+                assert_eq!(hu.category, tr.category, "{code} {id}: category");
+                assert_eq!(hu.ftp_pct, tr.ftp_pct, "{code} {id}: ftp_pct");
+                assert_eq!(hu.duration_min, tr.duration_min, "{code} {id}: length");
+                assert_eq!(hu.tags, tr.tags, "{code} {id}: tags");
+                assert_eq!(hu.steps.len(), tr.steps.len(), "{code} {id}: step count");
+                for (a, b) in hu.steps.iter().zip(tr.steps.iter()) {
+                    assert_eq!(a.kind, b.kind, "{code} {id}: kind");
+                    assert_eq!(a.duration_s, b.duration_s, "{code} {id}: duration");
+                    assert_eq!(a.target, b.target, "{code} {id}: target");
+                    assert_eq!(a.cadence, b.cadence, "{code} {id}: cadence");
+                    let timing = |s: &WorkoutStep| -> Vec<u32> {
+                        s.messages.iter().map(|m| m.at_s).collect()
+                    };
+                    assert_eq!(timing(a), timing(b), "{code} {id}: messages");
+                }
+                let mut texts = vec![&tr.name, &tr.goal, &tr.description];
+                for step in &tr.steps {
+                    texts.push(&step.name);
+                    texts.extend(step.messages.iter().map(|m| &m.text));
+                }
+                for text in texts {
                     assert!(
-                        !message.text.contains(['ő', 'ű', 'Ő', 'Ű']),
-                        "{}: Hungarian letters left in {}",
-                        es.id,
-                        message.text
+                        !text.contains(['ő', 'ű', 'Ő', 'Ű']),
+                        "{code} {id}: Hungarian letters left in {text}"
                     );
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_malformed_entry_costs_only_that_workout() {
+        let good = |id: &str| {
+            format!(
+                r#"{{"id":"{id}","name":"x","category":"test","goal":"","description":"",
+                "ftp_pct":50,"duration_min":1,"steps":[{{"kind":"steady","name":"x",
+                "duration_s":60,"target":{{"type":"free"}}}}]}}"#
+            )
+        };
+        let doc = format!(
+            r#"{{"schema_version":1,"workouts":[{},{{"id":"bad","steps":"nope"}},{}]}}"#,
+            good("a"),
+            good("b")
+        );
+        let lib = WorkoutLibrary::from_json(&doc);
+        assert_eq!(lib.len(), 2, "{lib:?}");
+        assert!(lib.get("bad").is_none());
+    }
+
+    #[test]
+    fn huge_step_lengths_saturate_instead_of_overflowing() {
+        let step = |d| WorkoutStep {
+            kind: StepKind::Steady,
+            name: "x".into(),
+            duration_s: d,
+            target: StepTarget::Free,
+            cadence: None,
+            note: None,
+            messages: Vec::new(),
+        };
+        let workout = Workout {
+            id: "x".into(),
+            name: "x".into(),
+            category: WorkoutCategory::Test,
+            goal: String::new(),
+            description: String::new(),
+            ftp_pct: 80,
+            duration_min: 1,
+            tags: vec![],
+            sources: vec![],
+            steps: vec![step(u32::MAX), step(u32::MAX)],
+        };
+        assert_eq!(workout.total_seconds(), u32::MAX);
+        assert!(!workout.duration_text().is_empty());
+        assert!(workout.validate().is_err());
     }
 
     #[test]

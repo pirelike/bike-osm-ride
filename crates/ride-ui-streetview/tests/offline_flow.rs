@@ -166,7 +166,7 @@ async fn downloaded_images_ride_without_a_key_or_a_request() {
     assert!(html.contains("<iframe"), "{html}");
     assert!(html.contains("pano=MOCK"), "{html}");
     assert!(
-        !html.contains("svimg.localhost"),
+        !html.contains(&ride_ui_kit::protocol::base("svimg")),
         "the missing bucket uses the embed: {html}"
     );
     // The rider's own spot is not looked up: its id comes from the cache. (With a key and an

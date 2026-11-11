@@ -121,7 +121,8 @@ fn riding_snapshot(dist: f64, inside: bool) -> RideSnapshot {
         elapsed_s: 1_264.0,
         dist,
         remaining_dist: 22_000.0 - dist,
-        eta_s: Some(4_200.0),
+        // the rest of the route at the ride's average speed, so the numbers agree with each other
+        eta_s: Some((22_000.0 - dist) / 7.1),
         ascent_done: 312.0,
         descent_done: 148.0,
         ascent_left: 268.0,
@@ -274,12 +275,12 @@ fn HudPage(props: HudPageProps) -> Element {
             }
             section { class: "hp-sec",
                 h2 { "Üres állapot" }
-                p { "Nincs útvonal: a mérőszámok „—”-t mutatnak, a ClimbCard teljesen elrejtőzik, a Kezdés gomb letiltva." }
+                p { "Nincs útvonal: a mérőszámok „—”-t mutatnak, a ClimbCard a helyét megtartó helykitöltőt mutat, a Kezdés gomb letiltva." }
                 Scene {
                     snapshot: empty,
                     route: None,
                     theme,
-                    note: "Nincs betöltött útvonal — az emelkedő-kártya ilyenkor nem jelenik meg.",
+                    note: "Nincs betöltött útvonal: az emelkedő-kártya helyén a helykitöltő áll.",
                 }
             }
             section { class: "hp-sec",

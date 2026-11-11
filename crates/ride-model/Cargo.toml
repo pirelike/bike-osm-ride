@@ -3,6 +3,8 @@ name = "ride-model"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "Shared data model (route, settings, sensors, ride state) for bike-osm-ride"
 
 [dependencies]

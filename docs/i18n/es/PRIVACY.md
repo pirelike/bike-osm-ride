@@ -9,7 +9,7 @@ partir del código fuente (2026-11-04, versión 0.3.0).
 
 | Dirección | Cuándo | Qué recibe | Nota |
 |---|---|---|---|
-| `tile.openstreetmap.org` | cuando el mapa pide teselas | las coordenadas de la tesela (zoom, x, y) y el nombre del programa en el User-Agent (`bike-osm-ride/0.1 (desktop app)`) | se guarda en caché localmente 30 días; no hay precarga masiva (por la política de teselas de OSM) |
+| `tile.openstreetmap.org` | cuando el mapa pide teselas | las coordenadas de la tesela (zoom, x, y) y el nombre del programa en el User-Agent (`bike-osm-ride/0.1 (desktop app)`) | Las teselas están vigentes 30 días; las copias antiguas se conservan hasta 90 días / 512 MiB en total para uso sin conexión, con limpieza al iniciar y cada hora de uso. |
 | `brouter.de` | si pegas un enlace de bikerouter | los puntos leídos del enlace (longitud, latitud), el perfil y los evitados | la ruta la calcula su servidor |
 | `api.open-meteo.com` | solo si el GPX no tiene datos de altitud utilizables | las coordenadas de los puntos de muestra de la ruta (como máximo 100 por petición) | CC BY 4.0, para uso no comercial |
 | `api.github.com` | al arrancar, cinco segundos después | la consulta de la última versión, `User-Agent: bike-osm-ride/<versión>` | se calla si no funciona; **no se puede desactivar en los ajustes** |

@@ -11,7 +11,7 @@ o que pode sair e o que está na tua máquina. As afirmações baseiam-se no có
 
 | Endereço | Quando | O que recebe | Nota |
 |---|---|---|---|
-| `tile.openstreetmap.org` | quando o mapa pede tiles | as coordenadas do tile (zoom, x, y) e o nome do programa no User-Agent (`bike-osm-ride/0.1 (desktop app)`) | em cache local durante 30 dias; sem pré-carregamento em massa (por causa da política de tiles da OSM) |
+| `tile.openstreetmap.org` | quando o mapa pede tiles | as coordenadas do tile (zoom, x, y) e o nome do programa no User-Agent (`bike-osm-ride/0.1 (desktop app)`) | Os mosaicos mantêm-se atuais durante 30 dias; as cópias antigas ficam até 90 dias / 512 MiB no total para uso offline, com limpeza no arranque e a cada hora de utilização. |
 | `brouter.de` | se colares um link do bikerouter | os pontos lidos do link (longitude, latitude), o perfil e as evitações | o percurso é calculado pelo servidor deles |
 | `api.open-meteo.com` | só se o GPX não tiver dados de elevação utilizáveis | as coordenadas dos pontos de amostragem do percurso (no máximo 100 por pedido) | CC BY 4.0, para uso não comercial |
 | `api.github.com` | no arranque, cinco segundos depois | a consulta da última versão, `User-Agent: bike-osm-ride/<version>` | fica em silêncio se falhar; **não pode ser desativada nas definições** |

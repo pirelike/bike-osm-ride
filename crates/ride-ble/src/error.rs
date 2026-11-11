@@ -24,24 +24,25 @@ pub enum BleError {
 impl std::fmt::Display for BleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BleError::Unavailable(reason) => write!(
-                f,
-                "{}: {reason}",
-                t("ble.error.a_bluetooth_nem_erheto_el_0")
-            ),
+            // the catalogue sentences carry the `{reason}` placeholder themselves
+            BleError::Unavailable(reason) => f.write_str(&tf(
+                "ble.error.a_bluetooth_nem_erheto_el_0",
+                &[("reason", reason)],
+            )),
             BleError::NotFound => {
                 f.write_str(t("ble.error.az_eszkoz_nem_talalhato_indits_uj_keresest"))
             }
             BleError::NotConnected => f.write_str(t("ble.error.nincs_kapcsolat_az_eszkozzel")),
             BleError::Timeout(reason) => {
-                write!(f, "{}: {reason}", t("ble.error.idotullepes_0"))
+                f.write_str(&tf("ble.error.idotullepes_0", &[("reason", reason)]))
             }
-            BleError::MissingService(reason) => write!(
-                f,
-                "{}: {reason}",
-                t("ble.error.az_eszkoz_nem_kinalja_a_szukseges_szolgaltatast_0")
-            ),
-            BleError::Gatt(reason) => write!(f, "{}: {reason}", t("ble.error.bluetooth_hiba")),
+            BleError::MissingService(reason) => f.write_str(&tf(
+                "ble.error.az_eszkoz_nem_kinalja_a_szukseges_szolgaltatast_0",
+                &[("reason", reason)],
+            )),
+            BleError::Gatt(reason) => {
+                f.write_str(&tf("ble.error.bluetooth_hiba", &[("reason", reason)]))
+            }
         }
     }
 }
@@ -96,6 +97,26 @@ pub(crate) async fn bounded<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_reason_fills_the_placeholder_once() {
+        let text = BleError::Timeout("nincs válasz".into()).to_string();
+        assert!(!text.contains('{'), "{text}");
+        assert_eq!(text.matches("nincs válasz").count(), 1, "{text}");
+        for e in [
+            BleError::Unavailable("q1".into()),
+            BleError::MissingService("q2".into()),
+            BleError::Gatt("q3".into()),
+        ] {
+            let text = e.to_string();
+            assert!(
+                !text.contains('{') && text.matches('q').count() == 1,
+                "{text}"
+            );
+        }
+        let parse = crate::parsers::ParseError::Invalid("y").to_string();
+        assert!(!parse.contains('{'), "{parse}");
+    }
 
     #[test]
     fn mapping_from_btleplug() {

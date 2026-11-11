@@ -6,8 +6,8 @@
 # Why this exists: `dx` 0.7.10 writes its Dioxus-template icons (`mipmap-*/ic_launcher.webp`, the
 # blue diamond) and its own light `AppTheme` on **every** bundle, and it never reads
 # `[android] icon`. The pinned manifest
-# (`crates/ride-app/android/AndroidManifest.xml`) therefore points at `@style/BikeSplash` and at
-# `@mipmap/ic_launcher` + `@mipmap/ic_launcher_round`, and this script drops those resources beside
+# (`crates/ride-app/android/AndroidManifest.xml`) therefore points at `@style/AppTheme` and at
+# `@mipmap/ic_launcher`, and this script drops those resources beside
 # the template ones — after deleting them, since two files with the same resource name in one
 # density folder fail the build.
 #

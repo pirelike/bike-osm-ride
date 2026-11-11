@@ -170,7 +170,8 @@ impl MultiSession {
                     )
                     .await
                     {
-                        self.control.on_write_failed(Instant::now());
+                        let notices = self.control.on_write_failed(Instant::now());
+                        self.forward(ctx, notices);
                         ctx.log.comment(&tf(
                             "ble.multi.vezerloparancs_sikertelen_e",
                             &[("e", &e.to_string())],
@@ -393,13 +394,24 @@ impl MultiSession {
         stop: &mut watch::Receiver<bool>,
     ) -> Result<SessionEnd, BleError> {
         let cfg = ctx.cfg.clone();
-        bounded(t("ble.multi.kapcsolodas"), cfg.connect_timeout, p.connect()).await?;
-        bounded(
-            t("ble.multi.szolgaltatasok_felderitese"),
-            cfg.io_timeout,
-            p.discover_services(),
-        )
-        .await?;
+        // A stop while the link is still coming up must not wait for the connect to run out (up
+        // to a minute on Android): nothing is subscribed yet, so there is nothing to hand back.
+        let connected = tokio::select! {
+            biased;
+            _ = stopped(stop) => return Ok(SessionEnd::Stopped),
+            r = bounded(t("ble.multi.kapcsolodas"), cfg.connect_timeout, p.connect()) => r,
+        };
+        connected?;
+        let discovered = tokio::select! {
+            biased;
+            _ = stopped(stop) => return Ok(SessionEnd::Stopped),
+            r = bounded(
+                t("ble.multi.szolgaltatasok_felderitese"),
+                cfg.io_timeout,
+                p.discover_services(),
+            ) => r,
+        };
+        discovered?;
 
         let chars = p.characteristics();
         let find = |service: u16, short: u16| {
@@ -433,8 +445,7 @@ impl MultiSession {
 
         if ibd.is_none() && cps.is_none() && csc.is_none() && hr.is_none() && !shifter {
             return Err(BleError::MissingService(
-                "Fitness Machine (FTMS), Cycling Power, CSC, Heart Rate vagy Zwift kontroller"
-                    .into(),
+                "FTMS / CPS / CSC / HR / Zwift".into(),
             ));
         }
 
@@ -574,6 +585,9 @@ impl MultiSession {
                 ));
             }
         }
+        // The command channel is borrowed for the dialogue and put back on *every* way out: the
+        // supervisor runs this session again after a lost link, and a channel dropped here
+        // would silence every later grade / ERG / start command.
         let mut ctl_rx = self.ctl_rx.take();
         let mut health = tokio::time::interval_at(
             tokio::time::Instant::now() + cfg.health_interval,
@@ -586,9 +600,13 @@ impl MultiSession {
         // A controller that only sends key-pad packets may stay silent for long; its link is
         // still checked by `is_connected`, so it gets no data watchdog.
         let controller_only = !found.is_empty() && found.iter().all(|k| *k == DeviceKind::Shifter);
-        loop {
-            self.pump(p, ctx, cp.as_ref()).await?;
-            Self::flush_haptic(p, ctx, zwift_ctl.as_ref(), &mut rx).await?;
+        let end = loop {
+            if let Err(e) = self.pump(p, ctx, cp.as_ref()).await {
+                break Err(e);
+            }
+            if let Err(e) = Self::flush_haptic(p, ctx, zwift_ctl.as_ref(), &mut rx).await {
+                break Err(e);
+            }
             let idle_wait = tokio::time::Instant::now() + cfg.health_interval;
             let wake = self
                 .control
@@ -605,15 +623,14 @@ impl MultiSession {
                     {
                         let _ = bounded(t("ble.multi.leiratkozas"), cfg.io_timeout, p.unsubscribe(c)).await;
                     }
-                    self.ctl_rx = ctl_rx;
-                    return Ok(SessionEnd::Stopped);
+                    break Ok(SessionEnd::Stopped);
                 }
                 cmd = recv_cmd(&mut ctl_rx) => match cmd {
                     Some(c) => self.apply(c, Instant::now()),
                     None => {
                         // the hub went away: leave the trainer in a neutral state
                         self.hand_back(p, ctx, cp.as_ref(), &mut stream, &mut rx).await;
-                        return Ok(SessionEnd::Stopped);
+                        break Ok(SessionEnd::Stopped);
                     }
                 },
                 n = stream.next() => match n {
@@ -621,7 +638,7 @@ impl MultiSession {
                         last_rx = Instant::now();
                         self.on_notification(ctx, &n, &mut rx);
                     }
-                    None => return Ok(SessionEnd::LinkLost(t("ble.multi.az_ertesitesek_folyama_megszunt").into())),
+                    None => break Ok(SessionEnd::LinkLost(t("ble.multi.az_ertesitesek_folyama_megszunt").into())),
                 },
                 _ = idle.tick() => {
                     if ctx.serves(DeviceKind::Cadence) {
@@ -637,17 +654,19 @@ impl MultiSession {
                 _ = health.tick() => {
                     match bounded(t("ble.multi.kapcsolat_ellenorzes"), cfg.io_timeout, p.is_connected()).await {
                         Ok(true) => {}
-                        Ok(false) | Err(_) => return Ok(SessionEnd::LinkLost("a kapcsolat megszakadt".into())),
+                        Ok(false) | Err(_) => break Ok(SessionEnd::LinkLost(t("ble.multi.a_kapcsolat_megszakadt").into())),
                     }
                     if !controller_only {
                         let window = if trainer_like { cfg.trainer_watchdog } else { cfg.sensor_watchdog };
                         if last_rx.elapsed() > window {
-                            return Ok(SessionEnd::LinkLost(t("ble.multi.nem_erkezik_adat_az_eszkozrol").into()));
+                            break Ok(SessionEnd::LinkLost(t("ble.multi.nem_erkezik_adat_az_eszkozrol").into()));
                         }
                     }
                 }
             }
-        }
+        };
+        self.ctl_rx = ctl_rx;
+        end
     }
 }
 

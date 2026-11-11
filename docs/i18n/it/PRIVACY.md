@@ -13,7 +13,7 @@ pagina elenca esattamente cosa può uscire e cosa c'è sul tuo computer. Le affe
 
 | Indirizzo | Quando | Cosa riceve | Nota |
 |---|---|---|---|
-| `tile.openstreetmap.org` | quando la mappa richiede delle tile | le coordinate della tile (zoom, x, y) e il nome del programma nello User-Agent (`bike-osm-ride/0.1 (desktop app)`) | in cache locale per 30 giorni; nessun precaricamento in blocco (per la politica delle tile di OSM) |
+| `tile.openstreetmap.org` | quando la mappa richiede delle tile | le coordinate della tile (zoom, x, y) e il nome del programma nello User-Agent (`bike-osm-ride/0.1 (desktop app)`) | Le tessere sono aggiornate per 30 giorni; le copie offline restano fino a 90 giorni / 512 MiB totali, con pulizia all’avvio e ogni ora durante l’uso. |
 | `brouter.de` | se incolli un link di bikerouter | i punti letti dal link (longitudine, latitudine), il profilo e le opzioni di evitamento | il percorso lo calcola il loro server |
 | `api.open-meteo.com` | solo se nel GPX non ci sono dati di altitudine utilizzabili | le coordinate dei punti campione del percorso (al massimo 100 per richiesta) | CC BY 4.0, per uso non commerciale |
 | `api.github.com` | all'avvio, cinque secondi dopo | la richiesta dell'ultima release, `User-Agent: bike-osm-ride/<version>` | se fallisce resta in silenzio; **non si può disattivare nelle Impostazioni** |

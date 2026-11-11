@@ -132,6 +132,20 @@ pub fn apply_estimate(points: &mut [RecordPoint], params: &EstimateParams) -> Ve
     watts
 }
 
+/// Like [`apply_estimate`], but only the samples without a power value get one: measured watts
+/// are never replaced. Returns how many samples were filled.
+pub fn fill_estimate(points: &mut [RecordPoint], params: &EstimateParams) -> usize {
+    let watts = estimate_power(points, &physics_for(params));
+    let mut filled = 0;
+    for (point, w) in points.iter_mut().zip(&watts) {
+        if point.power_w.is_none() {
+            point.power_w = Some(*w);
+            filled += 1;
+        }
+    }
+    filled
+}
+
 fn smoothed_speed(points: &[RecordPoint]) -> Vec<f64> {
     let n = points.len();
     let mut out = Vec::with_capacity(n);

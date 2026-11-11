@@ -4,7 +4,7 @@
 //! (huge condensed numeral, a 7-step zone bar with the FTP tick), a ruled 2 x 2 data grid
 //! (cadence, heart rate, speed, grade), the stats as a ruled table and the next climb as a flush
 //! panel. Every visible number is produced by [`ride_ui_kit::format`]; the pure helpers in this
-//! module ([`MetricView`], [`stat_rows`], [`stat_groups`], [`watts_per_kg`], [`power_zone_of`],
+//! module ([`MetricView`], [`stat_groups`], [`watts_per_kg`], [`power_zone_of`],
 //! [`hr_zone_of`], [`ftp_tick_pct`], [`eta_text`], [`select_climb`], [`climb_progress`]) are
 //! unit-tested and the components only lay the resulting strings out. A value that is not
 //! available is shown as an em dash ([`DASH`]), never as `NaN` or an empty box.
@@ -289,97 +289,6 @@ impl MetricView {
 
 // ───────────────────────────── stats panel view model ─────────────────────────────
 
-/// One label / value / unit row of the flat stats list (the value is already formatted).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StatRow {
-    pub label: &'static str,
-    pub value: String,
-    pub unit: &'static str,
-}
-
-/// The flat stats list: distance, remaining, time, ETA, ascent done/left, average and
-/// maximum speed, average/normalised/maximum power, work, energy, average/maximum heart rate.
-/// (The panel itself shows the same numbers as the ruled table of [`stat_groups`].)
-pub fn stat_rows(snapshot: &RideSnapshot) -> Vec<StatRow> {
-    vec![
-        StatRow {
-            label: t("ui_hud.megtett_tav"),
-            value: fmt_km(snapshot.dist),
-            unit: "km",
-        },
-        StatRow {
-            label: t("ui_hud.hatralevo_tav"),
-            value: fmt_km(snapshot.remaining_dist),
-            unit: "km",
-        },
-        StatRow {
-            label: t("ui_hud.eltelt_ido"),
-            value: fmt_duration(snapshot.elapsed_s),
-            unit: "",
-        },
-        StatRow {
-            label: t("ui_hud.hatralevo_ido"),
-            value: eta_text(snapshot.eta_s),
-            unit: "",
-        },
-        StatRow {
-            label: t("ui_hud.megtett_szint"),
-            value: fmt_m(snapshot.ascent_done),
-            unit: "m",
-        },
-        StatRow {
-            label: t("ui_hud.hatralevo_szintemelkedes"),
-            value: fmt_m(snapshot.ascent_left),
-            unit: "m",
-        },
-        StatRow {
-            label: t("ui_hud.atlagsebesseg"),
-            value: fmt_speed_kmh(snapshot.avg_speed_ms),
-            unit: "km/h",
-        },
-        StatRow {
-            label: t("ui_hud.csucssebesseg"),
-            value: fmt_speed_kmh(snapshot.max_speed_ms),
-            unit: "km/h",
-        },
-        StatRow {
-            label: t("ui_hud.atlagteljesitmeny"),
-            value: fmt_opt0(snapshot.avg_power_w),
-            unit: "W",
-        },
-        StatRow {
-            label: t("ui_hud.normalizalt_teljesitmeny"),
-            value: fmt_opt0(snapshot.normalized_power_w),
-            unit: "W",
-        },
-        StatRow {
-            label: t("ui_hud.csucsteljesitmeny"),
-            value: fmt_opt0(snapshot.max_power_w),
-            unit: "W",
-        },
-        StatRow {
-            label: t("ui_hud.munka"),
-            value: fmt_opt0(Some(snapshot.work_kj)),
-            unit: "kJ",
-        },
-        StatRow {
-            label: t("ui_hud.energia"),
-            value: fmt_opt0(Some(snapshot.kcal)),
-            unit: "kcal",
-        },
-        StatRow {
-            label: t("ui_hud.atlagpulzus"),
-            value: fmt_opt0(snapshot.avg_hr),
-            unit: "bpm",
-        },
-        StatRow {
-            label: t("ui_hud.csucspulzus"),
-            value: fmt_opt0(snapshot.max_hr),
-            unit: "bpm",
-        },
-    ]
-}
-
 /// One row of the ruled stats table: a label with its unit and three value columns (an empty
 /// string is an empty cell, `—` a missing sensor value).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -403,7 +312,6 @@ fn finite_sum(a: f64, b: f64) -> Option<f64> {
 
 /// The stats as three ruled blocks: *done / left / total* for distance, ascent and time,
 /// *average / normalised / maximum* for speed, power and heart rate, and the energy spent.
-/// All fifteen numbers of [`stat_rows`] appear in it.
 pub fn stat_groups(snapshot: &RideSnapshot) -> Vec<StatGroup> {
     let total_time = match (snapshot.eta_s, snapshot.elapsed_s) {
         (Some(eta), elapsed) if eta.is_finite() && eta >= 0.0 => {
@@ -838,7 +746,7 @@ pub fn ClimbCard(
     let length_text = fmt_km(climb.length);
     let grade_text = fmt_grade(climb.avg_grade);
     let gain_text = fmt_m(climb.gain);
-    let remaining_gain = fmt_m((climb.gain * (1.0 - progress)).max(0.0));
+    let remaining_gain = fmt_m((climb.end_ele - snapshot.pos.ele).max(0.0));
     let cat_label = palette::climb_category_label(cat);
     let summary = if inside {
         tf(
@@ -986,7 +894,7 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
             &[
                 ("name", &w.workout_name),
                 ("step", &w.step_name),
-                ("target", &target_text),
+                ("target", format!("{target_text} {unit_text}").trim()),
                 ("remaining", &remaining),
                 ("pct", &overall_whole),
             ],
@@ -1442,14 +1350,15 @@ mod tests {
         let route = two_climb_route();
         assert_eq!(route.climbs.len(), 2);
 
-        // before the first climb: the countdown comes from `next_climb_in`
+        // before the first climb: the countdown comes from `next_climb_in` (a value that differs
+        // from the route geometry's 1 500 m, so the override is what is seen)
         let mut before = snapshot_at(2_800.0);
         before.next_climb = Some(0);
-        before.next_climb_in = Some(1_500.0);
+        before.next_climb_in = Some(1_234.0);
         let view = select_climb(&route, &before).expect("climb ahead");
         assert_eq!(view.index, 0);
         assert!(!view.inside);
-        assert_eq!(view.ahead_m, 1_500.0);
+        assert_eq!(view.ahead_m, 1_234.0);
         assert_eq!(view.progress, 0.0);
 
         // inside the first climb: no countdown, progress instead
@@ -1482,8 +1391,9 @@ mod tests {
         // a stale `next_climb_in` must not override the distance while inside a climb
         let mut inside = snapshot_at(6_200.0);
         inside.next_climb = Some(0);
-        inside.next_climb_in = Some(0.0);
+        inside.next_climb_in = Some(999.0);
         let view = select_climb(&route, &inside).expect("inside");
+        assert!(view.inside);
         assert_eq!(view.ahead_m, 0.0);
     }
 
@@ -1566,85 +1476,48 @@ mod tests {
     }
 
     #[test]
-    fn stats_rows_cover_the_brief_and_use_the_format_helpers() {
-        let rows = stat_rows(&mid_climb_snapshot());
-        assert_eq!(rows.len(), 15);
-        let get = |label: &str| {
-            rows.iter()
-                .find(|r| r.label == label)
-                .unwrap_or_else(|| panic!("missing row {label}"))
-        };
-        assert_eq!(get("Megtett táv").value, fmt_km(6_200.0));
-        assert_eq!(get("Megtett táv").unit, "km");
-        assert_eq!(get("Hátralévő táv").value, fmt_km(15_800.0));
-        assert_eq!(get("Eltelt idő").value, "21:04");
-        assert_eq!(get("Hátralévő idő").value, "1:10 ó");
-        assert_eq!(get("Megtett szint").value, "312");
-        assert_eq!(get("Hátralévő szintemelkedés").value, "268");
-        assert_eq!(get("Átlagsebesség").value, fmt_speed_kmh(7.1));
-        assert_eq!(get("Csúcssebesség").value, fmt_speed_kmh(12.4));
-        assert_eq!(get("Átlagteljesítmény").value, "214");
-        assert_eq!(get("Normalizált teljesítmény").value, "236");
-        assert_eq!(get("Csúcsteljesítmény").value, "402");
-        assert_eq!(get("Munka").value, "264");
-        assert_eq!(get("Munka").unit, "kJ");
-        assert_eq!(get("Energia").value, "264");
-        assert_eq!(get("Energia").unit, "kcal");
-        assert_eq!(get("Átlagpulzus").value, "139");
-        assert_eq!(get("Csúcspulzus").value, "168");
-    }
-
-    #[test]
-    fn stats_rows_of_the_empty_snapshot_have_dashes_for_missing_sensors() {
-        let rows = stat_rows(&RideSnapshot::empty());
-        let avg_power = rows.iter().find(|r| r.label == "Átlagteljesítmény");
-        assert_eq!(avg_power.map(|r| r.value.as_str()), Some("—"));
-        let eta = rows.iter().find(|r| r.label == "Hátralévő idő");
-        assert_eq!(eta.map(|r| r.value.as_str()), Some("—"));
-        let dist = rows.iter().find(|r| r.label == "Megtett táv");
-        assert_eq!(dist.map(|r| r.value.clone()), Some(fmt_km(0.0)));
-    }
-
-    #[test]
-    fn stat_groups_carry_the_same_numbers_as_the_flat_list() {
+    fn stat_groups_carry_every_number_of_the_brief() {
         let snapshot = mid_climb_snapshot();
         let groups = stat_groups(&snapshot);
         assert_eq!(groups.len(), 3);
-        let rows = stat_rows(&snapshot);
-        let flat = |label: &str| {
-            rows.iter()
-                .find(|r| r.label == label)
-                .map(|r| r.value.clone())
-                .unwrap_or_default()
-        };
         let cell = |g: usize, r: usize, c: usize| groups[g].rows[r].cells[c].clone();
         // done / left / total
         assert_eq!(groups[0].heads, ["Megtett", "Hátralévő", "Összesen"]);
-        assert_eq!(cell(0, 0, 0), flat("Megtett táv"));
-        assert_eq!(cell(0, 0, 1), flat("Hátralévő táv"));
+        assert_eq!(cell(0, 0, 0), fmt_km(6_200.0));
+        assert_eq!(cell(0, 0, 1), fmt_km(15_800.0));
         assert_eq!(cell(0, 0, 2), fmt_km(22_000.0), "6.2 + 15.8 km");
-        assert_eq!(cell(0, 1, 0), flat("Megtett szint"));
-        assert_eq!(cell(0, 1, 1), flat("Hátralévő szintemelkedés"));
+        assert_eq!(cell(0, 1, 0), "312");
+        assert_eq!(cell(0, 1, 1), "268");
         assert_eq!(cell(0, 1, 2), "580", "312 + 268 m");
-        assert_eq!(cell(0, 2, 0), flat("Eltelt idő"));
-        assert_eq!(cell(0, 2, 1), flat("Hátralévő idő"));
+        assert_eq!(cell(0, 2, 0), "21:04");
+        assert_eq!(cell(0, 2, 1), "1:10 ó");
         assert_eq!(cell(0, 2, 2), fmt_hm_text(4_200.0 + 1_264.0));
         // average / normalised / maximum
         assert_eq!(groups[1].heads, ["Átlag", "NP", "Csúcs"]);
-        assert_eq!(cell(1, 0, 0), flat("Átlagsebesség"));
-        assert_eq!(cell(1, 0, 2), flat("Csúcssebesség"));
-        assert_eq!(cell(1, 1, 0), flat("Átlagteljesítmény"));
-        assert_eq!(cell(1, 1, 1), flat("Normalizált teljesítmény"));
-        assert_eq!(cell(1, 1, 2), flat("Csúcsteljesítmény"));
-        assert_eq!(cell(1, 2, 0), flat("Átlagpulzus"));
-        assert_eq!(cell(1, 2, 2), flat("Csúcspulzus"));
+        assert_eq!(cell(1, 0, 0), fmt_speed_kmh(7.1));
+        assert_eq!(cell(1, 0, 2), fmt_speed_kmh(12.4));
+        assert_eq!(cell(1, 1, 0), "214");
+        assert_eq!(cell(1, 1, 1), "236");
+        assert_eq!(cell(1, 1, 2), "402");
+        assert_eq!(cell(1, 2, 0), "139");
+        assert_eq!(cell(1, 2, 2), "168");
         assert_eq!(cell(1, 0, 1), "", "no normalised speed");
         // energy
-        assert_eq!(cell(2, 0, 0), flat("Munka"));
-        assert_eq!(cell(2, 0, 1), flat("Energia"));
+        assert_eq!(cell(2, 0, 0), "264");
+        assert_eq!(cell(2, 0, 1), "264");
         // units ride on the row label
         assert_eq!(groups[0].rows[0].unit, "km");
         assert_eq!(groups[1].rows[1].unit, "W");
+    }
+
+    #[test]
+    fn a_nan_left_is_a_dash_not_zero() {
+        let mut snapshot = mid_climb_snapshot();
+        snapshot.remaining_dist = f64::NAN;
+        snapshot.ascent_left = f64::NAN;
+        let groups = stat_groups(&snapshot);
+        assert_eq!(groups[0].rows[0].cells[1], "—");
+        assert_eq!(groups[0].rows[1].cells[1], "—");
     }
 
     #[test]

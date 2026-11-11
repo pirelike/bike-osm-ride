@@ -17,8 +17,8 @@
 //! offered in `Discovered`, and works even when no Bluetooth adapter exists.
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use futures::future::BoxFuture;
 use futures::FutureExt;
@@ -27,7 +27,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
-use crate::error::BleError;
+use crate::error::{bounded, BleError};
 use crate::hexlog::HexLog;
 use crate::link::{supervise, Ctx, HubConfig, Internal, Rescan};
 use crate::merge::{EmitGate, Field, Merger, Source};
@@ -122,6 +122,22 @@ struct Slot {
     trainer_tx: Option<UnboundedSender<TrainerCmd>>,
     /// Stop was requested; the task is shutting down.
     stopping: bool,
+    /// The last state the task reported was `Failed`: when it then finishes, the cards keep
+    /// that state (and its reason) instead of turning into a plain "disconnected".
+    failed: bool,
+    /// The task's own view of its roles (`Ctx::serves`), kept equal to `kinds`: a role that
+    /// went to another device must not be served (and its data dropped) by this one.
+    roles: Arc<Mutex<Vec<DeviceKind>>>,
+    previous: Vec<(DeviceKind, String)>,
+    name: String,
+    connected: bool,
+}
+
+impl Slot {
+    fn set_kinds(&mut self, kinds: Vec<DeviceKind>) {
+        *self.roles.lock().unwrap_or_else(|p| p.into_inner()) = kinds.clone();
+        self.kinds = kinds;
+    }
 }
 
 struct ScanHandle {
@@ -143,6 +159,9 @@ struct Hub<A: BleAdapter> {
     last_tick: Instant,
     /// One connection per physical device, keyed by device id.
     slots: HashMap<String, Slot>,
+    /// Tasks told to stop whose link may still be handed back, per device. The next connect to
+    /// the device starts behind its task (see [`supervise`]).
+    retiring: HashMap<String, JoinHandle<()>>,
     /// Which device serves each role.
     role_owner: HashMap<DeviceKind, String>,
     /// Newest generation ever started per device (older State messages are stale).
@@ -177,6 +196,7 @@ pub(crate) async fn run_hub<A: BleAdapter>(
         sim_slots: Vec::new(),
         last_tick: Instant::now(),
         slots: HashMap::new(),
+        retiring: HashMap::new(),
         role_owner: HashMap::new(),
         latest_generation: HashMap::new(),
         generation: 0,
@@ -334,24 +354,54 @@ impl<A: BleAdapter> Hub<A> {
         if let Some(scan) = self.scan.take() {
             let _ = scan.stop.send(true);
             let limit = self.cfg.io_timeout * 2;
+            let abort = scan.handle.abort_handle();
             if tokio::time::timeout(limit, scan.handle).await.is_err() {
-                // the task is dropped by the timeout future; nothing else to do
+                // A dropped `JoinHandle` only detaches the task: a scan stuck in an adapter call
+                // would keep running next to the one the next `StartScan` starts.
+                abort.abort();
             }
         }
     }
 
     async fn connect_sim(&mut self, kind: DeviceKind) {
-        if let Some(owner) = self.role_owner.get(&kind).cloned() {
-            let handle = self.stop_device(&owner);
-            if let Some(h) = handle {
-                self.wait_handle(h).await;
-            }
+        // Only this role moves to the simulated rider: a bridge trainer keeps its other roles
+        // (and its link), exactly like a role moving to another real device.
+        if self.role_owner.contains_key(&kind) {
+            self.take_role(kind, false);
         }
         self.sim_slots.retain(|k| *k != kind);
         self.sim_slots.push(kind);
         self.emit_state(kind, ConnState::Connected, Some(sim_name().to_string()));
         // show the first values immediately
         self.on_tick();
+    }
+
+    /// Reports a connect of `id` that failed before its task started: the requested role, and
+    /// the advertised roles that are free or already this device's. A role another device (or
+    /// the simulated rider) serves keeps its healthy card.
+    fn fail_roles(
+        &self,
+        id: &str,
+        kind: DeviceKind,
+        advertised: &[DeviceKind],
+        msg: &str,
+        name: &str,
+    ) {
+        for k in advertised {
+            let other_owner = self.role_owner.get(k).is_some_and(|owner| owner != id)
+                || self.sim_slots.contains(k);
+            if *k == kind && other_owner {
+                self.notice(msg.to_string());
+                continue;
+            }
+            if *k == kind || !other_owner {
+                self.emit_state(
+                    *k,
+                    ConnState::Failed(msg.to_string()),
+                    Some(name.to_string()),
+                );
+            }
+        }
     }
 
     /// Connects `id` once, claiming `kind` plus every other free role the device advertises.
@@ -374,34 +424,38 @@ impl<A: BleAdapter> Hub<A> {
 
         let Some(adapter) = self.ensure_adapter().await else {
             let msg = t("ble.hub.a_bluetooth_nem_erheto_el").to_string();
-            for k in &advertised {
-                self.emit_state(*k, ConnState::Failed(msg.clone()), Some(name.clone()));
-            }
+            self.fail_roles(&id, kind, &advertised, &msg, &name);
             return;
         };
         // stop scanning before connecting (Windows connects far more reliably that way)
         self.stop_scan().await;
 
-        let peripheral = match adapter.peripherals().await {
+        // Every adapter call is bounded: the hub serves all commands and samples from this one
+        // loop, and a platform stack that hangs must not freeze it.
+        let peripherals = bounded(
+            t("ble.hub.eszkozlista"),
+            self.cfg.io_timeout,
+            adapter.peripherals(),
+        )
+        .await;
+        let peripheral = match peripherals {
             Ok(list) => list.into_iter().find(|p| p.id() == id),
             Err(e) => {
-                for k in &advertised {
-                    self.emit_state(*k, ConnState::Failed(e.to_string()), Some(name.clone()));
-                }
+                self.fail_roles(&id, kind, &advertised, &e.to_string(), &name);
                 return;
             }
         };
         let Some(peripheral) = peripheral else {
             let msg = BleError::NotFound.to_string();
-            for k in &advertised {
-                self.emit_state(*k, ConnState::Failed(msg.clone()), Some(name.clone()));
-            }
+            self.fail_roles(&id, kind, &advertised, &msg, &name);
             return;
         };
         // The advertisement tells us the rest without a full scan (names included), and which
         // Zwift controller side it is (a Play report only means something for a known side).
         let mut controller_side = None;
-        if let Ok(Some(adv)) = adapter.advertisement(&peripheral).await {
+        let advertisement =
+            tokio::time::timeout(self.cfg.io_timeout, adapter.advertisement(&peripheral)).await;
+        if let Ok(Ok(Some(adv))) = advertisement {
             for k in classify_with(adv.name.as_deref(), &adv.services, adv.zwift_controller) {
                 if !advertised.contains(&k) {
                     advertised.push(k);
@@ -429,19 +483,27 @@ impl<A: BleAdapter> Hub<A> {
         }
         sort_roles(&mut wanted);
 
+        let mut previous = Vec::new();
         // Free the requested roles from the simulated rider and from other devices: only the
         // role moves, the other device keeps its remaining roles and its link.
         for role in &wanted {
             if self.sim_slots.contains(role)
                 || self.role_owner.get(role).is_some_and(|owner| owner != &id)
             {
-                self.take_role(*role);
+                let owner = if self.sim_slots.contains(role) {
+                    SIM_ID.to_string()
+                } else {
+                    self.role_owner[role].clone()
+                };
+                previous.push((*role, owner));
+                self.take_role(*role, true);
             }
         }
-        // Restart our own device first, so only one connection exists at a time.
-        if let Some(handle) = self.stop_device(&id) {
-            self.wait_handle(handle).await;
-        }
+        // Restart our own device: its previous task (still running, or already told to stop by a
+        // `Disconnect` that is handing the link back) must be done before the new one touches the
+        // device, so only one connection exists at a time. The new task waits for it itself; the
+        // hub keeps serving commands meanwhile.
+        let predecessor = self.stop_device(&id).or_else(|| self.retiring.remove(&id));
         self.sim_slots.retain(|k| *k != kind);
 
         self.generation += 1;
@@ -460,6 +522,7 @@ impl<A: BleAdapter> Hub<A> {
             rescan,
         );
         let (stop_tx, stop_rx) = watch::channel(false);
+        let roles = ctx.roles_handle();
 
         // One command channel per device: the connection may turn out to be a trainer even if
         // the advertisement was silent about FTMS, so control is always possible.
@@ -487,7 +550,27 @@ impl<A: BleAdapter> Hub<A> {
             (Some(tx), Some(rx))
         };
         let session = MultiSession::new(ctl_rx, self.cfg.control, controller_side);
-        let handle = tokio::spawn(supervise(peripheral, session, ctx, stop_rx));
+        // A panic inside the task must not leave the slot "Connected" with frozen values: the
+        // hub only learns that a task ended from its `Finished` message.
+        let (panic_tx, panic_id) = (self.int_tx.clone(), id.clone());
+        let handle = tokio::spawn(async move {
+            let run = std::panic::AssertUnwindSafe(supervise(
+                peripheral,
+                session,
+                ctx,
+                stop_rx,
+                predecessor,
+            ))
+            .catch_unwind()
+            .await;
+            if run.is_err() {
+                eprintln!("[ride-ble] the task of {panic_id} panicked");
+                let _ = panic_tx.send(Internal::Finished {
+                    device: panic_id,
+                    generation,
+                });
+            }
+        });
 
         for role in &wanted {
             self.role_owner.insert(*role, id.clone());
@@ -501,6 +584,11 @@ impl<A: BleAdapter> Hub<A> {
                 handle,
                 trainer_tx,
                 stopping: false,
+                failed: false,
+                roles,
+                previous,
+                name: name.clone(),
+                connected: false,
             },
         );
         for role in &wanted {
@@ -510,7 +598,7 @@ impl<A: BleAdapter> Hub<A> {
 
     /// Moves one role to another device: the previous owner (a BLE device or the simulated
     /// rider) keeps its link and its other roles, and only the role's values are dropped.
-    fn take_role(&mut self, role: DeviceKind) {
+    fn take_role(&mut self, role: DeviceKind, keep_empty: bool) {
         if self.sim_slots.contains(&role) {
             self.sim_slots.retain(|k| *k != role);
             self.merger.clear_source(source_of(role));
@@ -524,7 +612,9 @@ impl<A: BleAdapter> Hub<A> {
             .slots
             .get_mut(&old)
             .map(|slot| {
-                slot.kinds.retain(|k| *k != role);
+                let kinds: Vec<DeviceKind> =
+                    slot.kinds.iter().copied().filter(|k| *k != role).collect();
+                slot.set_kinds(kinds);
                 slot.kinds.is_empty()
             })
             .unwrap_or(true);
@@ -532,9 +622,56 @@ impl<A: BleAdapter> Hub<A> {
         self.role_owner.remove(&role);
         self.emit_state(role, ConnState::Disconnected, None);
         self.emit_sample_now();
-        if now_empty {
-            // No roles left: the task is stopping; the hub does not need its handle.
-            let _ = self.stop_device(&old);
+        if now_empty && !keep_empty {
+            // No roles left: the task is stopping.
+            self.retire(&old);
+        }
+    }
+
+    fn restore_roles(&mut self, previous: Vec<(DeviceKind, String)>) {
+        for (role, owner) in previous {
+            if self.role_owner.contains_key(&role) || self.sim_slots.contains(&role) {
+                continue;
+            }
+            if owner == SIM_ID {
+                self.sim_slots.push(role);
+                self.emit_state(role, ConnState::Connected, Some(sim_name().into()));
+            } else if let Some(slot) = self
+                .slots
+                .get_mut(&owner)
+                .filter(|s| !s.stopping && !s.failed)
+            {
+                let mut kinds = slot.kinds.clone();
+                if !kinds.contains(&role) {
+                    kinds.push(role);
+                }
+                sort_roles(&mut kinds);
+                slot.set_kinds(kinds);
+                let name = slot.name.clone();
+                let state = if slot.connected {
+                    ConnState::Connected
+                } else {
+                    ConnState::Connecting
+                };
+                self.role_owner.insert(role, owner);
+                self.emit_state(role, state, Some(name));
+            }
+        }
+        self.emit_sample_now();
+    }
+
+    fn release_previous(&mut self, previous: Vec<(DeviceKind, String)>) {
+        for (_, owner) in previous {
+            if self.slots.get(&owner).is_some_and(|s| s.kinds.is_empty()) {
+                self.retire(&owner);
+            }
+        }
+    }
+
+    /// Stops a device's task without waiting for it; the next connect to the device waits instead.
+    fn retire(&mut self, id: &str) {
+        if let Some(handle) = self.stop_device(id) {
+            self.retiring.insert(id.to_string(), handle);
         }
     }
 
@@ -576,12 +713,8 @@ impl<A: BleAdapter> Hub<A> {
             self.emit_state(*kind, ConnState::Disconnected, None);
         }
         self.emit_sample_now();
+        self.restore_roles(slot.previous);
         Some(slot.handle)
-    }
-
-    async fn wait_handle(&self, handle: JoinHandle<()>) {
-        let limit = self.cfg.shutdown_flush + self.cfg.io_timeout * 3;
-        let _ = tokio::time::timeout(limit, handle).await;
     }
 
     /// Ask the device serving `kind` (or the simulated rider) to stop.
@@ -599,7 +732,10 @@ impl<A: BleAdapter> Hub<A> {
                 .map(|(id, _)| id.clone())
         });
         if let Some(owner) = owner {
-            let _ = self.stop_device(&owner);
+            if let Some(slot) = self.slots.get(&owner) {
+                self.emit(SensorEvent::Disconnecting(slot.kinds.clone()));
+            }
+            self.retire(&owner);
         }
     }
 
@@ -637,6 +773,24 @@ impl<A: BleAdapter> Hub<A> {
                 if !matches!(state, ConnState::Connected) {
                     // no live link, no values
                     self.merger.clear_source(source_of(kind));
+                }
+                let previous = if let Some(slot) = self.slots.get_mut(&device) {
+                    slot.connected = matches!(state, ConnState::Connected);
+                    if slot.connected {
+                        std::mem::take(&mut slot.previous)
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                };
+                self.release_previous(previous);
+                if let Some(slot) = self.slots.get_mut(&device) {
+                    match &state {
+                        ConnState::Failed(_) => slot.failed = true,
+                        ConnState::Connected | ConnState::Connecting => slot.failed = false,
+                        _ => {}
+                    }
                 }
                 self.emit_state(kind, state, name);
                 self.emit_sample_now();
@@ -678,11 +832,20 @@ impl<A: BleAdapter> Hub<A> {
                     }
                 }
                 if let Some(slot) = self.slots.get_mut(&device) {
-                    slot.kinds = accepted.clone();
+                    slot.set_kinds(accepted.clone());
                 }
                 for role in &accepted {
                     self.role_owner.insert(*role, device.clone());
                 }
+                let previous = if let Some(slot) = self.slots.get_mut(&device) {
+                    let (restore, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut slot.previous)
+                        .into_iter()
+                        .partition(|(role, _)| dropped.contains(role));
+                    slot.previous = keep;
+                    restore
+                } else {
+                    Vec::new()
+                };
                 for (kind, reason) in missing {
                     if self
                         .role_owner
@@ -692,6 +855,7 @@ impl<A: BleAdapter> Hub<A> {
                         self.emit_state(kind, ConnState::Failed(reason), None);
                     }
                 }
+                self.restore_roles(previous);
             }
             Internal::Notice(text) => self.notice(text),
             Internal::Shift {
@@ -747,10 +911,15 @@ impl<A: BleAdapter> Hub<A> {
                             }
                         }
                         self.clear_slot_sources(&slot.kinds);
-                        for kind in &slot.kinds {
-                            self.emit_state(*kind, ConnState::Disconnected, None);
+                        // A task that gave up keeps its `Failed` card (the reason and the name);
+                        // only a stop the user asked for, or a plain end, reads "disconnected".
+                        if slot.stopping || !slot.failed {
+                            for kind in &slot.kinds {
+                                self.emit_state(*kind, ConnState::Disconnected, None);
+                            }
                         }
                         self.emit_sample_now();
+                        self.restore_roles(slot.previous);
                     }
                 }
             }
@@ -799,7 +968,7 @@ impl<A: BleAdapter> Hub<A> {
     async fn shutdown(&mut self) {
         self.stop_scan().await;
         let ids: Vec<String> = self.slots.keys().cloned().collect();
-        let mut handles = Vec::new();
+        let mut handles: Vec<JoinHandle<()>> = self.retiring.drain().map(|(_, h)| h).collect();
         for id in ids {
             if let Some(h) = self.stop_device(&id) {
                 handles.push(h);
@@ -810,7 +979,6 @@ impl<A: BleAdapter> Hub<A> {
         for h in handles {
             let _ = tokio::time::timeout_at(deadline, h).await;
         }
-        let _ = Duration::ZERO;
     }
 }
 

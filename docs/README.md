@@ -1,6 +1,6 @@
 # Documentation index
 
-Everything about bike-osm-ride that is not in the code. Written and checked against version 0.3.0 on 2026-11-04.
+Everything about bike-osm-ride that is not in the code. Source references updated for workspace version 0.5.0 on 2026-11-10; runtime limits are recorded in TESTING.md.
 Hungarian, English, Spanish, Portuguese, German, Italian and Chinese documents are for riders; the English
 developer docs are for people working on the code. Start with the [README](../README.md) for what the app is and how
 to get it.

@@ -3,6 +3,8 @@ name = "ride-ui-dialogs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "Welcome/route import screen, devices, settings, summary and about dialogs"
 
 [dependencies]
@@ -11,6 +13,7 @@ ride-model = { workspace = true }
 ride-ui-kit = { workspace = true }
 ride-ui-streetview = { workspace = true }
 dioxus = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 dioxus-ssr = "0.7"

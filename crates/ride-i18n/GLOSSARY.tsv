@@ -41,7 +41,7 @@ alapozás	base	base	base	Basis	基础期	base	the base period
 állóképesség	endurance	resistencia	resistência	Ausdauer	耐力	resistenza	
 regeneráció	recovery	recuperación	recuperação	Regeneration	恢复	recupero	
 verseny	race	carrera	corrida	Rennen	比赛	gara	
-versenydinamika	race dynamics	dinámica de carrera	dinâmica de corrida	Renndynamik比赛动态	dinamica di gara	
+versenydinamika	race dynamics	dinámica de carrera	dinâmica de corrida	Renndynamik	比赛动态	dinamica di gara	
 időfutam	time trial	contrarreloj	contrarrelógio	Zeitfahren	计时赛	cronometro	
 hegymenet	uphill	subida	subida	Bergauf	爬坡	salita	the workout tag
 sík	flat	llano	plano	Flach	平路	pianura	
@@ -61,7 +61,7 @@ beállítások	settings	ajustes	definições	Einstellungen	设置	impostazioni	E
 eszközök	devices	dispositivos	dispositivos	Geräte	设备	dispositivi	
 névjegy	about	acerca de	sobre	Über	关于	informazioni	the About dialog
 összegzés	summary	resumen	resumo	Zusammenfassung	总结	riepilogo	
-áttekintés	review	revisión	revisão	Übersicht	回顾	analisi	the review page; the review page
+áttekintés	review	revisión	revisão	Übersicht	回顾	analisi	the review page
 mentés	save	guardar	guardar	speichern	保存	salva	not salvar
 betöltés	load	cargar	carregar	laden	加载	carica	
 törlés	delete	eliminar	eliminar	löschen	删除	elimina	not excluir
@@ -81,7 +81,7 @@ kapcsolódás	connecting	conectando	a ligar	verbinden	连接中	connessione
 lecsatlakozás	disconnect	desconectar	desligar	trennen	断开连接	scollega	
 pulzusmérő	heart rate monitor	pulsómetro	monitor de pulso	Pulssensor	心率带	cardiofrequenzimetro	
 teljesítménymérő	power meter	potenciómetro	potenciómetro	Leistungsmesser	功率计	misuratore di potenza	
-sebesség	speed	velocidad	velocidade	Tempo	速度	velocità	km/h; the label is Tempo
+sebesség	speed	velocidad	velocidade	Tempo	速度	velocità	km/h; German uses Tempo for speed and pace; context and unit distinguish them
 táv	distance	distancia	distância	Distanz	距离	distanza	
 idő	time	tiempo	tempo	Zeit	时间	tempo	
 térkép	map	mapa	mapa	Karte	地图	mappa	

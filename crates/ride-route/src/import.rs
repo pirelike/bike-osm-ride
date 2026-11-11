@@ -13,7 +13,7 @@ use ride_model::{
     EstimateParams, RecordPoint, RideRecord, RideSource, RiderSettings, Route, RIDE_RECORD_VERSION,
 };
 use ride_sim::analysis::summarize;
-use ride_sim::estimate::{apply_estimate, profile_params};
+use ride_sim::estimate::{apply_estimate, fill_estimate, profile_params};
 
 use crate::activity::{Activity, ActivitySample};
 use crate::matching::{match_to_route, Matched};
@@ -22,8 +22,8 @@ use ride_i18n::{t, tf};
 
 /// A gap between two samples longer than this may be a pause, seconds.
 const PAUSE_GAP_S: f64 = 10.0;
-/// Over such a gap an average speed below this means the rider stood still, m/s.
-const PAUSE_SPEED_MS: f64 = 1.0;
+/// Only effectively stationary gaps count as a pause; sparse uphill samples still move.
+const PAUSE_DISTANCE_M: f64 = 2.0;
 /// A sensor value is used for a second only if it was measured this close to it, seconds.
 const SENSOR_REACH_S: f64 = 3.0;
 /// Speed is the slope of the distance over this many seconds each side.
@@ -32,6 +32,8 @@ const SPEED_SPAN_S: usize = 2;
 const MAX_SPEED_MS: f64 = 30.0;
 /// More than this many seconds is not an activity but a log of days (or a broken time stamp).
 const MAX_DURATION_S: f64 = 24.0 * 3600.0;
+/// The ride counts as measured when at least this share of its samples carries watts.
+const MIN_MEASURED_SHARE: f64 = 0.5;
 
 /// The result of an import.
 #[derive(Debug, Clone, PartialEq)]
@@ -57,6 +59,16 @@ pub fn import_activity(
     rider: &RiderSettings,
     estimate: Option<EstimateParams>,
 ) -> Result<Imported> {
+    if activity
+        .samples
+        .first()
+        .zip(activity.samples.last())
+        .is_some_and(|(a, b)| b.time - a.time > MAX_DURATION_S)
+    {
+        return err(t(
+            "route.import.az_edzes_24_oranal_hosszabb_valoszinuleg_hibas_az_id",
+        ));
+    }
     let matched = match_to_route(&activity.samples, route)?;
     let frames = key_frames(&activity.samples, &matched);
     let Some((timeline, paused_s)) = timer_times(&frames) else {
@@ -75,10 +87,25 @@ pub fn import_activity(
     }
 
     let mut points = resample(&frames, &timeline, route);
-    let has_power = points.iter().any(|p| p.power_w.is_some());
+    // Measured only when most of the ride carries watts: a few seconds of power (a dropout-ridden
+    // meter, one stray value) must not turn the whole ride into "measured" averaged over them.
+    let measured = points.iter().filter(|p| p.power_w.is_some()).count();
+    let share = measured as f64 / points.len().max(1) as f64;
     let mut warnings = Vec::new();
-    let params = if has_power {
+    let mut measured_power = Vec::new();
+    let params = if share >= MIN_MEASURED_SHARE {
         None
+    } else if measured > 0 {
+        // The measured seconds stay; only the gaps are estimated. The record remembers which
+        // seconds those are, so that estimating again cannot overwrite them.
+        let params = estimate.unwrap_or_else(|| profile_params(rider));
+        measured_power = index_ranges(points.iter().map(|p| p.power_w.is_some()));
+        fill_estimate(&mut points, &params);
+        warnings.push(tf(
+            "route.import.reszleges_teljesitmenyadat",
+            &[("pct", &ride_i18n::decimal(share * 100.0, 0))],
+        ));
+        Some(params)
     } else {
         let params = estimate.unwrap_or_else(|| profile_params(rider));
         apply_estimate(&mut points, &params);
@@ -96,6 +123,9 @@ pub fn import_activity(
     let Some(summary) = summarize(&route.name, &route.id, &points, rider) else {
         return err(t("route.import.az_edzesbol_nem_keszitheto_osszegzes"));
     };
+    if !summary.avg_speed_ms.is_finite() || summary.avg_speed_ms > MAX_SPEED_MS {
+        return err(t("route.import.implausible_average_speed"));
+    }
     if matched.is_partial() {
         warnings.push(tf(
             "route.import.az_edzes_az_utvonal_0_at_fedi_le_1_1_km_a_tobbi_szak",
@@ -130,6 +160,7 @@ pub fn import_activity(
             source: RideSource::Imported,
             power_estimated: params.is_some(),
             estimate: params,
+            measured_power,
         },
         warnings,
         name: activity.name.clone(),
@@ -152,6 +183,15 @@ pub fn reestimate(
     }
     let mut points = record.points.clone();
     apply_estimate(&mut points, &params);
+    // the seconds the file really had watts for keep them
+    for &[from, to] in &record.measured_power {
+        let range = from as usize..(to as usize).min(points.len());
+        if let (Some(new), Some(old)) = (points.get_mut(range.clone()), record.points.get(range)) {
+            for (new, old) in new.iter_mut().zip(old) {
+                new.power_w = old.power_w;
+            }
+        }
+    }
     let Some(mut summary) = summarize(&record.route_name, &record.route_id, &points, rider) else {
         return err(t("route.import.az_edzesbol_nem_keszitheto_osszegzes"));
     };
@@ -163,6 +203,29 @@ pub fn reestimate(
         estimate: Some(params),
         ..record.clone()
     })
+}
+
+/// The runs of `true` as half-open index ranges `[from, to)`.
+fn index_ranges(flags: impl Iterator<Item = bool>) -> Vec<[u32; 2]> {
+    let mut out: Vec<[u32; 2]> = Vec::new();
+    let mut open: Option<u32> = None;
+    let mut end = 0u32;
+    for (i, flag) in flags.enumerate() {
+        let i = u32::try_from(i).unwrap_or(u32::MAX);
+        end = i.saturating_add(1);
+        match (flag, open) {
+            (true, None) => open = Some(i),
+            (false, Some(from)) => {
+                out.push([from, i]);
+                open = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(from) = open {
+        out.push([from, end]);
+    }
+    out
 }
 
 /// One on-route sample with its distance.
@@ -190,7 +253,7 @@ fn timer_times(frames: &[Frame<'_>]) -> Option<(Vec<f64>, f64)> {
     for pair in frames.windows(2) {
         let gap = pair[1].sample.time - pair[0].sample.time;
         let moved = pair[1].dist - pair[0].dist;
-        if gap > PAUSE_GAP_S && moved / gap < PAUSE_SPEED_MS {
+        if gap > PAUSE_GAP_S && moved.abs() <= PAUSE_DISTANCE_M {
             paused += gap - 1.0;
             t += 1.0;
         } else {
@@ -283,6 +346,15 @@ mod tests {
     use crate::activity::ActivityFormat;
     use ride_model::testing::straight_route;
     use ride_sim::physics::{step_speed, PhysicsParams};
+
+    #[test]
+    fn index_ranges_are_the_runs_of_true() {
+        let ranges = |flags: &[bool]| index_ranges(flags.iter().copied());
+        assert_eq!(ranges(&[]), Vec::<[u32; 2]>::new());
+        assert_eq!(ranges(&[false, false]), Vec::<[u32; 2]>::new());
+        assert_eq!(ranges(&[true, true, false, true]), vec![[0, 2], [3, 4]]);
+        assert_eq!(ranges(&[false, true, true]), vec![[1, 3]]);
+    }
 
     const M_PER_DEG_LON: f64 = 111_320.0 * 0.676_204_6;
     const START: f64 = 1_790_000_000.0;
@@ -470,6 +542,46 @@ mod tests {
         assert_eq!(loaded.points.len(), done.record.points.len());
         assert!(ride_sim::segments::best_times(std::slice::from_ref(&meta)).is_empty());
         assert!(ride_sim::segments::choose_ghost(&[meta], ride_model::GhostMode::Best).is_none());
+    }
+
+    #[test]
+    fn a_few_seconds_of_power_do_not_make_a_measured_ride() {
+        let route = route();
+        let (mut act, _) = activity(&route, 600, |_| 210.0, false);
+        for s in act.samples.iter_mut().skip(100).take(10) {
+            s.power = Some(900.0);
+        }
+        let done = import_activity(&act, &route, &RiderSettings::default(), None).unwrap();
+        let r = &done.record;
+        assert!(
+            r.power_estimated,
+            "estimated, with the measured seconds kept"
+        );
+        assert!(r.points.iter().all(|p| p.power_w.is_some()));
+        assert!(r.points.iter().any(|p| p.power_w == Some(900.0)));
+        let avg = r.summary.avg_power_w.unwrap();
+        assert!(
+            avg < 400.0,
+            "not the average of the 10 measured seconds: {avg}"
+        );
+        assert!(!done.warnings.is_empty());
+    }
+
+    #[test]
+    fn a_far_away_file_is_refused_without_scanning_for_every_sample() {
+        // a long route and a long file that never comes near it
+        let route = straight_route(&[(200_000.0, 0.0)], 100.0);
+        let (mut act, _) = activity(&route, 20_000, |_| 200.0, true);
+        for s in &mut act.samples {
+            s.lat += 1.0; // 110 km north
+        }
+        let started = std::time::Instant::now();
+        assert!(import_activity(&act, &route, &RiderSettings::default(), None).is_err());
+        assert!(
+            started.elapsed().as_secs_f64() < 30.0,
+            "{:?}",
+            started.elapsed()
+        );
     }
 
     #[test]

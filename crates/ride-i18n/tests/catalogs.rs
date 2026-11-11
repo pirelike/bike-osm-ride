@@ -23,6 +23,23 @@ fn read_catalog(code: &str) -> BTreeMap<String, String> {
     serde_json::from_str(&text).unwrap_or_else(|err| panic!("{}: {err}", path.display()))
 }
 
+fn source_value<'a>(source: &'a BTreeMap<String, String>, key: &str) -> Option<&'a String> {
+    source.get(key).or_else(|| {
+        key.strip_suffix(".one")
+            .and_then(|base| source.get(&format!("{base}.other")))
+    })
+}
+
+#[test]
+fn singular_forms_use_the_plural_source_for_quality_gates() {
+    let source = BTreeMap::from([("test.other".into(), "{count} darab".into())]);
+    assert_eq!(
+        placeholders(source_value(&source, "test.one").unwrap()),
+        vec!["count"]
+    );
+    assert!(source_value(&source, "unknown.one").is_none());
+}
+
 /// Every language code with a catalog file, in a stable order.
 fn catalog_codes() -> Vec<String> {
     let mut codes: Vec<String> = std::fs::read_dir(locales())
@@ -70,15 +87,31 @@ fn every_registry_language_has_a_catalog() {
     }
 }
 
+/// The finished translations. Every quality gate below runs on this list, and it must equal what
+/// `build.rs` lets the picker offer: a newly finished language (a row in `languages.tsv`, a
+/// complete catalog) fails here until it is added, so it never ships past the gates.
+const SHIPPED: &[&str] = &["en", "es", "pt", "de", "it", "zh"];
+
+#[test]
+fn the_gates_cover_every_language_the_picker_offers() {
+    let mut offered: Vec<&str> = ride_i18n::Lang::complete()
+        .map(|lang| lang.code())
+        .filter(|code| *code != SOURCE)
+        .collect();
+    offered.sort_unstable();
+    let mut shipped = SHIPPED.to_vec();
+    shipped.sort_unstable();
+    assert_eq!(offered, shipped, "COMPLETE_LOCALES and SHIPPED disagree");
+}
+
 #[test]
 fn a_catalog_covers_every_source_key() {
     // `build.rs` derives COMPLETE_LOCALES from exactly this comparison: a catalog missing a key is
     // not offered in the picker (and falls back to the source text), so this test says the shipped
     // translations are actually reachable. A half-finished catalog is *not* a failure here — it is
     // simply not offered — but the shipped, complete ones must all be complete.
-    const COMPLETE: &[&str] = &["en", "es", "pt", "de", "it", "zh"];
     let source = keys(&read_catalog(SOURCE));
-    for code in COMPLETE {
+    for code in SHIPPED {
         let catalog = keys(&read_catalog(code));
         let missing: Vec<&String> = source.difference(&catalog).collect();
         assert!(
@@ -139,11 +172,14 @@ fn a_language_with_a_singular_has_every_singular_form() {
             continue;
         }
         let catalog = read_catalog(&code);
+        if !SHIPPED.contains(&code.as_str()) {
+            continue;
+        }
         for key in &counted {
-            if catalog.contains_key(&format!("{key}.other")) {
+            for form in ["one", "other"] {
                 assert!(
-                    catalog.contains_key(&format!("{key}.one")),
-                    "{code}: {key}.one is missing (rule one-other)"
+                    catalog.contains_key(&format!("{key}.{form}")),
+                    "{code}: {key}.{form} is missing (rule one-other)"
                 );
             }
         }
@@ -168,7 +204,7 @@ fn placeholders_match_the_source() {
         }
         let catalog = read_catalog(&code);
         for (key, value) in &catalog {
-            let Some(source_value) = source.get(key) else {
+            let Some(source_value) = source_value(&source, key) else {
                 continue;
             };
             assert_eq!(
@@ -210,7 +246,7 @@ fn surrounding_whitespace_is_preserved() {
             continue;
         }
         for (key, value) in read_catalog(&code) {
-            let Some(source_value) = source.get(&key) else {
+            let Some(source_value) = source_value(&source, &key) else {
                 continue;
             };
             if !LEADING_SPACE_EXCEPTIONS.contains(&key.as_str()) {
@@ -234,15 +270,20 @@ fn a_translation_is_never_left_in_hungarian() {
     // Values that are legitimately identical: proper nouns, unit templates, pure placeholder
     // templates and words Spanish or English share with Hungarian.
     const SAME: &[&str] = &[
+        "app.state.trainer",
         "model.workout.anaerob",
         "model.workout.sprint",
         "model.workout.sweet_spot",
         "route.bikerouter.name_with_km",
         "ui_dialogs.helpers.sprint",
+        "ui_dialogs.helpers.sprint_700_w",
         "ui_dialogs.settings.kep_utvonalhoz",
         "ui_dialogs.settings.trainer_csoport",
         "ui_dialogs.summary.energia",
         "ui_dialogs.workouts.lista",
+        "ui_dialogs.workouts.ftp_percent",
+        "ui_dialogs.workouts.ftp_range",
+        "ui_dialogs.workouts.detail_meta",
         "ui_hud.energia",
         "ui_hud.energia_kcal",
         "ui_kit.palette.aerob",
@@ -256,7 +297,7 @@ fn a_translation_is_never_left_in_hungarian() {
             continue;
         }
         for (key, value) in read_catalog(&code) {
-            let Some(source_value) = source.get(&key) else {
+            let Some(source_value) = source_value(&source, &key) else {
                 continue;
             };
             if &value != source_value {
@@ -275,7 +316,7 @@ fn no_translation_carries_hungarian_letters() {
     // `ő` and `ű` exist in neither Spanish, English, German, Portuguese, Italian nor Chinese;
     // finding one means a word was copied from the source. A language whose orthography does use
     // them stays out.
-    for code in ["es", "en", "de", "pt", "it", "zh"] {
+    for code in SHIPPED {
         for (key, value) in read_catalog(code) {
             assert!(
                 !value.contains(['ő', 'ű', 'Ő', 'Ű']),
@@ -489,21 +530,275 @@ fn no_constant_is_initialised_with_a_lookup() {
         let Ok(text) = std::fs::read_to_string(&file) else {
             continue;
         };
-        for (at, line) in text.lines().enumerate() {
-            let line = line.trim_start();
-            let constant = line.starts_with("const ")
-                || line.starts_with("static ")
-                || line.starts_with("pub const ")
-                || line.starts_with("pub static ");
-            let lookup = [" t(", " tf(", " tn(", "ride_i18n::t("]
-                .iter()
-                .any(|call| line.contains(call));
+        // A whole item, from `const` / `static` (any visibility: `pub(crate) const`) to its `;`,
+        // however rustfmt wrapped it.
+        let lines: Vec<&str> = text.lines().collect();
+        let mut at = 0;
+        while at < lines.len() {
+            let line = lines[at].trim_start();
+            let rest = line
+                .strip_prefix("pub(crate) ")
+                .or_else(|| line.strip_prefix("pub(super) "))
+                .or_else(|| line.strip_prefix("pub "))
+                .unwrap_or(line);
+            if !(rest.starts_with("const ") || rest.starts_with("static ")) {
+                at += 1;
+                continue;
+            }
+            let start = at;
+            let mut item = String::new();
+            while at < lines.len() {
+                item.push_str(lines[at]);
+                item.push(' ');
+                at += 1;
+                if lines[at - 1].trim_end().ends_with(';')
+                    || lines[at - 1].trim_end().ends_with('{')
+                {
+                    break;
+                }
+            }
             assert!(
-                !(constant && lookup),
-                "{}:{}: a constant cannot call the catalog: {line}",
+                lookups(&item).is_empty() || item.contains("fn "),
+                "{}:{}: a constant cannot call the catalog: {}",
                 file.display(),
-                at + 1
+                start + 1,
+                item.trim()
             );
+        }
+    }
+}
+
+/// The `(function, key)` of every `t("…")`, `tf("…"` and `tn("…"` call in `text` (rustfmt may
+/// put the key on the next line).
+fn lookups(text: &str) -> Vec<(&'static str, String)> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::new();
+    for (name, call) in [("t", "t("), ("tf", "tf("), ("tn", "tn(")] {
+        let mut from = 0;
+        while let Some(pos) = text[from..].find(call) {
+            let at = from + pos;
+            from = at + call.len();
+            // a whole identifier: `t(` but not `get(` or `_t(`
+            let before = at.checked_sub(1).map(|i| bytes[i]);
+            if before.is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_') {
+                continue;
+            }
+            let args = text[from..].trim_start();
+            let Some(args) = args.strip_prefix('"') else {
+                continue;
+            };
+            let Some(end) = args.find('"') else {
+                continue;
+            };
+            out.push((name, args[..end].to_string()));
+        }
+    }
+    out
+}
+
+/// Every key the code looks up by a literal must exist in the source catalog: a typo or a key
+/// removed from `hu.json` shows the raw key to the rider.
+#[test]
+fn every_key_the_code_looks_up_exists() {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut files = Vec::new();
+    rust_sources(&crates, &mut files);
+    let source = read_catalog(SOURCE);
+    let mut checked = 0;
+    let mut missing = Vec::new();
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for (name, key) in lookups(&text) {
+            // only catalog keys: `crate.module.slug`
+            // only catalog keys (`crate.module.slug`); the `i18n.test.*` lookups test the
+            // fallback for a key that is missing on purpose
+            if !key.contains('.')
+                || key.contains(' ')
+                || key.contains('{')
+                || key.starts_with("i18n.test.")
+            {
+                continue;
+            }
+            checked += 1;
+            let present = match name {
+                "tn" => source.contains_key(&format!("{key}.other")),
+                _ => source.contains_key(&key),
+            };
+            if !present {
+                missing.push(format!("{}: {name}(\"{key}\")", file.display()));
+            }
+        }
+    }
+    assert!(checked > 500, "only {checked} lookups found");
+    assert!(
+        missing.is_empty(),
+        "keys not in {SOURCE}.json:
+{}",
+        missing.join(
+            "
+"
+        )
+    );
+}
+
+/// The argument list of the call that starts at `from` (just after its `(`), up to the matching
+/// `)`. String literals are skipped so a `)` inside one does not end it.
+fn call_args(text: &str, from: usize) -> &str {
+    let bytes = text.as_bytes();
+    let (mut depth, mut i, mut in_str) = (1usize, from, false);
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if in_str => i += 1,
+            b'"' => in_str = !in_str,
+            b'(' | b'[' if !in_str => depth += 1,
+            b')' | b']' if !in_str => {
+                depth -= 1;
+                if depth == 0 {
+                    return &text[from..i];
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    &text[from..]
+}
+
+/// `{name}` placeholders of a catalog text.
+fn placeholder_names(text: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let mut rest = text;
+    while let Some(open) = rest.find('{') {
+        rest = &rest[open + 1..];
+        let Some(close) = rest.find('}') else { break };
+        let name = &rest[..close];
+        if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            out.insert(name.to_string());
+        }
+        rest = &rest[close + 1..];
+    }
+    out
+}
+
+/// A `tf("key", &[("name", …), …])` must fill every `{name}` of the catalog text, and a `t("key")`
+/// cannot fill any: otherwise the rider reads a raw `{reason}`.
+#[test]
+fn every_placeholder_is_filled_by_its_call() {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut files = Vec::new();
+    rust_sources(&crates, &mut files);
+    let source = read_catalog(SOURCE);
+    let mut wrong = Vec::new();
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        for call in ["t(", "tf(", "tn("] {
+            let mut from = 0;
+            while let Some(pos) = text[from..].find(call) {
+                let at = from + pos;
+                from = at + call.len();
+                let before = at.checked_sub(1).map(|i| text.as_bytes()[i]);
+                if before.is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_') {
+                    continue;
+                }
+                let args = call_args(&text, from);
+                let Some(key) = args
+                    .trim_start()
+                    .strip_prefix('"')
+                    .and_then(|rest| rest.split('"').next())
+                else {
+                    continue;
+                };
+                let lookup = if call == "tn(" {
+                    format!("{key}.other")
+                } else {
+                    key.to_string()
+                };
+                if key.starts_with("i18n.test.") {
+                    continue; // fixtures of the lookup tests
+                }
+                let Some(value) = source.get(&lookup) else {
+                    continue; // unknown keys are the other test's business
+                };
+                // the first string of every `( "name", value )` pair, however it is wrapped
+                let given: BTreeSet<String> = args
+                    .split('(')
+                    .skip(1)
+                    .filter_map(|part| part.trim_start().strip_prefix('"'))
+                    .filter_map(|part| part.split('"').next())
+                    .map(str::to_string)
+                    .collect();
+                for name in placeholder_names(value) {
+                    if !given.contains(&name) {
+                        wrong.push(format!(
+                            "{}: {call}\"{key}\" leaves {{{name}}}",
+                            file.display()
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "unfilled placeholders:\n{}",
+        wrong.join("\n")
+    );
+}
+
+/// `tf` only fills named placeholders: a `{}` or `{:.0}` left from a `format!` template reaches
+/// the rider as it is.
+#[test]
+fn no_catalog_text_has_a_positional_placeholder() {
+    for code in catalog_codes() {
+        for (key, value) in read_catalog(&code) {
+            assert!(
+                !value.contains("{}") && !value.contains("{:"),
+                "{code}: {key} has a positional placeholder: {value}"
+            );
+        }
+    }
+}
+
+/// Every row of the hand-edited TSV files has all its columns: one missing tab silently shifts
+/// the cells after it into the wrong language (or drops a language from the registry).
+#[test]
+fn the_tsv_tables_have_every_column() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (file, columns) in [("languages.tsv", 7), ("GLOSSARY.tsv", 8), ("STYLE.tsv", 8)] {
+        let text = std::fs::read_to_string(root.join(file)).expect(file);
+        let mut codes = BTreeSet::new();
+        for (at, line) in text.lines().enumerate() {
+            if line.trim().is_empty() || line.trim_start().starts_with('#') {
+                continue;
+            }
+            let fields = line.split('\t').count();
+            assert_eq!(fields, columns, "{file}:{}: {fields} columns", at + 1);
+            if file == "languages.tsv" {
+                let code = line
+                    .split('\t')
+                    .next()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+                assert!(codes.insert(code.clone()), "{file}: {code} twice");
+            }
+        }
+    }
+}
+
+#[test]
+fn distinct_workout_filters_have_distinct_labels() {
+    for code in catalog_codes() {
+        let values = read_catalog(&code);
+        for (a, b) in [
+            ("model.workout.hegymaszas", "model.workout.hegymenet"),
+            ("model.workout.allokepesseg", "model.workout.tartossag"),
+        ] {
+            assert_ne!(values.get(a), values.get(b), "{code}: {a} and {b} collide");
         }
     }
 }

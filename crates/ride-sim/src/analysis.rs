@@ -16,30 +16,57 @@ const ZONE_WINDOW: usize = 3;
 /// A gap longer than this between two samples is not counted as riding time, seconds.
 pub(crate) const MAX_SAMPLE_GAP_S: f64 = 5.0;
 
-/// Normalised power of a 1 Hz power series (negative samples count as 0). `None` when empty.
-///
-/// The engine feeds the same window sample by sample (`RideEngine::record`); a test below keeps
-/// the two in step.
+/// A sample above this is a corrupt value, not a rider: it is clamped so the fourth powers stay
+/// finite.
+const MAX_NP_WATTS: f64 = 5_000.0;
+
+/// Normalised power fed one 1 s slot at a time: the 30 s rolling mean over *time slots*, a slot
+/// without a power value counting as 0 W. The engine (`RideEngine::record`) and
+/// [`normalized_power`] share it, so the live and the stored numbers agree.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct NpAccumulator {
+    window: std::collections::VecDeque<f64>,
+    sum4: f64,
+    count: u64,
+    measured: bool,
+}
+
+impl NpAccumulator {
+    /// One second of riding; `watts` is `None` (0 W) when no power value arrived.
+    pub(crate) fn push(&mut self, watts: Option<f64>) {
+        let w = match watts.filter(|w| w.is_finite()) {
+            Some(w) => {
+                self.measured = true;
+                w.clamp(0.0, MAX_NP_WATTS)
+            }
+            None => 0.0,
+        };
+        self.window.push_back(w);
+        while self.window.len() > NP_WINDOW {
+            self.window.pop_front();
+        }
+        let mean = self.window.iter().sum::<f64>() / self.window.len() as f64;
+        self.sum4 += mean.powi(4);
+        self.count += 1;
+    }
+
+    /// `None` until a slot with a measured value has been pushed.
+    pub(crate) fn value(&self) -> Option<f64> {
+        if !self.measured || self.count == 0 {
+            return None;
+        }
+        Some((self.sum4 / self.count as f64).max(0.0).powf(0.25))
+    }
+}
+
+/// Normalised power of a 1 Hz power series, one value per second (negative samples count as 0,
+/// a non-finite one as a second without power, i.e. 0 W). `None` when no sample has a value.
 pub fn normalized_power(power: impl IntoIterator<Item = f64>) -> Option<f64> {
-    let mut window: std::collections::VecDeque<f64> = std::collections::VecDeque::new();
-    let mut sum4 = 0.0;
-    let mut count = 0usize;
+    let mut np = NpAccumulator::default();
     for p in power {
-        if !p.is_finite() {
-            continue;
-        }
-        window.push_back(p.max(0.0));
-        while window.len() > NP_WINDOW {
-            window.pop_front();
-        }
-        let mean = window.iter().sum::<f64>() / window.len() as f64;
-        sum4 += mean.powi(4);
-        count += 1;
+        np.push(Some(p).filter(|p| p.is_finite()));
     }
-    if count == 0 {
-        return None;
-    }
-    Some((sum4 / count as f64).powf(0.25))
+    np.value()
 }
 
 fn mean(values: impl Iterator<Item = f64>) -> Option<f64> {
@@ -84,7 +111,12 @@ pub fn summarize(
     } else {
         0.0
     };
-    let np = normalized_power(points.iter().filter_map(|p| p.power_w));
+    // Over time, not over samples: a dropout second counts as 0 W, as in the live engine.
+    let np = if crate::power_curve::has_power(points) {
+        normalized_power(crate::power_curve::dense_power(points))
+    } else {
+        None
+    };
     let intensity_factor = np.filter(|_| ftp > 0.0).map(|np| np / ftp);
     let tss = intensity_factor
         .filter(|_| elapsed_s > 0.0)
@@ -126,7 +158,7 @@ pub fn summarize(
         route_id: route_id.to_string(),
         started_unix_s: first.unix_s - first.t,
         elapsed_s,
-        dist: last.dist,
+        dist: ridden_m,
         ascent,
         avg_speed_ms: if elapsed_s > 1e-9 {
             ridden_m / elapsed_s
@@ -180,6 +212,19 @@ mod tests {
         assert!(normalized_power(surging).unwrap() > mean);
         assert_eq!(normalized_power(std::iter::empty()), None);
         assert_eq!(normalized_power([f64::NAN]), None);
+        // a dropout counts as 0 W, it is not skipped
+        let with_gap: Vec<f64> = (0..120)
+            .map(|i| {
+                if (30..60).contains(&i) {
+                    f64::NAN
+                } else {
+                    200.0
+                }
+            })
+            .collect();
+        assert!(normalized_power(with_gap).unwrap() < 199.0);
+        // a corrupt value cannot make it infinite
+        assert!(normalized_power([1e200, 200.0]).unwrap().is_finite());
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! those, so a half-translated catalog can never reach a rider (it stays reachable for translators
 //! through `RIDE_LANG`).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -47,13 +47,31 @@ fn main() {
     }
     out.push_str("];\n");
 
-    // Completeness: every key of the source catalog, plural forms aside (`tn` looks up
-    // `<key>.one` / `<key>.other`, and a language only carries the forms its rule uses).
+    // Completeness: every plain key of the source catalog, and for every counted key the plural
+    // forms the language's own rule needs (`tn` looks up `<key>.one` / `<key>.other`): a
+    // `one-other` catalog without its `.other` forms would show the source text for every count
+    // but one.
     let source_keys = entries
         .iter()
         .find(|(code, _)| code == SOURCE)
         .map(|(_, path)| keys_of(path))
         .unwrap_or_default();
+    let (plain, counted): (BTreeSet<String>, BTreeSet<String>) = {
+        let mut plain = BTreeSet::new();
+        let mut counted = BTreeSet::new();
+        for key in &source_keys {
+            match plural_head(key) {
+                Some(head) => {
+                    counted.insert(head.to_string());
+                }
+                None => {
+                    plain.insert(key.clone());
+                }
+            }
+        }
+        (plain, counted)
+    };
+    let rules = plural_rules(&manifest.join("languages.tsv"));
     let mut complete: Vec<&str> = Vec::new();
     for (code, path) in &entries {
         if code == SOURCE {
@@ -61,7 +79,16 @@ fn main() {
             continue;
         }
         let keys = keys_of(path);
-        if source_keys.is_subset(&keys) {
+        let forms: &[&str] = match rules.get(code.as_str()).map(String::as_str) {
+            Some("one-other") => &["one", "other"],
+            _ => &["other"],
+        };
+        let plurals_ok = counted.iter().all(|head| {
+            forms
+                .iter()
+                .all(|form| keys.contains(&format!("{head}.{form}")))
+        });
+        if plain.is_subset(&keys) && plurals_ok {
             complete.push(code);
         }
     }
@@ -79,9 +106,31 @@ fn main() {
     fs::write(&dest, out).expect("write catalogs.rs");
 }
 
-/// Top-level keys of a catalog, without the plural suffix (`items.one` → `items`). The
-/// `i18n.test.*` fixtures are skipped: they exist to exercise fallback and plurals, so a catalog
-/// may legitimately leave one out.
+/// `items` of `items.one` / `items.other`, `None` for a plain key.
+fn plural_head(key: &str) -> Option<&str> {
+    match key.rsplit_once('.') {
+        Some((head, "one" | "other")) => Some(head),
+        _ => None,
+    }
+}
+
+/// `code` → plural rule from `languages.tsv` (the fourth column).
+fn plural_rules(path: &Path) -> BTreeMap<String, String> {
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+        .filter_map(|line| {
+            let mut cols = line.split('\t');
+            let code = cols.next()?.trim().to_string();
+            let rule = cols.nth(2)?.trim().to_string();
+            Some((code, rule))
+        })
+        .collect()
+}
+
+/// Top-level keys of a catalog, plural suffixes kept. The `i18n.test.*` fixtures are skipped:
+/// they exist to exercise fallback and plurals, so a catalog may legitimately leave one out.
 fn keys_of(path: &str) -> BTreeSet<String> {
     let text = fs::read_to_string(path).unwrap_or_default();
     let map: serde_json::Map<String, serde_json::Value> = match serde_json::from_str(&text) {
@@ -93,10 +142,7 @@ fn keys_of(path: &str) -> BTreeSet<String> {
     };
     map.keys()
         .filter(|key| !key.starts_with("i18n.test."))
-        .map(|key| match key.rsplit_once('.') {
-            Some((head, "one" | "other")) => head.to_string(),
-            _ => key.clone(),
-        })
+        .cloned()
         .collect()
 }
 

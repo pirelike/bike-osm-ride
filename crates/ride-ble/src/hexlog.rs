@@ -1,4 +1,6 @@
-//! Raw hex log of everything that crosses the GATT boundary (`RIDE_BLE_LOG=1`).
+//! Raw hex log of everything that crosses the GATT boundary (`<data>/ble.log`, always on).
+//! It is bounded: past [`ROTATE_AT_BYTES`] the file moves to `ble.log.1` (replacing the older
+//! one), at start-up and while it is being written.
 //!
 //! One line per packet: `timestamp  direction  characteristic  hex`, e.g.
 //! `2026-10-31T16:20:11.123Z  NOTIFY  2ad2  44009b077c005200`. Directions are
@@ -15,8 +17,8 @@ use uuid::Uuid;
 
 use crate::transport::short_id;
 
-/// The log file is rotated (renamed to `<name>.1`) at start-up beyond this size.
-const ROTATE_AT_BYTES: u64 = 8 * 1024 * 1024;
+/// The log file is rotated (renamed to `<name>.1`) beyond this size.
+pub const ROTATE_AT_BYTES: u64 = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dir {
@@ -35,12 +37,6 @@ impl Dir {
             Dir::Write => "WRITE",
         }
     }
-}
-
-/// `%LOCALAPPDATA%/bike-osm-ride/ble.log` (the place `RIDE_BLE_LOG=1` uses).
-pub fn default_hex_log_path() -> Option<PathBuf> {
-    let base = std::env::var_os("LOCALAPPDATA")?;
-    Some(PathBuf::from(base).join("bike-osm-ride").join("ble.log"))
 }
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -101,7 +97,44 @@ fn now_ms() -> i64 {
 /// Cloneable handle; a disabled log makes every call a no-op.
 #[derive(Clone, Default)]
 pub struct HexLog {
-    inner: Option<Arc<Mutex<BufWriter<File>>>>,
+    inner: Option<Arc<Mutex<LogFile>>>,
+}
+
+/// The open file and how many bytes it holds, so it can be rotated while the app runs.
+struct LogFile {
+    path: PathBuf,
+    writer: BufWriter<File>,
+    len: u64,
+    limit: u64,
+}
+
+impl LogFile {
+    fn write_line(&mut self, line: &str) {
+        if writeln!(self.writer, "{line}").is_ok() {
+            let _ = self.writer.flush();
+            self.len += line.len() as u64 + 1;
+        }
+        if self.len > self.limit {
+            let _ = self.writer.flush();
+            rotate(&self.path);
+            if let Ok(file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)
+            {
+                self.writer = BufWriter::new(file);
+                self.len = 0;
+            }
+        }
+    }
+}
+
+/// Moves `path` to `<path>.1`, replacing an older rotation.
+fn rotate(path: &Path) {
+    let mut rotated = path.as_os_str().to_owned();
+    rotated.push(".1");
+    let _ = fs::remove_file(&rotated);
+    let _ = fs::rename(path, &rotated);
 }
 
 impl HexLog {
@@ -112,20 +145,25 @@ impl HexLog {
     /// Open (append) the log file, creating parent directories. An oversized old file is
     /// moved to `<name>.1` first.
     pub fn open(path: &Path) -> std::io::Result<Self> {
+        Self::open_with_limit(path, ROTATE_AT_BYTES)
+    }
+
+    fn open_with_limit(path: &Path, limit: u64) -> std::io::Result<Self> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        if let Ok(meta) = fs::metadata(path) {
-            if meta.len() > ROTATE_AT_BYTES {
-                let mut rotated = path.as_os_str().to_owned();
-                rotated.push(".1");
-                let _ = fs::remove_file(&rotated);
-                let _ = fs::rename(path, &rotated);
-            }
+        if fs::metadata(path).is_ok_and(|meta| meta.len() > limit) {
+            rotate(path);
         }
         let file = OpenOptions::new().create(true).append(true).open(path)?;
+        let len = file.metadata().map_or(0, |m| m.len());
         Ok(Self {
-            inner: Some(Arc::new(Mutex::new(BufWriter::new(file)))),
+            inner: Some(Arc::new(Mutex::new(LogFile {
+                path: path.to_path_buf(),
+                writer: BufWriter::new(file),
+                len,
+                limit,
+            }))),
         })
     }
 
@@ -146,21 +184,17 @@ impl HexLog {
             None => characteristic.to_string(),
         };
         let line = format_line(unix_ms, dir, &name, bytes);
-        if let Ok(mut w) = inner.lock() {
-            if writeln!(w, "{line}").is_ok() {
-                let _ = w.flush();
-            }
+        if let Ok(mut file) = inner.lock() {
+            file.write_line(&line);
         }
     }
 
     /// A free-form marker line (`# text`), e.g. connection events.
     pub fn comment(&self, text: &str) {
         let Some(inner) = &self.inner else { return };
-        if let Ok(mut w) = inner.lock() {
+        if let Ok(mut file) = inner.lock() {
             let clean: String = text.chars().filter(|c| !c.is_control()).collect();
-            if writeln!(w, "{}  #  {clean}", format_utc(now_ms())).is_ok() {
-                let _ = w.flush();
-            }
+            file.write_line(&format!("{}  #  {clean}", format_utc(now_ms())));
         }
     }
 }
@@ -189,6 +223,24 @@ mod tests {
             format_line(0, Dir::Write, "2ad9", &[]).split("  ").count(),
             4
         );
+    }
+
+    #[test]
+    fn the_log_rotates_while_it_is_written() {
+        let dir = std::env::temp_dir().join(format!("ride-ble-hexrot-{}", std::process::id()));
+        let path = dir.join("ble.log");
+        let _ = fs::remove_dir_all(&dir);
+        let log = HexLog::open_with_limit(&path, 1_000).unwrap();
+        for i in 0..200 {
+            log.record_at(i, Dir::Notify, &sig_uuid(0x2AD2), &[0x44; 16]);
+        }
+        let current = fs::metadata(&path).unwrap().len();
+        let mut rotated = path.as_os_str().to_owned();
+        rotated.push(".1");
+        let older = fs::metadata(&rotated).unwrap().len();
+        assert!(current <= 1_100, "{current} bytes");
+        assert!(older <= 1_100, "{older} bytes");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

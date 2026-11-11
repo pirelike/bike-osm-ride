@@ -1,4 +1,4 @@
-//! Devices dialog: scan for sensors, inspect the four slots and connect/disconnect.
+//! Devices dialog: scan for sensors, inspect the role slots and connect/disconnect.
 
 use dioxus::prelude::*;
 use ride_model::{ConnState, DeviceInfo, DeviceKind, SensorCommand};
@@ -101,14 +101,14 @@ pub fn DevicesDialog(
                 div { class: "dlg-slots",
                     for kind in SLOT_ORDER {
                         SlotCard {
-                            key: "{kind_label(kind)}",
+                            key: "{kind:?}",
                             kind,
                             slot: slot_of(&slot_list, kind),
                             shared: slot_list
                                 .iter()
                                 .find(|s| s.kind == kind)
                                 .and_then(|s| s.name.clone())
-                                .is_some_and(|name| shared_names.contains(&name)),
+                                .is_some_and(|name| shared_names.iter().any(|shared| shared == name.trim())),
                             on_command,
                         }
                     }
@@ -142,7 +142,7 @@ pub fn DevicesDialog(
     }
 }
 
-/// One of the four slots, with its state badge and a disconnect action. `shared` marks a
+/// One of the role slots, with its state badge and a disconnect action. `shared` marks a
 /// slot of a device that serves several roles: its "Leválasztás" releases the whole device.
 #[component]
 fn SlotCard(
@@ -232,10 +232,15 @@ fn FoundRow(
         .kinds
         .iter()
         .any(|kind| slot_connecting(&slots, *kind, &title));
-    let connected = device
+    // The roles this device serves right now: the simulated rider may hold any of them (the
+    // heart rate alone, say), and "disconnect" has to name those, not the suggested one.
+    let connected_kinds: Vec<DeviceKind> = device
         .kinds
         .iter()
-        .any(|kind| slot_matches(&slots, *kind, &title));
+        .copied()
+        .filter(|kind| slot_matches(&slots, *kind, &title))
+        .collect();
+    let connected = !connected_kinds.is_empty();
     let roles = device
         .kinds
         .iter()
@@ -282,15 +287,17 @@ fn FoundRow(
                         {t("ui_dialogs.devices.kapcsolodas")}
                     }
                 } else if connected {
-                    if let Some(kind) = suggested {
-                        button {
-                            class: "btn btn--ghost btn--sm",
-                            r#type: "button",
-                            title: t("ui_dialogs.devices.az_egesz_eszkoz_levalasztasa").to_string(),
-                            onclick: move |_| on_command.call(SensorCommand::Disconnect(kind)),
-                            Icon { name: IconName::Close, size: 13 }
-                            {t("ui_dialogs.devices.levalasztas")}
-                        }
+                    button {
+                        class: "btn btn--ghost btn--sm",
+                        r#type: "button",
+                        title: t("ui_dialogs.devices.az_egesz_eszkoz_levalasztasa").to_string(),
+                        onclick: move |_| {
+                            for kind in connected_kinds.iter().copied() {
+                                on_command.call(SensorCommand::Disconnect(kind));
+                            }
+                        },
+                        Icon { name: IconName::Close, size: 13 }
+                        {t("ui_dialogs.devices.levalasztas")}
                     }
                 } else if let Some(kind) = suggested {
                     button {
@@ -311,7 +318,7 @@ fn FoundRow(
                             button {
                                 class: "btn btn--ghost btn--sm",
                                 r#type: "button",
-                                key: "connect-{kind_label(kind)}",
+                                key: "connect-{kind:?}",
                                 title: t("ui_dialogs.devices.csatlakozas_masik_szerepkent").to_string(),
                                 onclick: {
                                     let id = device.id.clone();

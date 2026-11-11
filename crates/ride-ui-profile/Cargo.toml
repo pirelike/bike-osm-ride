@@ -3,6 +3,8 @@ name = "ride-ui-profile"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "Elevation profile (full + look-ahead) and live history charts, rendered as SVG"
 
 [dependencies]

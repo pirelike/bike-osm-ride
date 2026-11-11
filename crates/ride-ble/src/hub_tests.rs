@@ -282,7 +282,8 @@ async fn scan_lists_the_simulated_rider_first() {
     };
     assert_eq!(first.len(), 1);
     assert_eq!(first[0].id, SIM_ID);
-    assert_eq!(first[0].name, sim_name(), "Szimulált tekerő");
+    // the label itself, not the function that makes it
+    assert_eq!(first[0].name, "Szimulált tekerő");
     assert_eq!(first[0].rssi, None);
     assert_eq!(
         first[0].kinds,
@@ -853,6 +854,133 @@ async fn link_loss_reconnects_and_repeats_the_handshake() {
 }
 
 #[tokio::test]
+async fn commands_still_reach_the_trainer_after_a_reconnect() {
+    let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_state(DeviceKind::Trainer, &ConnState::Connected)
+        .await;
+    let connects = trainer.connects();
+    trainer.drop_link();
+    hub.wait_until("the reconnect attempt", || trainer.connects() > connects)
+        .await;
+    hub.wait_state(DeviceKind::Trainer, &ConnState::Connected)
+        .await;
+
+    // A command sent only after the reconnect: nothing could replay it from before.
+    let before = writes_of(&trainer, 0x05).len();
+    hub.send(SensorCommand::SetTargetPower(180.0));
+    hub.send(SensorCommand::TrainerStart);
+    hub.wait_until("the ERG target on the new link", || {
+        writes_of(&trainer, 0x05).len() > before
+    })
+    .await;
+}
+
+/// What a device's link saw, in order. Android's btleplug backend (droidplug) keeps one serial
+/// command queue per device, so a connect that starts while the previous task still hands the
+/// link back lands in the middle of that teardown, and the old disconnect then kills the new link.
+const HANDED_BACK_BEFORE_THE_NEXT_CONNECT: [&str; 4] =
+    ["connect", "disconnect:begin", "disconnect:end", "connect"];
+
+#[tokio::test]
+async fn a_quick_reconnect_waits_until_the_old_link_is_handed_back() {
+    let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
+    trainer.set_disconnect_delay(Duration::from_millis(120));
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_state(DeviceKind::Trainer, &ConnState::Connected)
+        .await;
+
+    // The rider taps "disconnect" by mistake and straight away connects again.
+    hub.send(SensorCommand::Disconnect(DeviceKind::Trainer));
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_state(DeviceKind::Trainer, &ConnState::Connected)
+        .await;
+
+    assert_eq!(trainer.ops(), HANDED_BACK_BEFORE_THE_NEXT_CONNECT);
+    assert!(trainer.is_connected_now(), "the new link stays up");
+}
+
+#[tokio::test]
+async fn connecting_again_to_a_live_device_waits_until_its_link_is_handed_back() {
+    let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
+    trainer.set_disconnect_delay(Duration::from_millis(120));
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_state(DeviceKind::Trainer, &ConnState::Connected)
+        .await;
+
+    // A second tap on the same device while it is connected restarts its connection.
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_state(DeviceKind::Trainer, &ConnState::Connected)
+        .await;
+
+    assert_eq!(trainer.ops(), HANDED_BACK_BEFORE_THE_NEXT_CONNECT);
+    assert!(trainer.is_connected_now(), "the new link stays up");
+}
+
+#[tokio::test]
+async fn a_disconnect_ends_a_connect_that_pends_at_once() {
+    // `fast()` gives a connect 500 ms; the cleanup must not wait for that to run out.
+    let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
+    trainer.hang_connects(true);
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_until("the connect to start", || trainer.connects() == 1)
+        .await;
+
+    hub.send(SensorCommand::Disconnect(DeviceKind::Trainer));
+    tokio::time::timeout(Duration::from_millis(250), async {
+        while trainer.disconnect_calls() == 0 {
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    })
+    .await
+    .expect("the pending connect was abandoned before its own timeout");
+    assert_eq!(trainer.connects(), 1, "no retry after a deliberate stop");
+
+    // The hub is usable afterwards.
+    trainer.hang_connects(false);
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_state(DeviceKind::Trainer, &ConnState::Connected)
+        .await;
+}
+
+#[tokio::test]
 async fn reconnect_gives_up_after_three_retries_with_a_notice() {
     let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
     trainer.fail_next_connects(4); // the initial attempt plus the three retries all fail
@@ -882,6 +1010,61 @@ async fn reconnect_gives_up_after_three_retries_with_a_notice() {
     assert!(
         failure.contains("nem sikerült (újra)csatlakozni"),
         "{failure}"
+    );
+    assert_eq!(trainer.connects(), 4, "one attempt plus 3 retries");
+    // the card keeps the failure: the task's end is no plain "disconnected"
+    let later = hub.events_for(Duration::from_millis(300)).await;
+    assert!(
+        !later.iter().any(|e| matches!(
+            e,
+            SensorEvent::State {
+                kind: DeviceKind::Trainer,
+                state: ConnState::Disconnected,
+                ..
+            }
+        )),
+        "{later:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_slow_connect_that_drops_at_once_still_uses_up_the_retries() {
+    let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
+    // the connect alone takes longer than a link has to last to count as stable
+    trainer.set_connect_delay(Duration::from_millis(400));
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let cfg = HubConfig {
+        connect_timeout: Duration::from_secs(2),
+        stable_after: Duration::from_millis(300),
+        ..HubConfig::fast()
+    };
+    let mut hub = Harness::spawn(adapter, cfg);
+    let _ = hub.next_event().await; // Discovered
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    let failed = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            match hub.next_event().await {
+                SensorEvent::State {
+                    kind: DeviceKind::Trainer,
+                    state: ConnState::Connected,
+                    ..
+                } => trainer.drop_link(),
+                SensorEvent::State {
+                    kind: DeviceKind::Trainer,
+                    state: ConnState::Failed(_),
+                    ..
+                } => break,
+                _ => {}
+            }
+        }
+    })
+    .await;
+    assert!(
+        failed.is_ok(),
+        "the retries ran out instead of going on forever"
     );
     assert_eq!(trainer.connects(), 4, "one attempt plus 3 retries");
 }
@@ -1064,7 +1247,7 @@ async fn simulated_rider_connects_and_the_sample_rate_is_bounded() {
     let name = hub
         .wait_state(DeviceKind::Trainer, &ConnState::Connected)
         .await;
-    assert_eq!(name.as_deref(), Some(sim_name()), "Szimulált tekerő");
+    assert_eq!(name.as_deref(), Some("Szimulált tekerő"));
     hub.send(SensorCommand::SetVirtualPower(180.0));
 
     let samples = hub.samples_for(Duration::from_millis(200)).await;
@@ -1194,7 +1377,9 @@ async fn a_dedicated_strap_takes_only_the_heart_rate_role() {
         .wait_sample("the trainer still owns power", |s| s.power_w == Some(190.0))
         .await;
     assert_eq!(sample.power_w, Some(190.0));
-    hub.wait_state(DeviceKind::PowerMeter, &ConnState::Connected)
+    trainer.push(0x2A5B, &csc_crank_packet(0, 0));
+    trainer.push(0x2A5B, &csc_crank_packet(2, 1024));
+    hub.wait_sample("the bridge keeps cadence", |s| s.cadence_rpm == Some(120.0))
         .await;
 }
 
@@ -1218,6 +1403,41 @@ async fn advertised_roles_are_claimed_even_without_a_scan() {
     ] {
         hub.wait_state(kind, &ConnState::Connected).await;
     }
+}
+
+#[tokio::test]
+async fn the_simulated_rider_takes_only_the_role_it_is_given() {
+    let trainer = FakePeripheral::bridge_trainer("b1", "Bridge Trainer");
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+    hub.send(SensorCommand::Connect {
+        id: "b1".to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    for kind in [DeviceKind::Trainer, DeviceKind::HeartRate] {
+        hub.wait_state(kind, &ConnState::Connected).await;
+    }
+    hub.send(SensorCommand::Connect {
+        id: SIM_ID.to_string(),
+        kind: DeviceKind::HeartRate,
+    });
+    hub.wait_state(DeviceKind::HeartRate, &ConnState::Connected)
+        .await;
+    let later = hub.events_for(Duration::from_millis(300)).await;
+    assert!(
+        !later.iter().any(|e| matches!(
+            e,
+            SensorEvent::State {
+                kind: DeviceKind::Trainer | DeviceKind::PowerMeter | DeviceKind::Cadence,
+                state: ConnState::Disconnected,
+                ..
+            }
+        )),
+        "the bridge keeps its other roles: {later:?}"
+    );
+    assert!(trainer.is_connected_now());
+    assert_eq!(trainer.disconnect_calls(), 0);
 }
 
 #[tokio::test]
@@ -1344,7 +1564,7 @@ async fn a_zwift_click_steps_the_gearbox_over_one_plain_link() {
 #[tokio::test]
 async fn a_zwift_hub_with_ftms_never_becomes_a_shifter() {
     // a Hub exposes the Zwift service as well as FTMS: the trainer role wins, no Shifter
-    let trainer = FakePeripheral::trainer("h1", "Zwift Hub");
+    let trainer = FakePeripheral::zwift_hub("h1", "Zwift Hub");
     let adapter = FakeAdapter::new(vec![trainer]);
     let mut hub = Harness::spawn(adapter, HubConfig::fast());
     let _ = hub.next_event().await; // Discovered
@@ -1365,4 +1585,35 @@ async fn a_zwift_hub_with_ftms_never_becomes_a_shifter() {
         )),
         "no shifter role on a trainer"
     );
+}
+
+#[tokio::test]
+async fn a_failed_role_replacement_restores_the_live_bridge() {
+    let trainer = FakePeripheral::bridge_trainer("bridge-restore", "Bridge");
+    let missing = FakePeripheral::power_meter("wrong-role", "No HR service");
+    let mut hub = Harness::spawn(
+        FakeAdapter::new(vec![trainer.clone(), missing]),
+        HubConfig::fast(),
+    );
+    let _ = hub.next_event().await;
+    hub.send(SensorCommand::Connect {
+        id: "bridge-restore".into(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.wait_state(DeviceKind::HeartRate, &ConnState::Connected)
+        .await;
+    hub.send(SensorCommand::Connect {
+        id: "wrong-role".into(),
+        kind: DeviceKind::HeartRate,
+    });
+    // First consume the new attempt, then the original owner's restoration.
+    hub.wait_state(DeviceKind::HeartRate, &ConnState::Connecting)
+        .await;
+    hub.wait_state(DeviceKind::HeartRate, &ConnState::Connected)
+        .await;
+    trainer.push(0x2A37, &[0, 143]);
+    hub.wait_sample("restored bridge HR", |s| s.hr_bpm == Some(143.0))
+        .await;
+    assert!(trainer.is_connected_now());
+    assert_eq!(trainer.connects(), 1);
 }

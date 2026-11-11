@@ -153,7 +153,9 @@ impl ControllerSession {
 
     /// Handles one notification or indication. Never panics; bad input yields no events.
     pub fn on_data(&mut self, bytes: &[u8], now: Instant) -> Vec<ControllerEvent> {
-        if bytes.starts_with(super::crypto::RIDE_ON) {
+        // Only an answer during the handshake is a device hello: afterwards a packet that
+        // happens to start with "RideOn" is data (and fails to open if it is not ours).
+        if !self.crypto.is_ready() && bytes.starts_with(super::crypto::RIDE_ON) {
             return match self.crypto.on_device_hello(bytes) {
                 Ok(mode) => vec![ControllerEvent::Ready {
                     encrypted: mode == Encryption::Encrypted,

@@ -26,7 +26,7 @@ GPL/AGPL code is never copied (it would make the whole app copyleft) — only
 ## Open risk
 Everything above is young and lightly hardware-tested. Mitigations: (1) differential
 tests `ftms` crate vs `cycling-ble` vs hand-computed spec vectors; (2) raw hex logging of
-every notification / control-point exchange (`RIDE_BLE_LOG=1` → `%LOCALAPPDATA%/bike-osm-ride/ble.log`);
+every notification / control-point exchange (always on: `<data>/ble.log`, rotated to `ble.log.1` beyond 8 MB, also while it runs);
 (3) a fully simulated trainer backend so every other part of the app is testable without hardware.
 
 ## Added after the first research (2026-11-01 to 2026-11-03)

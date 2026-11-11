@@ -12,9 +12,9 @@
 //! the other UI crates are measured against them.
 
 use dioxus::prelude::*;
-use ride_model::{testing::straight_route, ClimbCategory, RoutePoint, Theme};
+use ride_model::{ClimbCategory, RoutePoint, Theme};
 use ride_ui_kit::color;
-use ride_ui_kit::palette::{self, *};
+use ride_ui_kit::palette::*;
 use ride_ui_kit::*;
 use std::path::PathBuf;
 
@@ -138,16 +138,10 @@ fn bucket_runs(pts: &[RoutePoint]) -> Vec<(usize, usize, usize)> {
     runs
 }
 
-/// Black or white, whichever reads better on `bg` (flag numerals sit on a data colour).
+/// Black or white, whichever reads better on `bg` (flag numerals sit on a data colour): the
+/// kit's own rule, so the reference shows what the app draws.
 fn ink_on(bg: &str) -> &'static str {
-    let c = color::parse_hex(bg).unwrap_or(color::Rgb(128, 128, 128));
-    let on_dark = color::contrast_ratio(c, color::Rgb(16, 15, 13));
-    let on_light = color::contrast_ratio(c, color::Rgb(255, 255, 255));
-    if on_dark >= on_light {
-        "#100f0d"
-    } else {
-        "#ffffff"
-    }
+    color::ink_on(bg)
 }
 
 /// REFERENCE elevation profile: flat grade-coloured fill, a crisp 2 px ink outline, a km ruler
@@ -322,15 +316,8 @@ fn power_history_svg(theme: Theme, w: f64, h: f64) -> String {
         (205.0 + 70.0 * (t * 9.0).sin() + 38.0 * (t * 37.0).sin() + 90.0 * smooth(0.7, 0.9, t))
             .clamp(40.0, max_w - 20.0)
     };
-    let zone_of = |p: f64| match p / ftp * 100.0 {
-        v if v < 55.0 => 1,
-        v if v <= 75.0 => 2,
-        v if v <= 90.0 => 3,
-        v if v <= 105.0 => 4,
-        v if v <= 120.0 => 5,
-        v if v <= 150.0 => 6,
-        _ => 7,
-    };
+    // the app's own zone boundaries, not a copy that drifts from them
+    let zone_of = |p: f64| ride_model::power_zone_of_pct(p / ftp * 100.0);
     let mut s = format!("<svg viewBox=\"0 0 {w} {h}\" xmlns=\"http://www.w3.org/2000/svg\" font-family=\"Barlow Condensed\">");
     let line: Vec<String> = (0..n)
         .map(|i| format!("{:.1},{:.1}", (i as f64 + 0.5) * bw, y(power(i))))
@@ -837,9 +824,10 @@ fn HeadUnit(theme: Theme) -> Element {
     let profile = profile_svg(&pts, theme, rider, 1238.0, 200.0);
     let map = map_svg(&pts, theme, rider);
     let history = power_history_svg(theme, 378.0, 104.0);
-    let rp = pts[rider];
-    let climb = format!("{:.1}", 3.9).replace('.', ",");
-    let _ = rp;
+    // The rider (index 170, ~10.2 km) is past the foot of the 2nd-category climb drawn at
+    // 4.3-11.1 km, so the card shows the one after it, the 4th-category climb at 20.6-22.9 km:
+    // ahead of the rider, hence no progress bar (`ClimbCard` draws one only inside a climb).
+    let climb = format!("{:.1}", 2.3).replace('.', ",");
     rsx! {
         div { class: "hu",
             div { class: "hu-top",
@@ -860,16 +848,15 @@ fn HeadUnit(theme: Theme) -> Element {
             div { class: "hu-map",
                 div { dangerous_inner_html: "{map}" }
                 div { class: "hu-climb",
-                    div { class: "panel__head", span { "Következő emelkedő" } span { class: "tag tag--data", style: "--c: var(--cat-2)", span { class: "tag__dot" } "2. kat." } }
+                    div { class: "panel__head", span { "Következő emelkedő" } span { class: "tag tag--data", style: "--c: var(--cat-4)", span { class: "tag__dot" } "4. kat." } }
                     div { style: "padding: 8px 12px 12px",
-                        div { class: "num num--xl", "1,24" span { class: "unit", "km múlva" } }
+                        div { class: "num num--xl", "10,4" span { class: "unit", "km múlva" } }
                     }
                     div { class: "cells cells--3 cells--flush", style: "border-top: 1px solid var(--rule)",
                         div { class: "cell cell--sm", div { class: "cell__label", "Hossz" } div { class: "cell__value", "{climb}" span { class: "cell__unit", "km" } } }
-                        div { class: "cell cell--sm", div { class: "cell__label", "Átlag" } div { class: "cell__value", "6,8" span { class: "cell__unit", "%" } } }
-                        div { class: "cell cell--sm", div { class: "cell__label", "Szint" } div { class: "cell__value", "264" span { class: "cell__unit", "m" } } }
+                        div { class: "cell cell--sm", div { class: "cell__label", "Átlag" } div { class: "cell__value", "4,1" span { class: "cell__unit", "%" } } }
+                        div { class: "cell cell--sm", div { class: "cell__label", "Szint" } div { class: "cell__value", "+94" span { class: "cell__unit", "m" } } }
                     }
-                    div { class: "progress", style: "--p: 34; --c: var(--cat-2)", i {} }
                 }
                 div { class: "hu-ctl btn-group btn-group--v",
                     button { class: "btn btn--icon", "aria-label": "Nagyítás", Icon { name: IconName::Plus, size: 20 } }
@@ -981,6 +968,4 @@ fn main() {
             println!("{}", path.display());
         }
     }
-    let _ = palette::GRADE_BUCKETS;
-    let _ = straight_route(&[(100.0, 1.0)], 0.0);
 }

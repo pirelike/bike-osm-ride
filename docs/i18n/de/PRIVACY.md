@@ -11,7 +11,7 @@ hinausgehen kann und was auf deinem Rechner liegt. Die Aussagen beruhen auf dem 
 
 | Adresse | Wann | Was sie erhält | Hinweis |
 |---|---|---|---|
-| `tile.openstreetmap.org` | wenn die Karte Kacheln anfordert | die Koordinaten der Kachel (Zoom, x, y) und der Programmname im User-Agent (`bike-osm-ride/0.1 (desktop app)`) | lokal 30 Tage zwischengespeichert; kein Massen-Vorabladen (wegen der OSM-Tile-Policy) |
+| `tile.openstreetmap.org` | wenn die Karte Kacheln anfordert | die Koordinaten der Kachel (Zoom, x, y) und der Programmname im User-Agent (`bike-osm-ride/0.1 (desktop app)`) | Kacheln sind 30 Tage aktuell; ältere Offline-Kopien bleiben bis zu 90 Tage / insgesamt 512 MiB auf der Platte. Bereinigung beim Start und stündlich während der Nutzung. |
 | `brouter.de` | wenn du einen bikerouter-Link einfügst | die aus dem Link gelesenen Punkte (Längengrad, Breitengrad), das Profil und die Vermeidungen | die Route berechnet ihr Server |
 | `api.open-meteo.com` | nur wenn die GPX keine brauchbaren Höhendaten hat | die Koordinaten der Stützpunkte der Route (höchstens 100 pro Anfrage) | CC BY 4.0, für nichtkommerzielle Nutzung |
 | `api.github.com` | beim Start, fünf Sekunden später | die Abfrage der neuesten Version, `User-Agent: bike-osm-ride/<version>` | schlägt sie fehl, wird es still; **in den Einstellungen lässt sie sich nicht abschalten** |

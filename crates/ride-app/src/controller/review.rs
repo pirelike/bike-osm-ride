@@ -91,9 +91,9 @@ fn collect(
         .filter(|stem| available.contains(stem))
         .collect();
     if let Some(stem) = prefer.filter(|s| available.contains(s)) {
-        if !selected.contains(&stem) {
-            selected.push(stem);
-        }
+        selected.retain(|s| s != &stem);
+        selected.truncate(MAX_TICKED - 1);
+        selected.push(stem);
     }
     if selected.is_empty() {
         selected = available.iter().take(DEFAULT_TICKED).cloned().collect();
@@ -211,6 +211,16 @@ impl Controller {
         self.review_refresh(route_id, keep, None);
     }
 
+    /// A mutation refresh must not undo a route choice made while its disk work ran.
+    fn refresh_after_mutation(self, route_id: String, keep: Vec<String>, prefer: Option<String>) {
+        if self.st.review.route_id.peek().as_ref() == Some(&route_id) {
+            self.review_refresh(Some(route_id), keep, prefer);
+        } else {
+            let mut busy = self.st.review.busy;
+            busy.set(false);
+        }
+    }
+
     /// Deletes one stored ride.
     pub fn review_delete(self, stem: String) {
         let Some(route_id) = self.st.review.route_id.peek().clone() else {
@@ -244,21 +254,21 @@ impl Controller {
                     t("app.controller.review.az_edzest_nem_sikerult_torolni"),
                 ),
             }
-            self.review_refresh(Some(route_id), keep, None);
+            self.refresh_after_mutation(route_id, keep, None);
         });
     }
 
     /// The "import" button: a file dialog, then the file goes onto the route shown.
     #[cfg(not(target_os = "android"))]
     pub fn review_import(self) {
-        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+        let Some(lease) = self.acquire_file_dialog() else {
             return;
-        }
+        };
         let Some(win) = self.window() else {
-            self.with(|i| i.file_dialog_open = false);
             return;
         };
         spawn(async move {
+            let _lease = lease;
             let picked = rfd::AsyncFileDialog::new()
                 .set_title(t("app.controller.review.edzes_importalasa_gpx_vagy_tcx"))
                 .add_filter(
@@ -269,7 +279,7 @@ impl Controller {
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
-            self.with(|i| i.file_dialog_open = false);
+
             if let Some(file) = picked {
                 self.review_import_path(file.path().to_path_buf());
             }
@@ -330,7 +340,7 @@ impl Controller {
                     notes.extend(done.warnings);
                     let mut signal = self.st.review.notes;
                     signal.set(notes);
-                    self.review_refresh(Some(route.id.clone()), keep, Some(stem));
+                    self.refresh_after_mutation(route.id.clone(), keep, Some(stem));
                 }
                 Ok(Ok(Err(message))) => {
                     self.st.toast(ToastKind::Error, message);
@@ -369,7 +379,7 @@ impl Controller {
                         .ok_or(t("app.controller.review.az_edzes_nem_toltheto_be"))?;
                     let redone =
                         import::reestimate(&record, params, &rider).map_err(|e| e.to_string())?;
-                    rides::save_ride(&redone, &route).map_err(|e| {
+                    rides::replace_ride(&redone, &route, &stem).map_err(|e| {
                         tf(
                             "app.controller.review.az_edzest_nem_sikerult_elmenteni_e",
                             &[("e", &e.to_string())],
@@ -390,7 +400,7 @@ impl Controller {
                     t("app.controller.review.az_ujraszamolas_nem_sikerult"),
                 ),
             }
-            self.review_refresh(Some(route_id), keep, None);
+            self.refresh_after_mutation(route_id, keep, None);
         });
     }
 
@@ -523,6 +533,7 @@ mod tests {
             source: RideSource::Recorded,
             power_estimated: false,
             estimate: None,
+            measured_power: Vec::new(),
         }
     }
 

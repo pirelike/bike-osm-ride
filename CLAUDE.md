@@ -31,7 +31,7 @@ Runs on Windows, Linux, macOS and Android from one code base. Public repo
 
 ```powershell
 cargo run -p ride-app                    # debug build + start (Windows: the exe needs WebView2Loader.dll beside it, build.rs copies it)
-cargo test --workspace                   # 1098 tests, 3 ignored (network / Bluetooth); all green on Windows GNU, 2026-11-07
+cargo test --workspace                   # 1205 tests, 3 ignored (network / Bluetooth); Windows GNU, 2026-11-10
 cargo clippy --workspace --all-targets   # clean on 2026-11-06; keep it that way
 cargo fmt --all -- --check
 node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a built debug exe, Node 22+)
@@ -71,7 +71,7 @@ node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a 
 ## Repository map
 
 ```
-crates/ride-model       shared data model = the contract (Route, Settings, RideSnapshot, Workout, ride log types). Depends on nothing of ours.
+crates/ride-model       shared data model = the contract (Route, Settings, RideSnapshot, Workout, ride log types). Depends only on ride-i18n.
 crates/ride-route       GPX / bikerouter link -> Route; climbs; persistence (store, ride log, backup zip). Pure + async loaders.
 crates/ride-sim         physics, RideEngine, stats, recorder, workouts runner/import, ghost, segments, TCX, power curve. No I/O, no clock.
 crates/ride-ble         sensor hub: transport traits, FTMS/CPS/CSC/HR/Zwift, simulated rider. btleplug types live in btle.rs only.
@@ -84,7 +84,7 @@ crates/ride-app         the shell: state, controller (ride loop), tiling dock, t
 packaging/ scripts/ docs/ tests/fixtures/ .github/workflows/release.yml
 ```
 
-Dependency rule: everything depends on `ride-model`; `ride-ui-map/profile/hud` add only `ride-ui-kit`;
+Dependency rule: everything depends on `ride-model` and on `ride-i18n` (catalogue lookups; it depends on nothing of ours); `ride-ui-map/profile/hud` add only `ride-ui-kit`;
 `ride-sim`, `ride-ble` and `ride-ui-kit` depend only on `ride-model`; `ride-route` also uses `ride-sim`
 (segment times must be computed exactly like the live engine); `ride-ui-streetview` also uses `ride-route`
 `ride-ui-dialogs` uses `ride-ui-streetview`; `ride-ui-review` uses `ride-sim` (compare and estimate maths), `ride-ui-map` and `ride-ui-profile`; `ride-app` depends on all. Keep it acyclic.
@@ -166,7 +166,9 @@ were accepted 928 times, Request Control and Start work, and the trainer answers
 not supported". The capture contains **no terrain simulation**: its only six Set Indoor Bike Simulation
 writes are neutral (0 %) grades sent right before a pause. That the trainer follows hills is therefore
 **not confirmed on hardware**. **Never verified:** real Google Street View (only a
-local mock), Android Bluetooth on a device, the macOS and Linux apps at runtime (CI
+local mock), Android Bluetooth beyond one rider report (2026-11-08: a trainer was found and connected on a
+phone at the first try, a reconnect after a disconnect was unreliable; the fixes since are tested only against the
+fake transport, `docs/BLUETOOTH.md` §7), the macOS and Linux apps at runtime (CI
 builds them and smoke-tests Linux for 20 s), any trainer other than the VE200, **a real Strava/Garmin export** on the review page's import (only synthetic files and the
 app's own TCX were read), and the estimated watts against a real power meter (checked only as a round trip through the
 app's own physics), the **Android keep-screen-on flag and the Android backup (system save / open dialogs)** (written and

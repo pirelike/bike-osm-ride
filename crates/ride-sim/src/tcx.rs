@@ -5,7 +5,9 @@ use std::fmt::Write as _;
 
 use ride_model::{RecordPoint, RideSummary};
 
-/// Escapes text for XML content and attribute values.
+/// Escapes text for XML content and attribute values. Characters XML 1.0 does not allow at all
+/// (C0 controls other than tab and line breaks, U+FFFE, U+FFFF) are dropped: a route name from
+/// a hand-edited file must not make the whole TCX unreadable.
 fn esc(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 8);
     for c in s.chars() {
@@ -15,6 +17,8 @@ fn esc(s: &str) -> String {
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             '\'' => out.push_str("&apos;"),
+            '\t' | '\n' | '\r' => out.push(c),
+            c if (c as u32) < 0x20 || c == '\u{FFFE}' || c == '\u{FFFF}' => {}
             _ => out.push(c),
         }
     }
@@ -142,11 +146,20 @@ pub fn to_tcx(summary: &RideSummary, points: &[RecordPoint]) -> String {
     }
     xml.push_str("        <Intensity>Active</Intensity>\n");
     if let Some(c) = summary.avg_cadence.filter(|v| v.is_finite()) {
-        let _ = writeln!(xml, "        <Cadence>{}</Cadence>", num0(c.max(0.0)));
+        let _ = writeln!(
+            xml,
+            "        <Cadence>{}</Cadence>",
+            num0(c.clamp(0.0, 255.0))
+        );
     }
     xml.push_str("        <TriggerMethod>Manual</TriggerMethod>\n");
 
     if !points.is_empty() {
+        let start_dist = points
+            .first()
+            .map(|p| p.dist)
+            .filter(|d| d.is_finite())
+            .unwrap_or(0.0);
         xml.push_str("        <Track>\n");
         for p in points {
             xml.push_str("          <Trackpoint>\n");
@@ -165,10 +178,12 @@ pub fn to_tcx(summary: &RideSummary, points: &[RecordPoint]) -> String {
                 "            <AltitudeMeters>{}</AltitudeMeters>",
                 num1(p.ele)
             );
+            // From the start of the activity, not the route position: a ride may start with a
+            // seek, and the lap total is the distance ridden.
             let _ = writeln!(
                 xml,
                 "            <DistanceMeters>{}</DistanceMeters>",
-                num1(p.dist.max(0.0))
+                num1((p.dist - start_dist).max(0.0))
             );
             if let Some(hr) = p.hr_bpm.filter(|v| v.is_finite()) {
                 let _ = writeln!(
@@ -178,17 +193,27 @@ pub fn to_tcx(summary: &RideSummary, points: &[RecordPoint]) -> String {
                 );
             }
             if let Some(c) = p.cadence_rpm.filter(|v| v.is_finite()) {
-                let _ = writeln!(xml, "            <Cadence>{}</Cadence>", num0(c.max(0.0)));
+                let _ = writeln!(
+                    xml,
+                    "            <Cadence>{}</Cadence>",
+                    num0(c.clamp(0.0, 255.0))
+                );
             }
-            if let Some(w) = p.power_w.filter(|v| v.is_finite()) {
-                xml.push_str(concat!(
+            // ActivityExtension v2 is an `xsd:sequence`: Speed before Watts. The speed is written
+            // with or without a power value (a ride without a power meter still has one).
+            let speed = Some(p.speed_ms).filter(|v| v.is_finite());
+            let watts = p.power_w.filter(|v| v.is_finite());
+            if speed.is_some() || watts.is_some() {
+                xml.push_str(
                     "            <Extensions><TPX xmlns=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">",
-                    "<Watts>"
-                ));
-                let _ = write!(xml, "{}", num0(w.max(0.0)));
-                xml.push_str("</Watts><Speed>");
-                let _ = write!(xml, "{}", num1(p.speed_ms.max(0.0)));
-                xml.push_str("</Speed></TPX></Extensions>\n");
+                );
+                if let Some(v) = speed {
+                    let _ = write!(xml, "<Speed>{}</Speed>", num1(v.max(0.0)));
+                }
+                if let Some(w) = watts {
+                    let _ = write!(xml, "<Watts>{}</Watts>", num0(w.max(0.0)));
+                }
+                xml.push_str("</TPX></Extensions>\n");
             }
             xml.push_str("          </Trackpoint>\n");
         }
@@ -339,8 +364,65 @@ mod tests {
         assert!(!xml.contains("<&>"), "route name must be escaped");
         assert!(xml.contains("&lt;&amp;&gt;"));
         assert!(xml.trim_end().ends_with("</TrainingCenterDatabase>"));
-        // balanced angle brackets, no stray tag
-        assert_eq!(xml.matches('<').count(), xml.matches('>').count());
+        assert_well_formed(&xml);
+    }
+
+    /// Parses the document with a real XML reader: every tag closes, nothing illegal inside.
+    fn assert_well_formed(xml: &str) {
+        let mut reader = quick_xml::Reader::from_str(xml);
+        reader.config_mut().check_end_names = true;
+        let mut depth = 0i32;
+        loop {
+            match reader.read_event() {
+                Ok(quick_xml::events::Event::Start(_)) => depth += 1,
+                Ok(quick_xml::events::Event::End(_)) => depth -= 1,
+                Ok(quick_xml::events::Event::Text(t)) => {
+                    let text = t.xml10_content().to_string();
+                    assert!(
+                        !text
+                            .chars()
+                            .any(|c| (c as u32) < 0x20 && !matches!(c, '\t' | '\n' | '\r')),
+                        "control character in {text:?}"
+                    );
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(_) => {}
+                Err(e) => panic!("not well formed: {e}"),
+            }
+        }
+        assert_eq!(depth, 0, "unbalanced elements");
+    }
+
+    #[test]
+    fn a_point_without_power_keeps_its_speed_and_the_order_is_speed_then_watts() {
+        let mut pts: Vec<RecordPoint> = (0..3).map(|i| point(i as f64)).collect();
+        pts[1].power_w = None;
+        let xml = to_tcx(&summary(), &pts);
+        assert_eq!(xml.matches("<Speed>6.5</Speed>").count(), 3);
+        assert_eq!(xml.matches("<Watts>").count(), 2);
+        assert!(xml.contains("<Speed>6.5</Speed><Watts>200</Watts>"));
+        assert_well_formed(&xml);
+    }
+
+    #[test]
+    fn control_characters_are_dropped_from_names() {
+        let mut s = summary();
+        s.route_name = "Route\u{1}\u{FFFE}One\tTwo".into();
+        let xml = to_tcx(&s, &[point(0.0)]);
+        assert!(xml.contains("RouteOne\tTwo"));
+        assert_well_formed(&xml);
+    }
+
+    #[test]
+    fn trackpoint_distances_count_from_the_start_of_the_ride() {
+        let mut pts: Vec<RecordPoint> = (0..3).map(|i| point(i as f64)).collect();
+        for p in &mut pts {
+            p.dist += 4_000.0;
+        }
+        let xml = to_tcx(&summary(), &pts);
+        assert!(xml.contains("<DistanceMeters>0.0</DistanceMeters>"));
+        assert!(xml.contains("<DistanceMeters>13.0</DistanceMeters>"));
+        assert!(!xml.contains("<DistanceMeters>4000.0</DistanceMeters>"));
     }
 
     #[test]

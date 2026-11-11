@@ -107,15 +107,15 @@ impl Controller {
         if !self.backup_allowed() {
             return;
         }
-        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+        let Some(lease) = self.acquire_file_dialog() else {
             return;
-        }
+        };
         let Some(win) = self.window() else {
-            self.with(|i| i.file_dialog_open = false);
             return;
         };
         let settings = self.backup_settings();
         spawn(async move {
+            let _lease = lease;
             let picked = rfd::AsyncFileDialog::new()
                 .set_title(t("app.controller.backup.biztonsagi_mentes_mentese"))
                 .set_file_name(backup::suggested_filename(now_unix()))
@@ -124,7 +124,7 @@ impl Controller {
                 .save_file()
                 .await
                 .map(|file| file.path().to_path_buf());
-            self.with(|i| i.file_dialog_open = false);
+
             let Some(mut path) = picked else { return };
             if path.extension().is_none() {
                 path.set_extension("zip");
@@ -138,9 +138,8 @@ impl Controller {
             })
             .await;
             match joined {
-                Ok(Ok(Ok(report))) => self.st.toast(
-                    ToastKind::Success,
-                    tf(
+                Ok(Ok(Ok(report))) => {
+                    let mut text = tf(
                         "app.controller.backup.mentve_name_utvonal_tura_edzes",
                         &[
                             ("name", &name),
@@ -148,8 +147,19 @@ impl Controller {
                             ("rides", &report.rides.to_string()),
                             ("workouts", &report.workouts.to_string()),
                         ],
-                    ),
-                ),
+                    );
+                    // A backup that is missing files must not look complete.
+                    let kind = if report.omitted > 0 {
+                        text.push_str(&tf(
+                            "app.controller.backup.fajl_kimaradt_a_mentesbol",
+                            &[("n", &report.omitted.to_string())],
+                        ));
+                        ToastKind::Warning
+                    } else {
+                        ToastKind::Success
+                    };
+                    self.st.toast(kind, text);
+                }
                 Ok(Ok(Err(message))) => self.st.toast(ToastKind::Error, message),
                 _ => self.st.toast(
                     ToastKind::Error,
@@ -188,7 +198,19 @@ impl Controller {
                 .await
             };
             match written {
-                Ok(Ok(Ok(_))) => {}
+                Ok(Ok(Ok(report))) => {
+                    if report.omitted > 0 {
+                        self.st.toast(
+                            ToastKind::Warning,
+                            tf(
+                                "app.controller.backup.fajl_kimaradt_a_mentesbol",
+                                &[("n", &report.omitted.to_string())],
+                            )
+                            .trim()
+                            .to_string(),
+                        );
+                    }
+                }
                 Ok(Ok(Err(message))) => {
                     self.st.toast(ToastKind::Error, message);
                     return;
@@ -209,7 +231,7 @@ impl Controller {
                     ToastKind::Error,
                     tf(
                         "app.controller.backup.a_fajlvalaszto_nem_nyilt_meg_err",
-                        &[("err", &err.to_string())],
+                        &[("error", &err.to_string())],
                     ),
                 );
             }
@@ -238,14 +260,14 @@ impl Controller {
         if !self.backup_allowed() {
             return;
         }
-        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+        let Some(lease) = self.acquire_file_dialog() else {
             return;
-        }
+        };
         let Some(win) = self.window() else {
-            self.with(|i| i.file_dialog_open = false);
             return;
         };
         spawn(async move {
+            let _lease = lease;
             let picked = rfd::AsyncFileDialog::new()
                 .set_title(t("app.controller.backup.visszaallitas_mentesbol"))
                 .add_filter(t("app.controller.backup.mentes_zip"), &["zip"])
@@ -253,7 +275,7 @@ impl Controller {
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
-            self.with(|i| i.file_dialog_open = false);
+
             if let Some(file) = picked {
                 self.backup_restore_path(file.path().to_path_buf(), false);
             }
@@ -352,6 +374,15 @@ impl Controller {
                 &[("n", &report.skipped.to_string())],
             ));
         }
-        self.st.toast(ToastKind::Success, text);
+        let kind = if report.failed > 0 {
+            text.push_str(&tf(
+                "app.controller.backup.fajlt_nem_sikerult_kiirni",
+                &[("n", &report.failed.to_string())],
+            ));
+            ToastKind::Warning
+        } else {
+            ToastKind::Success
+        };
+        self.st.toast(kind, text);
     }
 }

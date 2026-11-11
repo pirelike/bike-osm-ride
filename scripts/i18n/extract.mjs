@@ -14,6 +14,7 @@
 //   node scripts/i18n/extract.mjs --crate ride-ui-hud
 //   node scripts/i18n/extract.mjs --crate ride-ui-hud --apply
 //   node scripts/i18n/extract.mjs --list          # print every candidate with its context
+//   node scripts/i18n/extract.mjs --prune         # drop keys no Rust source looks up any more
 //
 // Run from the repository root. The tests and the `examples/` previews are not UI: they are
 // skipped, as is `vendor/`.
@@ -147,14 +148,93 @@ const onlyCrate = value("--crate", null);
 const apply = flag("--apply");
 const list = flag("--list");
 
+if (flag("--self-test")) {
+  const fixture = '#[cfg(test)] mod tests { let json = r#"}"#; /* } /* { */ } */ let ch = \'}\'; let label = "Kettő"; }\nfn real() { let label = "Éles"; }';
+  const labels = scanStrings(stripTestBlocks(fixture)).map(s => s.text);
+  if (JSON.stringify(labels) !== JSON.stringify(["Éles"])) throw new Error("Test fixtures escaped the test-block mask");
+  const external = '#[cfg(test)] mod tests;\nfn real() { let label = "Éles"; }';
+  if (!stripTestBlocks(external).includes('let label = "Éles"')) throw new Error("An external test module hid production code");
+  console.log("Passed extractor test-block regressions");
+  process.exit(0);
+}
+
+// ───────────────────────────── pruning ─────────────────────────────
+
+// A key whose literal no longer appears in any Rust source (the text changed, the code went) is
+// dead: it can never be looked up, yet every translator keeps translating it. `--prune` removes
+// it from every catalog and from `_meta.json` (plural keys by their head, `items` for
+// `items.one` / `items.other`; the `i18n.test.*` fixtures stay). The catalog test
+// `every_source_key_is_used` fails while one is left.
+if (flag("--prune")) {
+  const sources = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== "target") walk(full);
+      } else if (entry.name.endsWith(".rs")) {
+        sources.push(fs.readFileSync(full, "utf8"));
+      }
+    }
+  };
+  walk(CRATES);
+  const text = sources.join("\n");
+  const head = (key) => key.replace(/\.(one|other)$/, "");
+  const used = (key) => key.startsWith("i18n.test.") || text.includes(`"${head(key)}"`);
+  let removed = new Set();
+  for (const file of fs.readdirSync(LOCALES).filter((f) => f.endsWith(".json")).sort()) {
+    const full = path.join(LOCALES, file);
+    const catalog = readJson(full);
+    let changed = false;
+    for (const key of Object.keys(catalog)) {
+      if (key === "_doc" || used(key)) continue;
+      delete catalog[key];
+      removed.add(key);
+      changed = true;
+    }
+    if (changed) writeJson(full, catalog);
+  }
+  removed = [...removed].sort();
+  console.log(`${removed.length} dead key(s) removed${removed.length ? ":\n  " + removed.join("\n  ") : ""}`);
+  process.exit(0);
+}
+
 // ───────────────────────────── Rust scanning ─────────────────────────────
 
-/** Byte offsets of `#[cfg(test)] mod/impl/fn … { … }` blocks, removed before scanning. */
+/** UTF-16 offsets of `#[cfg(test)]` items removed before scanning. */
 function testBlocks(src) {
+  // Braces in Rust strings, char literals and comments do not close an item.
+  // In particular, CSS/JSON test fixtures often contain unbalanced literal braces.
+  // Offsets below are UTF-16, as are slice()/scanStrings(); keep code units intact.
+  const masked = src.split("");
+  for (const { start, end } of scanStrings(src)) {
+    for (let i = start; i < end; i++) if (masked[i] !== "\n") masked[i] = " ";
+  }
+  let code = masked.join("").replace(/'(?:\\.|[^'\\])'/g, (s) => " ".repeat(s.length));
+  const clean = code.split("");
+  for (let i = 0; i < code.length;) {
+    let end = i;
+    if (code.startsWith("//", i)) {
+      end = code.indexOf("\n", i);
+      if (end < 0) end = code.length;
+    } else if (code.startsWith("/*", i)) {
+      let depth = 1;
+      end = i + 2;
+      while (end < code.length && depth) {
+        if (code.startsWith("/*", end)) { depth++; end += 2; }
+        else if (code.startsWith("*/", end)) { depth--; end += 2; }
+        else end++;
+      }
+    }
+    if (end > i) {
+      for (; i < end; i++) if (clean[i] !== "\n") clean[i] = " ";
+    } else i++;
+  }
+  code = clean.join("");
   const blocks = [];
   const re = /#\[cfg\(test\)\]/g;
   let m;
-  while ((m = re.exec(src))) {
+  while ((m = re.exec(code))) {
     let i = m.index + m[0].length;
     // Skip attributes and visibility until the item keyword.
     while (i < src.length && /\s/.test(src[i])) i++;
@@ -166,13 +246,19 @@ function testBlocks(src) {
     }
     const rest = src.slice(i, i + 80);
     if (!/^(pub(\([^)]*\))?\s+)?(mod|impl|fn)\b/.test(rest)) continue;
-    const brace = src.indexOf("{", i);
+    const externalModule = rest.match(/^(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*;/);
+    if (externalModule) {
+      blocks.push([m.index, i + externalModule[0].length]);
+      re.lastIndex = i + externalModule[0].length;
+      continue;
+    }
+    const brace = code.indexOf("{", i);
     if (brace < 0) continue;
     let depth = 1;
     let j = brace + 1;
     while (j < src.length && depth > 0) {
-      if (src[j] === "{") depth++;
-      else if (src[j] === "}") depth--;
+      if (code[j] === "{") depth++;
+      else if (code[j] === "}") depth--;
       j++;
     }
     blocks.push([m.index, j]);

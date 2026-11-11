@@ -497,9 +497,14 @@ fn map_segments(data: &GpxData, points: &[RoutePoint]) -> Vec<RouteSegment> {
         let Some(b) = nearest(last.lat, last.lon, a + 1) else {
             continue;
         };
+        // A track of one repeated point has no length to compare: on an out-and-back route its
+        // end could match the second visit of the same spot and name kilometres of route.
+        if own < 1.0 {
+            continue;
+        }
         let (start, end) = (points[a].dist, points[b].dist);
         let along = end - start;
-        if along <= 0.0 || (own > 0.0 && !(own * 0.5..=own * 1.5).contains(&along)) {
+        if along <= 0.0 || !(own * 0.5..=own * 1.5).contains(&along) {
             continue;
         }
         out.push(RouteSegment {
@@ -1017,6 +1022,22 @@ mod tests {
         assert_eq!(seg.name, "Emelkedő sprint");
         assert!((seg.start_dist - 1000.0).abs() < 15.0, "{seg:?}");
         assert!((seg.end_dist - 1600.0).abs() < 15.0, "{seg:?}");
+    }
+
+    #[test]
+    fn a_segment_track_of_one_repeated_point_is_not_a_segment() {
+        // out and back: the same spot is passed twice
+        let mut data = gpx_data(raw_from_segments(&[(3000.0, 2.0)], 100.0, 20.0));
+        let mut back = data.points.clone();
+        back.reverse();
+        data.points.extend(back);
+        let spot = data.points[50];
+        data.segment_tracks.push(crate::gpx::RawTrack {
+            name: "Pont".into(),
+            points: vec![spot, spot, spot],
+        });
+        let r = build_route(&data, "x", RouteSource::GpxFile).unwrap();
+        assert!(r.segments.is_empty(), "{:?}", r.segments);
     }
 
     #[test]

@@ -151,8 +151,11 @@ pub fn range_path(route: &Route, zoom: u8, shift: (f64, f64), from: f64, to: f64
     let mut coords: Vec<(f64, f64)> = vec![(route.locate(from).lon, route.locate(from).lat)];
     coords.extend(route.slice(from, to).iter().map(|p| (p.lon, p.lat)));
     coords.push((route.locate(to).lon, route.locate(to).lat));
-    let mut path = String::new();
-    for (i, (lon, lat)) in coords.iter().enumerate() {
+    if coords.len() < 2 {
+        return String::new();
+    }
+    let mut projected = Vec::with_capacity(coords.len());
+    for (lon, lat) in &coords {
         let (x, y) = (
             lon_to_x(*lon, zoom_f) - shift.0,
             lat_to_y(*lat, zoom_f) - shift.1,
@@ -160,13 +163,15 @@ pub fn range_path(route: &Route, zoom: u8, shift: (f64, f64), from: f64, to: f64
         if !(x.is_finite() && y.is_finite()) {
             return String::new();
         }
-        path.push(if i == 0 { 'M' } else { 'L' });
-        write_coord(&mut path, x);
-        path.push(' ');
-        write_coord(&mut path, y);
+        projected.push(Projected { x, y, grade: 0.0 });
     }
-    if coords.len() < 2 {
-        return String::new();
+    // the same thinning as the route itself: no sub-pixel steps, a bounded point count
+    let mut path = String::new();
+    for (i, p) in thin(&projected).iter().enumerate() {
+        path.push(if i == 0 { 'M' } else { 'L' });
+        write_coord(&mut path, p.x);
+        path.push(' ');
+        write_coord(&mut path, p.y);
     }
     path
 }

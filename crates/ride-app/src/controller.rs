@@ -80,6 +80,8 @@ fn parent_window(_win: &DesktopContext) -> Option<isize> {
 /// Settings waiting to be written (flushed on exit so a change made <500 ms before closing
 /// the window is not lost).
 static PENDING_SETTINGS: Mutex<Option<Settings>> = Mutex::new(None);
+// Serializes worker writes with the exit flush; a queued worker takes the latest value.
+static SETTINGS_IO: Mutex<()> = Mutex::new(());
 
 pub fn unix_now() -> f64 {
     SystemTime::now()
@@ -90,6 +92,7 @@ pub fn unix_now() -> f64 {
 
 /// Writes settings that are still waiting for the debounce timer. Called when the app exits.
 pub fn flush_pending_settings() {
+    let _io = SETTINGS_IO.lock().unwrap_or_else(|p| p.into_inner());
     let pending = PENDING_SETTINGS.lock().ok().and_then(|mut p| p.take());
     if let Some(settings) = pending {
         let disk = boot().for_disk(settings);
@@ -190,6 +193,7 @@ pub struct Inner {
     cmd_tx: Option<UnboundedSender<SensorCommand>>,
     last_tick: Instant,
     awake: bool,
+    wake_retry_at: Option<Instant>,
     time_scale: f64,
     finished: Option<FinishedRide>,
     /// Slots (by kind) that were connected to the simulated rider.
@@ -210,6 +214,14 @@ pub struct Inner {
     /// The `Copy` handle of this controller, filled in right after the cell has been leaked:
     /// the async tasks started from an `Inner` method need it to come back after their `await`.
     cell: Option<&'static RefCell<Inner>>,
+}
+
+/// Clears the picker gate on success, panic, or cancellation of the owning UI task.
+struct FileDialogLease(Controller);
+impl Drop for FileDialogLease {
+    fn drop(&mut self) {
+        self.0.with(|i| i.file_dialog_open = false);
+    }
 }
 
 /// `Copy` handle to the controller; see the module docs.
@@ -247,6 +259,7 @@ impl Controller {
             cmd_tx: None,
             last_tick: Instant::now(),
             awake: false,
+            wake_retry_at: None,
             time_scale: b.hooks.time_scale,
             finished: None,
             sim_kinds: HashSet::new(),
@@ -288,6 +301,14 @@ impl Controller {
     /// The window handle for the native dialogs and the WebView panels. Not routed through
     /// [`Controller::with`]: `DesktopContext` has no `Default` to fall back to, and a handler that
     /// cannot get the window has nothing left to do.
+    fn acquire_file_dialog(self) -> Option<FileDialogLease> {
+        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+            None
+        } else {
+            Some(FileDialogLease(self))
+        }
+    }
+
     fn window(self) -> Option<DesktopContext> {
         guarded("ui.window", || self.inner.borrow_mut().win.clone()).ok()
     }
@@ -498,8 +519,8 @@ impl Controller {
             self.st.toast(
                 ToastKind::Error,
                 tf(
-                    "app.controller.a_fajlvalaszto_nem_nyilt_meg_err",
-                    &[("err", &err.to_string())],
+                    "app.controller.backup.a_fajlvalaszto_nem_nyilt_meg_err",
+                    &[("error", &err.to_string())],
                 ),
             );
         }
@@ -508,15 +529,16 @@ impl Controller {
     /// Native "open" dialog, then loads the chosen file.
     #[cfg(not(target_os = "android"))]
     pub fn pick_file(self) {
-        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+        let Some(lease) = self.acquire_file_dialog() else {
             return;
-        }
+        };
         let Some(win) = self.window() else {
             // no window, no dialog: do not leave the flag set and lock the next attempt out
-            self.with(|i| i.file_dialog_open = false);
+
             return;
         };
         spawn(async move {
+            let _lease = lease;
             let picked = rfd::AsyncFileDialog::new()
                 .set_title(t("app.controller.gpx_utvonal_megnyitasa"))
                 .add_filter(t("app.controller.gpx_utvonal"), &["gpx"])
@@ -524,18 +546,31 @@ impl Controller {
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
-            self.with(|i| i.file_dialog_open = false);
+
             if let Some(file) = picked {
                 self.open_path(file.path().to_path_buf());
             }
         });
     }
 
-    /// Loads a GPX file (dialog, drag & drop, `RIDE_GPX`).
+    /// Loads a caller-owned GPX file (dialog, drag & drop, `RIDE_GPX`).
     pub fn open_path(self, path: PathBuf) {
+        self.open_path_inner(path, false);
+    }
+
+    /// The Android picker hands us an app-owned cache copy, consumed after parsing.
+    #[cfg(target_os = "android")]
+    pub fn open_picked_path(self, path: PathBuf) {
+        self.open_path_inner(path, true);
+    }
+
+    fn open_path_inner(self, path: PathBuf, remove_copy: bool) {
         spawn(async move {
-            self.run_load(ride_route::load_route_from_path(path, true))
-                .await
+            self.run_load(ride_route::load_route_from_path(path.clone(), true))
+                .await;
+            if remove_copy {
+                let _ = tokio::fs::remove_file(path).await;
+            }
         });
     }
 
@@ -544,15 +579,16 @@ impl Controller {
     /// Native "open" dialog for a workout file (MyWhoosh / Zwift), then imports it.
     #[cfg(not(target_os = "android"))]
     pub fn import_workout(self) {
-        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+        let Some(lease) = self.acquire_file_dialog() else {
             return;
-        }
+        };
         let Some(win) = self.window() else {
             // no window, no dialog: do not leave the flag set and lock the next attempt out
-            self.with(|i| i.file_dialog_open = false);
+
             return;
         };
         spawn(async move {
+            let _lease = lease;
             let picked = rfd::AsyncFileDialog::new()
                 .set_title(t("app.controller.edzes_importalasa"))
                 .add_filter(
@@ -563,7 +599,7 @@ impl Controller {
                 .set_parent(&*win.window)
                 .pick_file()
                 .await;
-            self.with(|i| i.file_dialog_open = false);
+
             if let Some(file) = picked {
                 self.with(|i| i.import_workout_path(file.path().to_path_buf()));
             }
@@ -736,13 +772,16 @@ impl Controller {
     /// Does nothing while one is running or starting.
     pub fn browser_start(self) {
         if browser::is_docked()
-            || std::mem::replace(&mut BROWSER.lock().expect("lock").starting, true)
+            || std::mem::replace(
+                &mut BROWSER.lock().unwrap_or_else(|p| p.into_inner()).starting,
+                true,
+            )
         {
             return;
         }
         let mut note = self.st.browser_note;
         let Some(exe) = browser::firefox_path() else {
-            BROWSER.lock().expect("lock").starting = false;
+            BROWSER.lock().unwrap_or_else(|p| p.into_inner()).starting = false;
             note.set(Some(
                 t("app.controller.a_firefox_nincs_telepitve_telepitsd_a_mozilla_org_fi")
                     .to_string(),
@@ -756,22 +795,25 @@ impl Controller {
             let before = browser::firefox_windows();
             if let Err(err) = browser::launch(&exe, &profile) {
                 eprintln!("[ride-app] firefox: {err}");
-                BROWSER.lock().expect("lock").starting = false;
-                note.set(Some(format!("A Firefox nem indult el: {err}")));
+                BROWSER.lock().unwrap_or_else(|p| p.into_inner()).starting = false;
+                note.set(Some(tf(
+                    "app.controller.firefox_failed",
+                    &[("err", &err.to_string())],
+                )));
                 return;
             }
             // The window shows up a moment later (the launcher process may hand over to another
-            // one), so the new Firefox window is the one that was not there before.
+            // one); browser::firefox_windows filters by our process job membership.
             for _ in 0..160 {
                 tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                let slot = BROWSER.lock().expect("lock").slot;
+                let slot = BROWSER.lock().unwrap_or_else(|p| p.into_inner()).slot;
                 let found = browser::firefox_windows()
                     .into_iter()
                     .find(|h| !before.contains(h));
                 if let (Some(hwnd), Some(slot), Some(parent)) = (found, slot, parent) {
                     browser::dock(hwnd, parent, slot);
                     {
-                        let mut host = BROWSER.lock().expect("lock");
+                        let mut host = BROWSER.lock().unwrap_or_else(|p| p.into_inner());
                         host.starting = false;
                         if !host.visible {
                             browser::hide();
@@ -781,7 +823,8 @@ impl Controller {
                     return;
                 }
             }
-            BROWSER.lock().expect("lock").starting = false;
+            browser::close();
+            BROWSER.lock().unwrap_or_else(|p| p.into_inner()).starting = false;
             note.set(Some(
                 t("app.controller.a_firefox_ablaka_nem_jelent_meg").to_string(),
             ));
@@ -791,7 +834,7 @@ impl Controller {
     /// Where the panel's body is now (`None`: the panel is gone or too small).
     pub fn browser_place(self, slot: Option<browser::Slot>) {
         let visible = {
-            let mut host = BROWSER.lock().expect("lock");
+            let mut host = BROWSER.lock().unwrap_or_else(|p| p.into_inner());
             host.slot = slot;
             host.visible
         };
@@ -804,7 +847,7 @@ impl Controller {
     /// Firefox is covered by a dialog or a drag: hide it (`false`) or show it again.
     pub fn browser_visible(self, visible: bool) {
         let slot = {
-            let mut host = BROWSER.lock().expect("lock");
+            let mut host = BROWSER.lock().unwrap_or_else(|p| p.into_inner());
             host.visible = visible;
             host.slot
         };
@@ -817,7 +860,7 @@ impl Controller {
     /// The panel was closed: so is Firefox.
     pub fn browser_stop(self) {
         {
-            let mut host = BROWSER.lock().expect("lock");
+            let mut host = BROWSER.lock().unwrap_or_else(|p| p.into_inner());
             host.slot = None;
             host.starting = false;
         }
@@ -1001,7 +1044,7 @@ impl Controller {
     /// Picks (or clears) the workout from the picker. Ignored during a ride.
     pub fn select_workout(self, id: Option<String>) {
         let changed = self.with(|i| {
-            if i.core.state() == RideState::Riding {
+            if matches!(i.core.state(), RideState::Riding | RideState::Paused) {
                 i.toast(
                     ToastKind::Warning,
                     t("app.controller.tekeres_kozben_nem_lehet_edzest_valtani_elobb_tarts_"),
@@ -1108,15 +1151,16 @@ impl Controller {
                 .toast(ToastKind::Warning, t("app.controller.nincs_mentendo_tura"));
             return;
         };
-        if self.with(|i| std::mem::replace(&mut i.file_dialog_open, true)) {
+        let Some(lease) = self.acquire_file_dialog() else {
             return;
-        }
+        };
         let Some(win) = self.window() else {
             // no window, no dialog: do not leave the flag set and lock the next attempt out
-            self.with(|i| i.file_dialog_open = false);
+
             return;
         };
         spawn(async move {
+            let _lease = lease;
             let rendered = guarded("tcx", || {
                 (
                     ride_sim::tcx::to_tcx(&finished.summary, &finished.points),
@@ -1124,7 +1168,6 @@ impl Controller {
                 )
             });
             let Ok((xml, suggested)) = rendered else {
-                self.with(|i| i.file_dialog_open = false);
                 self.st.toast(
                     ToastKind::Error,
                     t("app.controller.a_tcx_fajl_eloallitasa_nem_sikerult"),
@@ -1146,7 +1189,7 @@ impl Controller {
             #[cfg(target_os = "android")]
             {
                 let _ = &win;
-                self.with(|i| i.file_dialog_open = false);
+
                 let temp = crate::paths::data_dir().join("export-tmp");
                 let path = temp.join(&suggested);
                 let written = match tokio::fs::create_dir_all(&temp).await {
@@ -1172,15 +1215,14 @@ impl Controller {
                     self.st.toast(
                         ToastKind::Error,
                         tf(
-                            "app.controller.a_fajlvalaszto_nem_nyilt_meg_err",
-                            &[("err", &err.to_string())],
+                            "app.controller.backup.a_fajlvalaszto_nem_nyilt_meg_err",
+                            &[("error", &err.to_string())],
                         ),
                     );
                 }
             }
             #[cfg(not(target_os = "android"))]
             {
-                self.with(|i| i.file_dialog_open = false);
                 let Some(mut path) = picked else { return };
                 if path.extension().is_none() {
                     path.set_extension("tcx");
@@ -1232,36 +1274,43 @@ impl Inner {
 
     /// Parses one workout file, stores it and adds it to the library.
     fn import_workout_path(&mut self, path: PathBuf) {
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| t("app.controller.review.edzes").to_string());
-        let bytes = match std::fs::read(&path) {
-            Ok(bytes) => bytes,
-            Err(err) => {
-                eprintln!("[ride-app] workout import: {err}");
-                self.toast(
+        let ctl = self.controller();
+        spawn(async move {
+            let result = tokio::task::spawn_blocking(move || {
+                guarded("workout import", || -> Result<Workout, String> {
+                    use std::io::Read;
+                    let name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let mut bytes = Vec::new();
+                    std::fs::File::open(&path)
+                        .and_then(|f| f.take(4 * 1024 * 1024 + 1).read_to_end(&mut bytes))
+                        .map_err(|_| {
+                            t("app.controller.review.a_fajlt_nem_sikerult_megnyitni").to_string()
+                        })?;
+                    let workout = ride_sim::workout_import::from_bytes(&bytes, &name)?;
+                    ride_route::store::Store::default_location()
+                        .save_workout(&workout)
+                        .map_err(|_| {
+                            t("app.controller.az_edzest_nem_sikerult_elmenteni").to_string()
+                        })?;
+                    Ok(workout)
+                })
+            })
+            .await;
+            match result {
+                Ok(Ok(Ok(workout))) => ctl.with(|i| i.accept_imported_workout(workout)),
+                Ok(Ok(Err(message))) => ctl.st.toast(ToastKind::Error, message),
+                _ => ctl.st.toast(
                     ToastKind::Error,
-                    t("app.controller.review.a_fajlt_nem_sikerult_megnyitni"),
-                );
-                return;
+                    t("app.controller.review.az_edzes_importalasa_nem_sikerult"),
+                ),
             }
-        };
-        let workout = match ride_sim::workout_import::from_bytes(&bytes, &name) {
-            Ok(workout) => workout,
-            Err(message) => {
-                self.toast(ToastKind::Error, message);
-                return;
-            }
-        };
-        if let Err(err) = ride_route::store::Store::default_location().save_workout(&workout) {
-            eprintln!("[ride-app] save_workout: {err}");
-            self.toast(
-                ToastKind::Error,
-                t("app.controller.az_edzest_nem_sikerult_elmenteni"),
-            );
-            return;
-        }
+        });
+    }
+
+    fn accept_imported_workout(&mut self, workout: Workout) {
         let mut imported = self.st.imported_workouts.peek().clone();
         imported.retain(|other| other.id != workout.id);
         imported.push(workout.clone());
@@ -1317,6 +1366,14 @@ impl Inner {
 
     fn hub_lost(&mut self) {
         self.cmd_tx = None;
+        self.core.set_sample(ride_model::SensorSample::default());
+        self.sim_kinds.clear();
+        self.expected_disconnect.clear();
+        self.st.slots.set(crate::state::default_slots());
+        self.st.sim_connected.set(false);
+        self.st.scanning.set(false);
+        let out = self.core.pause(Instant::now());
+        self.apply(out);
         if !std::mem::replace(&mut self.hub_lost_notified, true) {
             self.toast(
                 ToastKind::Error,
@@ -1400,6 +1457,7 @@ impl Inner {
                 d.set(list);
             }
             SensorEvent::State { kind, state, name } => self.on_device_state(kind, state, name),
+            SensorEvent::Disconnecting(kinds) => self.expected_disconnect.extend(kinds),
             SensorEvent::Sample(sample) => self.core.set_sample(sample),
             SensorEvent::Notice(text) => self.toast(ToastKind::Info, text),
             // routed by `Controller::on_sensor_event`, which owns the settings
@@ -1416,7 +1474,10 @@ impl Inner {
             .find(|s| s.kind == kind)
             .map(|s| s.state.clone())
             .unwrap_or(ConnState::Disconnected);
-        let expected = state == ConnState::Disconnected && self.expected_disconnect.remove(&kind);
+        let expected = matches!(
+            state,
+            ConnState::Disconnected | ConnState::Failed(_) | ConnState::Connected
+        ) && self.expected_disconnect.remove(&kind);
         if let Some((tone, text)) =
             state_change_toast(kind, &prev, &state, name.as_deref(), expected)
         {
@@ -1631,6 +1692,7 @@ impl Inner {
             source: ride_model::RideSource::Recorded,
             power_estimated: false,
             estimate: None,
+            measured_power: Vec::new(),
         };
         // The comparison must use the PRs *before* this ride is saved, so the read, the compare
         // and the write happen in this order on the same blocking thread.
@@ -1659,14 +1721,22 @@ impl Inner {
                 Ok((value, saved)) => {
                     comparison.set(Some(value));
                     match saved {
-                        Ok(Some(meta)) => ctl.st.toast(
+                        Ok(Some(meta)) => {
+                            if *ctl.st.review.open.peek() {
+                                let page = ctl.st.review;
+                                let id = page.route_id.peek().clone();
+                                let keep = page.selected.peek().clone();
+                                ctl.review_refresh(id, keep, None);
+                            }
+                            ctl.st.toast(
                             ToastKind::Success,
                             if meta.simulated {
                                 t("app.controller.menet_elmentve_a_tekeres_naploba_szimulalt_menet_nem")
                             } else {
                                 t("app.controller.menet_elmentve_a_tekeres_naploba_a_kovetkezo_menetne")
                             },
-                        ),
+                        );
+                        }
                         // Too short to keep: say so, otherwise the missing ghost looks broken.
                         Ok(None) => ctl.st.toast(
                             ToastKind::Info,
@@ -1744,8 +1814,15 @@ impl Inner {
     /// Keeps the PC awake while riding.
     fn set_awake(&mut self, on: bool) {
         if self.awake != on {
-            self.awake = on;
-            if !wake::set(on) {
+            let now = Instant::now();
+            if on && self.wake_retry_at.is_some_and(|retry| now < retry) {
+                return;
+            }
+            if wake::set(on) {
+                self.awake = on;
+                self.wake_retry_at = None;
+            } else {
+                self.wake_retry_at = Some(now + std::time::Duration::from_secs(30));
                 eprintln!("[ride-app] keep-awake could not be toggled to {on}");
             }
         }
@@ -1773,6 +1850,10 @@ impl Inner {
     }
 
     fn install_route(&mut self, route: Route) {
+        // Loading runs asynchronously; Start may have happened since it was requested.
+        if !self.can_replace_route() {
+            return;
+        }
         eprintln!(
             "[ride-app] route loaded: {} ({} points, {:.1} km)",
             route.name,
@@ -1860,20 +1941,28 @@ impl Inner {
         if route.source == RouteSource::Demo {
             return;
         }
-        match guarded("store::save_recent", || {
-            ride_route::store::save_recent(route)
-        }) {
-            Ok(Ok(())) => {}
-            Ok(Err(err)) => {
-                eprintln!("[ride-app] save_recent: {err}");
-                self.toast(
+        let route = route.clone();
+        let ctl = self.controller();
+        spawn(async move {
+            let result = tokio::task::spawn_blocking(move || {
+                let result = ride_route::store::save_recent(&route);
+                (result, ride_route::store::list_recent())
+            })
+            .await;
+            match result {
+                Ok((saved, list)) => {
+                    let mut recent = ctl.st.recents;
+                    recent.set(list);
+                    if saved.is_err() {
+                        ctl.st.toast(ToastKind::Warning, t("app.controller.az_utvonalat_nem_sikerult_a_legutobbiak_koze_menteni"));
+                    }
+                }
+                Err(_) => ctl.st.toast(
                     ToastKind::Warning,
                     t("app.controller.az_utvonalat_nem_sikerult_a_legutobbiak_koze_menteni"),
-                );
+                ),
             }
-            Err(_) => {}
-        }
-        self.refresh_recents();
+        });
     }
 
     fn refresh_recents(&mut self) {
@@ -1950,28 +2039,33 @@ impl Inner {
     }
 
     fn flush_settings(&mut self) {
-        let pending = PENDING_SETTINGS.lock().ok().and_then(|mut p| p.take());
-        let Some(settings) = pending else { return };
-        let disk = boot().for_disk(settings);
-        if disk == self.saved {
-            return;
-        }
-        match guarded("store::save_settings", || {
-            ride_route::store::save_settings(&disk)
-        }) {
-            Ok(Ok(())) => self.saved = disk,
-            Ok(Err(err)) => {
-                eprintln!("[ride-app] save_settings: {err}");
-                self.toast(
+        let ctl = self.controller();
+        let job = tokio::task::spawn_blocking(|| {
+            let _io = SETTINGS_IO.lock().unwrap_or_else(|p| p.into_inner());
+            let pending = PENDING_SETTINGS.lock().ok().and_then(|mut p| p.take());
+            let Some(settings) = pending else {
+                return Ok(None);
+            };
+            let disk = boot().for_disk(settings);
+            match guarded("store::save_settings", || {
+                ride_route::store::save_settings(&disk)
+            }) {
+                Ok(Ok(())) => Ok(Some(disk)),
+                Ok(Err(e)) => Err(e.to_string()),
+                Err(_) => Err("settings worker panicked".into()),
+            }
+        });
+        spawn(async move {
+            let result = job.await;
+            match result {
+                Ok(Ok(Some(disk))) => ctl.with(|i| i.saved = disk),
+                Ok(Ok(None)) => {}
+                _ => ctl.st.toast(
                     ToastKind::Error,
                     t("app.controller.a_beallitasokat_nem_sikerult_elmenteni"),
-                );
+                ),
             }
-            Err(_) => self.toast(
-                ToastKind::Error,
-                t("app.controller.a_beallitasokat_nem_sikerult_elmenteni"),
-            ),
-        }
+        });
     }
 
     // ───── window ─────

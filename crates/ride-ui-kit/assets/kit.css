@@ -234,7 +234,11 @@ a:hover { text-decoration-thickness: 2px; }
 .num--hero { font-size: var(--t-96); letter-spacing: -0.01em; }
 .num--prop { font-variant-numeric: proportional-nums lining-nums; font-feature-settings: "pnum" 1, "lnum" 1; }
 /* cap-height trim: the numeral box ends at the cap height and the baseline, so it aligns to hairlines */
-.num--trim { text-box: trim-both cap alphabetic; }
+/* Older webviews retain the normal numeral line box; trimming is progressive enhancement. */
+.num--trim { line-height: 1; }
+@supports (text-box: trim-both cap alphabetic) {
+  .num--trim { text-box: trim-both cap alphabetic; }
+}
 .unit { font: 500 var(--t-13)/1 var(--font-num); color: var(--text-dim); letter-spacing: 0; margin-left: 0.25em; }
 .num--sm .unit { font-size: var(--t-11); }
 .num--md .unit, .num--lg .unit { font-size: var(--t-13); }
@@ -551,8 +555,8 @@ button.chip:hover, a.chip:hover { background: var(--fill-2); color: var(--text);
 /* a dialog without footer content has no footer */
 .dialog__foot:empty { display: none; }
 
-/* phones: a dialog footer is a two-column grid. A row of three actions ("Csak mentés TCX-ként",
-   "Feltöltés Stravára", …) does not fit a phone's width, and a wrapped flex row left one button
+/* phones: a dialog footer is a two-column grid. A row of long actions ("Mentés TCX-ként",
+   "Új útvonal", …) does not fit a phone's width, and a wrapped flex row left one button
    alone on its own line. The secondary actions share a row (their labels wrap inside the button),
    the primary one spans the full width under them, where a thumb reaches it. */
 @media (max-width: 699px) {

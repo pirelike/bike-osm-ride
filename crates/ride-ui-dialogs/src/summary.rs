@@ -5,11 +5,15 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use ride_model::{RideComparison, RideSummary, Route};
-use ride_ui_kit::format::{fmt_delta_duration, fmt_duration, fmt_km, fmt_m, fmt_opt0};
+use ride_ui_kit::format::{
+    fmt_delta_duration, fmt_duration, fmt_km, fmt_m, fmt_opt0, fmt_speed_kmh,
+};
 use ride_ui_kit::palette::{hr_zone_name, hr_zone_var, power_zone_name, power_zone_var};
 use ride_ui_kit::{Dialog, Icon, IconName};
 
-use crate::helpers::{fmt_date, fmt_if, hr_zone_bars, power_zone_bars, segment_rows, SegmentRow};
+use crate::helpers::{
+    fmt_if, hr_zone_bars, power_zone_bars, segment_rows, summary_headline, SegmentRow,
+};
 use ride_i18n::t;
 
 /// End-of-ride summary: headline numbers, the ghost difference and the segment table, zone
@@ -86,12 +90,8 @@ fn SummaryBody(
 ) -> Element {
     let power_bars = power_zone_bars(&summary.power_zone_secs);
     let hr_bars = hr_zone_bars(&summary.hr_zone_secs);
-    let headline = format!(
-        "{} · {}",
-        fmt_date(summary.started_unix_s),
-        fmt_duration(summary.elapsed_s)
-    );
-    let avg_speed_kmh = fmt_opt0(Some(summary.avg_speed_ms.max(0.0) * 3.6));
+    let headline = summary_headline(&summary);
+    let avg_speed_kmh = fmt_speed_kmh(summary.avg_speed_ms);
     let rows = comparison
         .as_ref()
         .map(|comparison| segment_rows(comparison, route.as_deref()))
@@ -142,7 +142,12 @@ fn SummaryBody(
                         div { class: "dlg-ghost",
                             span { class: "dlg-ghost__label", {t("ui_dialogs.summary.szellemhez_kepest")} }
                             span {
-                                class: if delta < 0.0 { "dlg-ghost__value dlg-ghost__value--ahead" } else { "dlg-ghost__value dlg-ghost__value--behind" },
+                                // the colour follows the shown (whole-second) value: "0:00" is neither
+                                class: match delta.round() {
+                                    d if d < 0.0 => "dlg-ghost__value dlg-ghost__value--ahead",
+                                    d if d > 0.0 => "dlg-ghost__value dlg-ghost__value--behind",
+                                    _ => "dlg-ghost__value",
+                                },
                                 "{fmt_delta_duration(delta)}"
                             }
                         }

@@ -4,5 +4,5 @@
      location prompt is generated from Dioxus.toml. Kept as an explicit file so a later,
      rider-visible Android-only string has an obvious place in the Italian build. -->
 <resources>
-    <string name="app_name">bike-osm-ride</string>
+    <string name="app_name">BikeOsmRide</string>
 </resources>

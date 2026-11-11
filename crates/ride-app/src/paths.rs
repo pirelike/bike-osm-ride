@@ -25,7 +25,7 @@ pub fn tiles_dir() -> PathBuf {
     data_dir().join("tiles")
 }
 
-/// Target of `RIDE_BLE_LOG=1`.
+/// The BLE hex log, always written (rotated to `ble.log.1` beyond 8 MB).
 pub fn ble_log_path() -> PathBuf {
     data_dir().join("ble.log")
 }

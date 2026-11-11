@@ -107,15 +107,14 @@ pub fn oklch_lightness(c: Rgb) -> f64 {
 
 /// `rgba(r, g, b, a)` from a `#rrggbb` string; invalid input gives fully transparent black.
 pub fn with_alpha(hex: &str, alpha: f64) -> String {
-    let c = parse_hex(hex).unwrap_or(Rgb(0, 0, 0));
+    let Some(c) = parse_hex(hex) else {
+        return "rgba(0, 0, 0, 0)".into();
+    };
     let a = if alpha.is_finite() {
         alpha.clamp(0.0, 1.0)
     } else {
         0.0
     };
-    if parse_hex(hex).is_none() {
-        return "rgba(0, 0, 0, 0)".into();
-    }
     format!("rgba({}, {}, {}, {})", c.0, c.1, c.2, trim_float(a))
 }
 

@@ -2,7 +2,7 @@
 
 bike-osm-ride rides a GPX route on a 2D map with an elevation profile while a Bluetooth LE smart trainer
 follows the hills (or a simulated rider pedals). One Rust code base builds the Windows, Linux, macOS and
-Android apps. Everything below was checked against the code on 2026-11-04 (version 0.3.0).
+Android apps. Everything below was checked against the code on 2026-11-10 (source references for version 0.5.0).
 
 This document is the map. The details live next to it: [`BLUETOOTH.md`](BLUETOOTH.md),
 [`SIMULATION.md`](SIMULATION.md), [`ROUTES_AND_DATA.md`](ROUTES_AND_DATA.md), [`UI.md`](UI.md),
@@ -34,9 +34,15 @@ the big choices in [`DECISIONS.md`](DECISIONS.md).
 
 Dependencies between workspace crates (from the `Cargo.toml` files; the graph is acyclic):
 
+Every crate below also depends on `ride-i18n` (the catalogue lookups `t()` / `tf()` / `tn()`; it
+depends on nothing of ours, so it is the one deliberate exception to "`ride-model` depends on
+nothing"). Of the external crates, `tokio` appears in `ride-ui-kit` only for the toast timer on the
+runtime Dioxus already runs.
+
 | Crate | Depends on |
 |---|---|
-| `ride-model` | none |
+| `ride-i18n` | none |
+| `ride-model` | `ride-i18n` only |
 | `ride-sim`, `ride-ble`, `ride-ui-kit` | `ride-model` |
 | `ride-route` | `ride-model`, `ride-sim` |
 | `ride-ui-map`, `ride-ui-profile`, `ride-ui-hud` | `ride-model`, `ride-ui-kit` |

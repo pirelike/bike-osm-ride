@@ -122,7 +122,11 @@ pub fn circular_mean_deg(angles: &[f64]) -> Option<f64> {
         c += a.to_radians().cos();
     }
     if s.abs() < 1e-9 && c.abs() < 1e-9 {
-        return angles.first().copied().map(|a| a.rem_euclid(360.0));
+        return angles
+            .iter()
+            .copied()
+            .find(|a| a.is_finite())
+            .map(|a| a.rem_euclid(360.0));
     }
     Some(s.atan2(c).to_degrees().rem_euclid(360.0))
 }
@@ -203,12 +207,12 @@ impl Planner {
             Some((d0, t0)) => {
                 let moved = (dist - d0).abs();
                 let dt = now_s - t0;
-                if moved >= self.cfg.seek_jump_m {
+                if let Some(wait) = self.retry_after {
+                    dt >= wait
+                } else if moved >= self.cfg.seek_jump_m {
                     true
                 } else if dt < self.cfg.min_gap_s {
                     false
-                } else if let Some(wait) = self.retry_after {
-                    dt >= wait
                 } else {
                     moved >= self.cfg.min_move_m
                         || (dt >= self.cfg.min_interval_s && moved >= self.cfg.time_rule_floor_m)
@@ -307,6 +311,12 @@ impl Planner {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn circular_mean_ignores_nonfinite_values_even_in_degenerate_cases() {
+        assert_eq!(super::circular_mean_deg(&[f64::NAN]), None);
+        assert_eq!(super::circular_mean_deg(&[f64::NAN, 0.0, 180.0]), Some(0.0));
+    }
+
     use super::*;
     use ride_model::testing::straight_route;
 

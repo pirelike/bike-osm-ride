@@ -7,7 +7,8 @@
 //!
 //! * duplicate notifications (same counters) carry no information and never produce a rate;
 //! * a counter reset (sensor restarted) shows up as an absurd rate and is discarded;
-//! * no new revolution for [`COAST_AFTER`] means the rider stopped pedalling: 0 rpm.
+//! * no new revolution for [`COAST_AFTER`] (or three periods of the last rate, up to
+//!   [`COAST_AFTER_MAX`]) means the rider stopped pedalling: 0 rpm.
 
 use std::time::{Duration, Instant};
 
@@ -19,8 +20,10 @@ use crate::vendor::cycling_ble::{
     CSC_WHEEL_EVENT_TIME_HZ, WHEEL_REVOLUTIONS_WRAP_AT,
 };
 
-/// No new revolution for this long = coasting.
+/// No new revolution for this long = coasting (at least; see [`RevTracker::coast_window`]).
 pub const COAST_AFTER: Duration = Duration::from_millis(2500);
+/// The coasting window never grows past this, however slow the last revolution was.
+pub const COAST_AFTER_MAX: Duration = Duration::from_secs(10);
 
 /// Default wheel circumference for speed from a CSC wheel sensor: 700x25c, 2.105 m. (The app
 /// has no tyre setting; trainer-reported speed has priority anyway.)
@@ -109,12 +112,26 @@ impl RevTracker {
         }
     }
 
-    fn coast_value(&self, now: Instant) -> Option<f64> {
-        let last = self.last_change?;
-        (self.prev.is_some() && now.saturating_duration_since(last) >= COAST_AFTER).then_some(0.0)
+    /// How long without a new revolution means coasting: [`COAST_AFTER`], or three of the
+    /// last revolution periods when that is longer. A sensor reports once per revolution, so at
+    /// 20 rpm (3 s a turn) a fixed 2.5 s would claim a stop between every two turns, and that
+    /// fresh 0 would hide the trainer's own, correct cadence.
+    fn coast_window(&self) -> Duration {
+        self.last_rpm
+            .filter(|rpm| rpm.is_finite() && *rpm > 0.0)
+            .map_or(COAST_AFTER, |rpm| {
+                let three_turns = Duration::from_secs_f64((180.0 / rpm).min(60.0));
+                three_turns.clamp(COAST_AFTER, COAST_AFTER_MAX)
+            })
     }
 
-    /// Timer-driven check: `Some(0.0)` once the rider has been coasting for [`COAST_AFTER`].
+    fn coast_value(&self, now: Instant) -> Option<f64> {
+        let last = self.last_change?;
+        (self.prev.is_some() && now.saturating_duration_since(last) >= self.coast_window())
+            .then_some(0.0)
+    }
+
+    /// Timer-driven check: `Some(0.0)` once the rider has been coasting for the coasting window.
     pub fn idle(&self, now: Instant) -> Option<f64> {
         self.coast_value(now)
     }
@@ -237,17 +254,32 @@ mod tests {
             Some(rpm)
         );
         assert_eq!(tr.idle(t + Duration::from_millis(1500)), None);
-        // after COAST_AFTER without a new revolution: 0 rpm
+        // after three turns of the last rate (3 s at 60 rpm) without a new revolution: 0 rpm
+        assert_eq!(tr.idle(t + Duration::from_millis(3600)), None);
         assert_eq!(
-            tr.update(s(11, 1024), t + Duration::from_millis(3600)),
+            tr.update(s(11, 1024), t + Duration::from_millis(4100)),
             Some(0.0)
         );
-        assert_eq!(tr.idle(t + Duration::from_millis(3600)), Some(0.0));
+        assert_eq!(tr.idle(t + Duration::from_millis(4100)), Some(0.0));
         // pedalling resumes
         let rpm = tr
-            .update(s(12, 2560), t + Duration::from_millis(4000))
+            .update(s(12, 2560), t + Duration::from_millis(4500))
             .unwrap();
         assert!((rpm - 40.0).abs() < 0.01, "{rpm}");
+    }
+
+    #[test]
+    fn a_slow_cadence_is_not_taken_for_coasting() {
+        let t = Instant::now();
+        let mut tr = RevTracker::crank();
+        tr.update(s(10, 0), t);
+        // 20 rpm: one revolution every 3 s
+        let rpm = tr.update(s(11, 3072), t + Duration::from_secs(3)).unwrap();
+        assert!((rpm - 20.0).abs() < 0.01, "{rpm}");
+        // 2.9 s after it the next turn is simply not due yet
+        assert_eq!(tr.idle(t + Duration::from_millis(5900)), None);
+        // nine seconds without one is a stop; the window is capped
+        assert_eq!(tr.idle(t + Duration::from_millis(12_100)), Some(0.0));
     }
 
     #[test]

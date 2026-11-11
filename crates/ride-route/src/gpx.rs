@@ -237,7 +237,7 @@ impl Parser {
             El::Ele => {
                 if let (Some(pt), Some(p)) = (self.pt.as_mut(), parent) {
                     if p == pt.kind {
-                        pt.ele = parse_number(&self.text);
+                        pt.ele = parse_elevation(&self.text);
                     }
                 }
             }
@@ -367,6 +367,15 @@ pub(crate) fn parse_number(s: &str) -> Option<f64> {
     v.is_finite().then_some(v)
 }
 
+/// Elevations outside this range (metres) are corrupt data, not terrain: they are dropped like an
+/// unparsable `<ele>`. A finite 1e308 would pass `is_finite` and overflow the smoothing sums.
+const ELEVATION_RANGE_M: std::ops::RangeInclusive<f64> = -2_000.0..=20_000.0;
+
+/// A plausible elevation in metres (see [`parse_number`]); `None` for anything else.
+pub(crate) fn parse_elevation(s: &str) -> Option<f64> {
+    parse_number(s).filter(|e| ELEVATION_RANGE_M.contains(e))
+}
+
 fn clean_name(s: &str) -> String {
     let joined = s.split_whitespace().collect::<Vec<_>>().join(" ");
     joined.chars().take(200).collect()
@@ -391,11 +400,20 @@ pub fn parse_iso8601(s: &str) -> Option<f64> {
     if !matches!(bytes[10], b'T' | b't' | b' ') {
         return None;
     }
-    let number = |range: std::ops::Range<usize>| -> Option<i64> { s.get(range)?.parse().ok() };
+    // ASCII digits only: `str::parse` also takes a sign, and "-1" would shift the moment instead
+    // of rejecting the timestamp.
+    let number = |range: std::ops::Range<usize>| -> Option<i64> { digits(s.get(range)?) };
     let (year, month, day) = (number(0..4)?, number(5..7)?, number(8..10)?);
     let (hour, minute, second) = (number(11..13)?, number(14..16)?, number(17..19)?);
+    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let month_len = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
     if !(1..=12).contains(&month)
-        || !(1..=31).contains(&day)
+        || !(1..=month_len).contains(&day)
         || hour > 23
         || minute > 59
         || second > 60
@@ -421,7 +439,7 @@ pub fn parse_iso8601(s: &str) -> Option<f64> {
                 _ => return None,
             };
             let body = &rest[1..];
-            let two = |start: usize| -> Option<i64> { body.get(start..start + 2)?.parse().ok() };
+            let two = |start: usize| -> Option<i64> { digits(body.get(start..start + 2)?) };
             let (hours, minutes) = match body.len() {
                 5 if body.as_bytes()[2] == b':' => (two(0)?, two(3)?),
                 4 => (two(0)?, two(2)?),
@@ -437,6 +455,14 @@ pub fn parse_iso8601(s: &str) -> Option<f64> {
     let days = days_from_civil(year, month, day);
     let seconds = days * 86_400 + hour * 3600 + minute * 60 + second - offset_s;
     Some(seconds as f64 + fraction)
+}
+
+/// A non-negative integer made of ASCII digits only (no sign, no space).
+fn digits(s: &str) -> Option<i64> {
+    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse().ok()
 }
 
 /// Days since 1970-01-01 of a proleptic Gregorian date (Howard Hinnant's `days_from_civil`).
@@ -569,6 +595,54 @@ const SEGMENT_MAX_SHARE: f64 = 0.6;
 /// Track points sampled to decide whether a track lies on the main one.
 const SEGMENT_SAMPLES: usize = 40;
 
+/// More tracks than this in one file is not a route with a few marked sections: the section
+/// detection (which compares every track with the whole main track) is skipped.
+const MAX_SEGMENT_TRACKS: usize = 200;
+
+/// The main track is thinned to points at least this far apart before the comparison.
+const SEGMENT_THIN_M: f64 = 10.0;
+
+/// `line` without the points closer than [`SEGMENT_THIN_M`] to the previous kept one (the last
+/// point always stays).
+fn thinned(line: &[RawPoint]) -> Vec<RawPoint> {
+    let mut out: Vec<RawPoint> = Vec::with_capacity(line.len() / 4 + 2);
+    for p in line {
+        let keep = out
+            .last()
+            .is_none_or(|q| geo::haversine_m(q.lat, q.lon, p.lat, p.lon) >= SEGMENT_THIN_M);
+        if keep {
+            out.push(*p);
+        }
+    }
+    if let (Some(last), Some(kept)) = (line.last(), out.last()) {
+        if (last.lat, last.lon) != (kept.lat, kept.lon) {
+            out.push(*last);
+        }
+    }
+    out
+}
+
+/// Bounding box `(min lat, min lon, max lat, max lon)` of `line`, grown by `margin_m`.
+fn bbox(line: &[RawPoint], margin_m: f64) -> (f64, f64, f64, f64) {
+    let mut b = (
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    );
+    for p in line {
+        b = (
+            b.0.min(p.lat),
+            b.1.min(p.lon),
+            b.2.max(p.lat),
+            b.3.max(p.lon),
+        );
+    }
+    let dlat = margin_m / 110_540.0;
+    let dlon = margin_m / (111_320.0 * b.0.abs().max(b.2.abs()).min(89.0).to_radians().cos());
+    (b.0 - dlat, b.1 - dlon, b.2 + dlat, b.3 + dlon)
+}
+
 fn track_length(points: &[RawPoint]) -> f64 {
     points
         .windows(2)
@@ -602,17 +676,48 @@ fn dist_to_polyline(p: &RawPoint, line: &[RawPoint]) -> f64 {
     best.sqrt()
 }
 
-/// Every sampled point of `track` lies within [`SEGMENT_ON_ROUTE_M`] of `main`.
-fn lies_on(track: &[RawPoint], main: &[RawPoint]) -> bool {
+/// Every sampled point of `track` lies within [`SEGMENT_ON_ROUTE_M`] of `main` (`main_box` is
+/// its bounding box grown by that distance: a point outside it fails without a scan).
+fn lies_on(track: &[RawPoint], main: &[RawPoint], main_box: (f64, f64, f64, f64)) -> bool {
     if track.len() < 2 || main.len() < 2 {
         return false;
     }
+    let inside = |p: &RawPoint| {
+        p.lat >= main_box.0 && p.lon >= main_box.1 && p.lat <= main_box.2 && p.lon <= main_box.3
+    };
     let step = (track.len() / SEGMENT_SAMPLES).max(1);
     track
         .iter()
         .step_by(step)
         .chain(track.last())
-        .all(|p| dist_to_polyline(p, main) <= SEGMENT_ON_ROUTE_M)
+        .all(|p| inside(p) && dist_to_polyline(p, main) <= SEGMENT_ON_ROUTE_M)
+}
+
+/// Distance along `line` of a point's nearest projection. A return leg is route
+/// geometry, not an unmarked forward segment.
+fn distance_along(p: &RawPoint, line: &[RawPoint]) -> f64 {
+    let kx = 111_320.0 * p.lat.to_radians().cos();
+    let ky = 110_540.0;
+    let xy = |q: &RawPoint| ((q.lon - p.lon) * kx, (q.lat - p.lat) * ky);
+    let (mut best, mut along, mut walked) = (f64::INFINITY, 0.0, 0.0);
+    for w in line.windows(2) {
+        let (ax, ay) = xy(&w[0]);
+        let (bx, by) = xy(&w[1]);
+        let (dx, dy) = (bx - ax, by - ay);
+        let len2 = dx * dx + dy * dy;
+        let f = if len2 > 0.0 {
+            (-(ax * dx + ay * dy) / len2).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let d2 = (ax + f * dx).powi(2) + (ay + f * dy).powi(2);
+        if d2 < best {
+            best = d2;
+            along = walked + f * len2.sqrt();
+        }
+        walked += len2.sqrt();
+    }
+    along
 }
 
 /// Splits the track points into the route (the tracks joined in file order) and the tracks that
@@ -622,7 +727,7 @@ fn split_segment_tracks(
     points: Vec<RawPoint>,
     spans: &[TrackSpan],
 ) -> (Vec<RawPoint>, Vec<RawTrack>) {
-    if spans.len() < 2 {
+    if spans.len() < 2 || spans.len() > MAX_SEGMENT_TRACKS {
         return (points, Vec::new());
     }
     let ranges: Vec<(usize, usize)> = spans
@@ -640,7 +745,8 @@ fn split_segment_tracks(
     let Some(main) = (0..spans.len()).max_by(|&a, &b| lengths[a].total_cmp(&lengths[b])) else {
         return (points, Vec::new());
     };
-    let main_pts = &points[ranges[main].0..ranges[main].1];
+    let main_pts = thinned(&points[ranges[main].0..ranges[main].1]);
+    let main_box = bbox(&main_pts, SEGMENT_ON_ROUTE_M);
     let is_segment: Vec<bool> = (0..spans.len())
         .map(|i| {
             if i == main {
@@ -648,7 +754,12 @@ fn split_segment_tracks(
             }
             let marked = spans[i].kind.to_ascii_lowercase().contains("segment");
             let short = lengths[i] < lengths[main] * SEGMENT_MAX_SHARE;
-            (marked || short) && lies_on(&points[ranges[i].0..ranges[i].1], main_pts)
+            let track = &points[ranges[i].0..ranges[i].1];
+            let forward = track
+                .first()
+                .zip(track.last())
+                .is_some_and(|(a, b)| distance_along(b, &main_pts) > distance_along(a, &main_pts));
+            (marked || (short && forward)) && lies_on(track, &main_pts, main_box)
         })
         .collect();
     if !is_segment.contains(&true) {
@@ -710,6 +821,9 @@ mod tests {
             parse_iso8601(" 2020-01-01T00:00:00Z "),
             Some(1_577_836_800.0)
         );
+        // leap days that exist
+        assert!(parse_iso8601("2024-02-29T00:00:00Z").is_some());
+        assert!(parse_iso8601("2000-02-29T00:00:00Z").is_some());
         // garbage is rejected instead of guessed: a wrong timeline is worse than none
         for bad in [
             "",
@@ -719,6 +833,10 @@ mod tests {
             "2025-07-02 17:14",
             "2025-07-02T17:14:10+2:00",
             "yesterday",
+            "2025-02-29T00:00:00Z",
+            "2025-02-30T00:00:00Z",
+            "2025-04-31T00:00:00Z",
+            "1900-02-29T00:00:00Z",
         ] {
             assert_eq!(parse_iso8601(bad), None, "{bad:?}");
         }

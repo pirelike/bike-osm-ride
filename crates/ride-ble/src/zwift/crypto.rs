@@ -12,7 +12,10 @@
 //!
 //! Packets: `counter (4 bytes LE) ‖ ciphertext ‖ MIC (4 bytes)`; the nonce is
 //! `nonce_suffix (4) ‖ counter (4)`, there is no associated data, and the transmit counter
-//! of each side starts at 0.
+//! of the device starts at 0. To avoid bidirectional nonce reuse while preserving the
+//! device's shared-key protocol, app transmission uses the upper half of the counter space.
+//! Receive counters in that half are refused and transmission never wraps. This assumes the
+//! controller follows its incremental counter protocol; compatibility needs a hardware check.
 //!
 //! The key material never leaves this module and is not printed by `Debug`.
 
@@ -23,6 +26,7 @@ use ccm::Ccm;
 use hkdf::Hkdf;
 use p256::ecdh::EphemeralSecret;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::elliptic_curve::zeroize::Zeroize;
 use p256::{EncodedPoint, PublicKey};
 use rand_core::OsRng;
 use sha2::Sha256;
@@ -47,6 +51,7 @@ const TAG_LEN: usize = 4;
 const MIN_PACKET_LEN: usize = COUNTER_LEN + TAG_LEN;
 /// Derived key material: 32-byte AES key followed by a 4-byte nonce suffix.
 const KEY_MATERIAL_LEN: usize = 36;
+const APP_COUNTER_START: u32 = 1 << 31;
 
 /// AES-256-CCM with a 4-byte tag and an 8-byte nonce (as used by the controllers).
 type Cipher = Ccm<Aes256, U4, U8>;
@@ -63,6 +68,13 @@ pub enum Encryption {
 pub struct SessionKeys {
     key: [u8; 32],
     nonce_suffix: [u8; 4],
+}
+
+impl Drop for SessionKeys {
+    fn drop(&mut self) {
+        self.key.zeroize();
+        self.nonce_suffix.zeroize();
+    }
 }
 
 impl SessionKeys {
@@ -86,6 +98,9 @@ pub struct ClickCrypto {
     app_public: [u8; PUBLIC_KEY_LEN],
     session: Session,
     tx_counter: u32,
+    /// Counter of the last device packet that opened: a packet must carry a larger one, so a
+    /// recorded button press cannot be played back.
+    rx_counter: Option<u32>,
 }
 
 impl Default for ClickCrypto {
@@ -100,7 +115,8 @@ impl ClickCrypto {
             secret: None,
             app_public: [0; PUBLIC_KEY_LEN],
             session: Session::Handshake,
-            tx_counter: 0,
+            tx_counter: APP_COUNTER_START,
+            rx_counter: None,
         }
     }
 
@@ -115,7 +131,8 @@ impl ClickCrypto {
         }
         self.secret = Some(secret);
         self.session = Session::Handshake;
-        self.tx_counter = 0;
+        self.tx_counter = APP_COUNTER_START;
+        self.rx_counter = None;
 
         let mut out = Vec::with_capacity(RIDE_ON.len() + HELLO_VERSION.len() + PUBLIC_KEY_LEN);
         out.extend_from_slice(RIDE_ON);
@@ -124,9 +141,11 @@ impl ClickCrypto {
         out
     }
 
-    /// Reads the device's answer to our hello.
+    /// Reads the device's answer to our hello. Only during the handshake: a second answer
+    /// must neither downgrade an encrypted session to plain nor restart the transmit counter
+    /// under the same key (a CCM nonce used twice).
     pub fn on_device_hello(&mut self, bytes: &[u8]) -> Result<Encryption, ZwiftError> {
-        if !bytes.starts_with(RIDE_ON) {
+        if !bytes.starts_with(RIDE_ON) || !matches!(self.session, Session::Handshake) {
             return Err(ZwiftError::BadHandshake);
         }
         if bytes.len() < DEVICE_HELLO_LEN {
@@ -144,8 +163,9 @@ impl ClickCrypto {
         let shared = secret.diffie_hellman(&peer);
         let keys = derive_keys(shared.raw_secret_bytes(), device_public, &self.app_public)?;
 
+        self.secret = None; // EphemeralSecret zeroizes its private scalar on drop.
         self.session = Session::Encrypted(keys);
-        self.tx_counter = 0;
+        self.tx_counter = APP_COUNTER_START;
         Ok(Encryption::Encrypted)
     }
 
@@ -163,12 +183,23 @@ impl ClickCrypto {
         }
     }
 
-    /// Turns a device packet into its plaintext (`opcode ‖ payload`).
-    pub fn decrypt(&self, packet: &[u8]) -> Result<Vec<u8>, ZwiftError> {
+    /// Turns a device packet into its plaintext (`opcode ‖ payload`). An encrypted packet whose
+    /// counter is not past the last one that opened is a replay and fails like a forged one.
+    pub fn decrypt(&mut self, packet: &[u8]) -> Result<Vec<u8>, ZwiftError> {
         match &self.session {
             Session::Handshake => Err(ZwiftError::NotReady),
             Session::Plain => Ok(packet.to_vec()),
-            Session::Encrypted(keys) => open(keys, packet),
+            Session::Encrypted(keys) => {
+                let plain = open(keys, packet)?;
+                let counter = packet_counter(packet).ok_or(ZwiftError::ShortPacket)?;
+                if counter >= APP_COUNTER_START
+                    || self.rx_counter.is_some_and(|last| counter <= last)
+                {
+                    return Err(ZwiftError::AuthFailed);
+                }
+                self.rx_counter = Some(counter);
+                Ok(plain)
+            }
         }
     }
 
@@ -179,7 +210,7 @@ impl ClickCrypto {
             Session::Plain => Ok(plain.to_vec()),
             Session::Encrypted(keys) => {
                 let counter = self.tx_counter;
-                self.tx_counter = self.tx_counter.wrapping_add(1);
+                self.tx_counter = self.tx_counter.checked_add(1).ok_or(ZwiftError::Crypto)?;
                 seal(keys, counter, plain)
             }
         }
@@ -202,7 +233,11 @@ pub fn derive_keys(
     key.copy_from_slice(&okm[..32]);
     let mut nonce_suffix = [0u8; 4];
     nonce_suffix.copy_from_slice(&okm[32..]);
-    Ok(SessionKeys { key, nonce_suffix })
+    let keys = SessionKeys { key, nonce_suffix };
+    okm.zeroize();
+    key.zeroize();
+    nonce_suffix.zeroize();
+    Ok(keys)
 }
 
 fn cipher(keys: &SessionKeys) -> Result<Cipher, ZwiftError> {
@@ -233,6 +268,12 @@ pub fn seal(keys: &SessionKeys, counter: u32, plain: &[u8]) -> Result<Vec<u8>, Z
     out.extend_from_slice(&counter_le);
     out.extend_from_slice(&sealed);
     Ok(out)
+}
+
+/// The little-endian counter in front of a sealed packet.
+fn packet_counter(packet: &[u8]) -> Option<u32> {
+    let bytes: [u8; 4] = packet.get(..COUNTER_LEN)?.try_into().ok()?;
+    Some(u32::from_le_bytes(bytes))
 }
 
 /// Inverse of [`seal`]. Fails for short packets and for any authentication mismatch.
@@ -328,6 +369,26 @@ pub(crate) mod tests {
         // and the other way round
         let packet = seal(&keys, 7, &[0x15]).unwrap();
         assert_eq!(app.decrypt(&packet).unwrap(), vec![0x15]);
+        // the same packet again is a replay, an older counter too; a newer one opens
+        assert_eq!(app.decrypt(&packet), Err(ZwiftError::AuthFailed));
+        let older = seal(&keys, 3, &[0x15]).unwrap();
+        assert_eq!(app.decrypt(&older), Err(ZwiftError::AuthFailed));
+        let newer = seal(&keys, 8, &[0x16]).unwrap();
+        assert_eq!(app.decrypt(&newer).unwrap(), vec![0x16]);
+    }
+
+    #[test]
+    fn a_second_device_hello_neither_downgrades_nor_resets_the_counter() {
+        let (mut app, keys) = handshaken();
+        let first = app.encrypt(b"a").unwrap();
+        assert_eq!(
+            app.on_device_hello(b"RideOn"),
+            Err(ZwiftError::BadHandshake)
+        );
+        assert_eq!(app.encryption(), Some(Encryption::Encrypted));
+        let second = app.encrypt(b"a").unwrap();
+        assert_ne!(&first[..4], &second[..4], "the counter went on");
+        assert_eq!(open(&keys, &second).unwrap(), b"a");
     }
 
     #[test]
@@ -335,8 +396,8 @@ pub(crate) mod tests {
         let (mut app, keys) = handshaken();
         let first = app.encrypt(b"hello").unwrap();
         let second = app.encrypt(b"hello").unwrap();
-        assert_eq!(&first[..4], &[0, 0, 0, 0], "transmit counter starts at 0");
-        assert_eq!(&second[..4], &[1, 0, 0, 0]);
+        assert_eq!(&first[..4], &APP_COUNTER_START.to_le_bytes());
+        assert_eq!(&second[..4], &(APP_COUNTER_START + 1).to_le_bytes());
         assert_ne!(first, second, "a fresh nonce for every packet");
         assert_eq!(open(&keys, &first).unwrap(), b"hello");
         assert_eq!(open(&keys, &second).unwrap(), b"hello");
@@ -344,6 +405,20 @@ pub(crate) mod tests {
         let empty = app.encrypt(&[]).unwrap();
         assert_eq!(empty.len(), MIN_PACKET_LEN);
         assert_eq!(open(&keys, &empty).unwrap(), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn directions_use_disjoint_counters_and_transmission_never_wraps() {
+        let (mut app, keys) = handshaken();
+        let tx = app.encrypt(b"haptic").unwrap();
+        let rx = seal(&keys, 0, b"button").unwrap();
+        assert_ne!(&tx[..4], &rx[..4]);
+        assert_eq!(app.decrypt(&rx).unwrap(), b"button");
+        let reflected = app.encrypt(b"haptic").unwrap();
+        assert_eq!(app.decrypt(&reflected), Err(ZwiftError::AuthFailed));
+        app.tx_counter = u32::MAX;
+        assert_eq!(app.encrypt(b"x"), Err(ZwiftError::Crypto));
+        assert_eq!(app.encrypt(b"x"), Err(ZwiftError::Crypto));
     }
 
     #[test]
@@ -363,7 +438,7 @@ pub(crate) mod tests {
 
     #[test]
     fn short_packets_fail_without_panicking() {
-        let (app, keys) = handshaken();
+        let (mut app, keys) = handshaken();
         for len in 0..MIN_PACKET_LEN {
             let packet = vec![0xAA; len];
             assert_eq!(open(&keys, &packet), Err(ZwiftError::ShortPacket));

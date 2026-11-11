@@ -309,8 +309,10 @@ mod tests {
         assert_eq!(ghost.delta_at(0.0, 500.0), Some(0.0));
         // the rider needs 100 s for the second half, the ghost 50 s: 50 s behind at the end
         assert!((ghost.delta_at(100.0, 1_000.0).unwrap() - 50.0).abs() < 1e-6);
-        // faster than the ghost: negative
-        assert!((ghost.delta_at(25.0, 750.0).unwrap() + 0.0).abs() < 1e-6);
+        // level with the ghost: zero
+        assert!(ghost.delta_at(25.0, 750.0).unwrap().abs() < 1e-6);
+        // faster than the ghost (at 750 m 5 s earlier than it): negative
+        assert!((ghost.delta_at(20.0, 750.0).unwrap() + 5.0).abs() < 1e-6);
     }
 
     #[test]

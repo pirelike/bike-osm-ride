@@ -3,6 +3,8 @@ name = "ride-ui-hud"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "Ride HUD: metric tiles, stats panel, next-climb card, transport controls"
 
 [dependencies]

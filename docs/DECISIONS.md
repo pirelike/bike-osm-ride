@@ -107,6 +107,12 @@ storm" rules. The hex log is always on because it is the only evidence when a tr
 Rust from an Unlicense project and Makinolo's interoperability notes. · Unofficial, no record of a run against a real controller
 (see `NOTICE.md`).
 
+**BT6. A device's new task waits for its old one; the hub does not** (2026-11-08). Android's btleplug backend runs all
+commands of a device through one serial queue and cannot cancel any, so a connect started during the previous link's
+hand-back ends up between that task's unsubscribes and its disconnect, and the disconnect then kills the new link. ·
+`Hub::retiring` keeps the handle of a stopped task, `supervise` awaits it before the first connect. The earlier way
+(the hub awaiting the handle inline) held every command and sample for up to 38 s. Not confirmed on a phone.
+
 ## Simulation
 
 **S1. The full Martin et al. 1998 model** (2026-11-02), validated against SRM on the road and cross-checked with the

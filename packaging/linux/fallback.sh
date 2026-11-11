@@ -57,13 +57,19 @@ rm -rf "$debroot"
 tools="$out/tools"
 mkdir -p "$tools"
 linuxdeploy="$tools/linuxdeploy-x86_64.AppImage"
-if [ ! -x "$linuxdeploy" ]; then
-    curl -fsSL -o "$linuxdeploy" \
-        "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-    chmod +x "$linuxdeploy"
+# Pinned upstream release asset and GTK source revision. Verify cached tools as well.
+linuxdeploy_sha256="df908b19f1ed1cdafa79508d415aa12d6c56ce4d56d4149aa8c09286718706e5"
+gtk_commit="7a3fbc31a9e5075073ff8790f26effbac5f84453"
+gtk_sha256="b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171"
+if [ ! -f "$linuxdeploy" ]; then
+    curl -fsSL -H 'Accept: application/octet-stream' -o "$linuxdeploy" \
+        "https://api.github.com/repos/linuxdeploy/linuxdeploy/releases/assets/699514588"
 fi
+printf '%s  %s\n' "$linuxdeploy_sha256" "$linuxdeploy" | sha256sum -c -
+chmod +x "$linuxdeploy"
 curl -fsSL -o "$tools/linuxdeploy-plugin-gtk.sh" \
-    "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh"
+    "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/$gtk_commit/linuxdeploy-plugin-gtk.sh"
+printf '%s  %s\n' "$gtk_sha256" "$tools/linuxdeploy-plugin-gtk.sh" | sha256sum -c -
 chmod +x "$tools/linuxdeploy-plugin-gtk.sh"
 
 appdir="$out/bike-osm-ride.AppDir"

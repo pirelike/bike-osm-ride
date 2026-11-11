@@ -39,8 +39,7 @@ En los nombres de archivo, `<versión>` es el número de la versión (por ejempl
 
 El programa **avisa solo** cuando hay una versión nueva: en la barra superior aparece el botón
 *Actualización* (en Windows y como AppImage se sustituye a sí mismo; en las demás plataformas abre la
-página de la versión). El paquete de Android está firmado con una clave de depuración, así que entre dos
-versiones puede hacer falta desinstalar la anterior.
+página de la versión). Las versiones de Android requieren una clave de firma estable; la compilación falla si falta. Desinstala una versión antigua firmada con una clave de depuración antes de instalar el APK de lanzamiento.
 
 ## Inicio rápido
 

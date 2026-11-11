@@ -3,6 +3,7 @@ name = "ride-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 repository.workspace = true
 description = "bike-osm-ride desktop app (Dioxus + WebView2)"
 build = "build.rs"
@@ -28,6 +29,7 @@ dioxus = { workspace = true, features = ["desktop"] }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = "0.10"
 # Tile proxy (same feature set as ride-route so the TLS stack is built once).
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 
@@ -37,7 +39,7 @@ tempfile = "3"
 
 # The browser panel docks the Firefox window into the app window (Win32 child windows).
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security", "Win32_Storage_FileSystem"] }
 
 # Keeping the machine awake while riding: the session-bus inhibitor of the free desktops
 # (same crate version btleplug uses through bluez-async, so it is built once).
@@ -62,6 +64,6 @@ rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 # On Android the same desktop renderer runs inside the mobile shell `dx` generates.
 [target.'cfg(target_os = "android")'.dependencies]
 dioxus = { workspace = true, features = ["mobile"] }
-# The system file picker is called through JNI (jni 0.21 is the version the BLE stack uses).
+# The picker uses jni 0.21; ride-ble uses jni 0.22. Their JNI objects never cross this boundary.
 jni = "0.21"
 ndk-context = "0.1"

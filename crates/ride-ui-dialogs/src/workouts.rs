@@ -11,7 +11,7 @@ use ride_model::{StepTarget, TagGroup, Workout, WorkoutCategory, WorkoutLibrary,
 use ride_ui_kit::palette::{power_zone_name, power_zone_var};
 use ride_ui_kit::{Dialog, Icon, IconName};
 
-use ride_i18n::{t, tf};
+use ride_i18n::{t, tf, tn};
 use ride_ui_kit::workout_chart;
 
 /// Tags shown on a list card (the detail column shows all of them).
@@ -33,9 +33,9 @@ pub fn WorkoutsDialog(
     if !open {
         return rsx! {};
     }
-    let imported_list = imported.read().clone();
-    let imported_count = imported_list.len();
-    let library = use_memo(move || WorkoutLibrary::with_imported(imported_list.clone()));
+    let imported_count = imported.read().len();
+    // the signal is read inside the memo: a workout imported while the dialog is open shows up
+    let library = use_memo(move || WorkoutLibrary::with_imported(imported.read().clone()));
     let lib = library.read();
     let mut category = use_signal(|| None::<WorkoutCategory>);
     let mut picked = use_signal(Vec::<WorkoutTag>::new);
@@ -135,7 +135,7 @@ pub fn WorkoutsDialog(
                     }
                     for (cat, n) in categories {
                         button {
-                            key: "cat-{cat.label()}",
+                            key: "cat-{cat:?}",
                             class: match (filter == Some(cat), n) {
                                 (true, _) => "dlg-cat dlg-cat--active",
                                 (false, 0) => "dlg-cat dlg-cat--empty",
@@ -151,7 +151,7 @@ pub fn WorkoutsDialog(
                     }
                     }
                     for group in TagGroup::ALL {
-                        div { key: "tags-{group.label()}", class: "dlg-tags", role: "group", aria_label: "{group.label()}",
+                        div { key: "tags-{group:?}", class: "dlg-tags", role: "group", aria_label: "{group.label()}",
                             span { class: "dlg-tags__title label", "{group.label()}" }
                             div { class: "dlg-tags__chips",
                                 for (tag, n) in tag_counts.iter().copied().filter(|(t, _)| t.group() == group) {
@@ -224,7 +224,7 @@ pub fn WorkoutsDialog(
                             }
                             div { class: "dlg-workout__meta",
                                 span { class: "tag", "{workout.category.label()}" }
-                                span { class: "dlg-workout__pct num", "{workout.ftp_pct}% FTP" }
+                                span { class: "dlg-workout__pct num", {tf("ui_dialogs.workouts.ftp_percent", &[("pct", &workout.ftp_pct.to_string())])} }
                                 if workout.is_imported() {
                                     span { class: "tag tag--data", {t("ui_dialogs.workouts.importalt")} }
                                 }
@@ -246,7 +246,7 @@ pub fn WorkoutsDialog(
                         header { class: "dlg-workout-detail__head",
                             h3 { class: "dlg-workout-detail__name", "{w.name}" }
                             span { class: "dlg-workout-detail__meta",
-                                "{w.category.label()} · {w.duration_text()} · {w.ftp_pct}% FTP"
+                                {tf("ui_dialogs.workouts.detail_meta", &[("category", w.category.label()), ("duration", &w.duration_text()), ("pct", &w.ftp_pct.to_string())])}
                             }
                             if w.is_imported() {
                                 span { class: "tag tag--data", {t("ui_dialogs.workouts.importalt")} }
@@ -308,13 +308,15 @@ pub fn WorkoutsDialog(
                                             span { class: "dlg-wchart__zname num", "Z{zone}" }
                                         }
                                     }
-                                    span { class: "dlg-wchart__note num", "0–{chart.ceiling:.0}% FTP" }
+                                    span { class: "dlg-wchart__note num", {tf("ui_dialogs.workouts.ftp_range", &[("pct", &format!("{:.0}", chart.ceiling))])} }
                                 }
                             }
                         }
                         div { class: "dlg-steps__head",
                             span { class: "label", {t("ui_dialogs.workouts.blokkok")} }
-                            span { class: "dlg-steps__sum num", "{w.steps.len()} blokk" }
+                            span { class: "dlg-steps__sum num",
+                                {tn("ui_dialogs.workouts.blokk_count", w.steps.len() as i64, &[("count", &w.steps.len().to_string())])}
+                            }
                         }
                         ol { class: "dlg-steps",
                             for step in w.steps.iter() {
@@ -391,8 +393,16 @@ fn target_text(target: &StepTarget) -> String {
             step,
             step_s,
             max,
-        } => format!("{start:.0} W +{step:.0}/{step_s:.0}s (max {max:.0})"),
-        StepTarget::Free => "szabad".to_string(),
+        } => tf(
+            "ui_dialogs.workouts.stepped_target",
+            &[
+                ("start", &format!("{start:.0}")),
+                ("step", &format!("{step:.0}")),
+                ("seconds", &format!("{step_s:.0}")),
+                ("max", &format!("{max:.0}")),
+            ],
+        ),
+        StepTarget::Free => t("ui_profile.szabad_cel").to_string(),
     }
 }
 
@@ -502,8 +512,14 @@ mod tests {
         assert!(html.contains("dlg-wchart"), "the chart is missing");
         // three steps, three blocks; the ramp is a trapezoid, so every block is a polygon
         assert_eq!(html.matches("<polygon").count(), 3, "one block per step");
-        assert!(html.contains("var(--z1)"), "the 50 % block is zone 1");
-        assert!(html.contains("var(--z4)"), "the 90 % block is zone 4");
+        assert!(
+            html.contains("fill=\"var(--z1)\""),
+            "the 50 % block is zone 1"
+        );
+        assert!(
+            html.contains("fill=\"var(--z3)\""),
+            "the 90 % block is the upper boundary of zone 3"
+        );
         assert!(
             html.contains("0–140% FTP"),
             "the axis tops out above the ramp"
@@ -603,6 +619,6 @@ mod tests {
             step_s: 60.0,
             max: 600.0
         })
-        .contains("+20/60s"));
+        .contains("+20/60 mp"));
     }
 }

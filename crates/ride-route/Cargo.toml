@@ -3,6 +3,8 @@ name = "ride-route"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "GPX / bikerouter import, route processing (resample, smooth, grade, climbs) and local persistence"
 
 [dependencies]

@@ -304,7 +304,9 @@
    switcher and the printed scale bar would take most of the frame. */
 .map--compact .map-controls__style,
 .map--compact .map-scale { display: none; }
-.map--compact .map-controls { top: var(--space-1); right: var(--space-1); gap: 4px; }
+/* the corner buttons sit closer to the edge of the small map, both by the same step */
+.map--compact .map-controls__zoom { top: var(--space-2); right: var(--space-2); }
+.map--compact .map-controls__follow { left: var(--space-2); bottom: var(--space-2); }
 .map--compact .map-controls .btn-group > .btn { width: 28px; height: 28px; }
 .map--compact .map-attrib { padding: 1px 4px; }
 

@@ -47,13 +47,18 @@ fn init_linux_webkit() {
 fn main() {
     // First of all: a panic must never disappear. On Android it would otherwise take the process
     // down without a single line anywhere (see `crash.rs`).
+    #[cfg(target_os = "android")]
+    paths::init_android_data_dir();
     crash::install();
     #[cfg(target_os = "linux")]
     init_linux_webkit();
-    #[cfg(target_os = "android")]
-    paths::init_android_data_dir();
     #[cfg(not(target_os = "android"))]
     updater::cleanup_previous();
+
+    // Temporary files of a write a crash or a power cut interrupted.
+    let _ = guard::guarded("store::remove_stale_temp_files", || {
+        ride_route::store::remove_stale_temp_files(&ride_route::store::data_dir())
+    });
 
     // Test hooks and the persisted settings are read before the window exists, so the
     // first paint already has the right size and theme.
@@ -166,14 +171,21 @@ mod packaging_tests {
     #[test]
     fn no_module_of_the_shell_is_hidden_from_android() {
         const MAIN: &str = include_str!("main.rs");
-        let lines: Vec<&str> = MAIN.lines().collect();
-        for (at, line) in lines.iter().enumerate() {
-            if line.trim_start().starts_with("mod ") && at > 0 {
-                assert!(
-                    !lines[at - 1].contains("not(target_os = \"android\")"),
-                    "`{}` is not built for Android; the phone build would fail on its first use",
-                    line.trim()
-                );
+        let mut attrs = String::new();
+        for line in MAIN.split("fn main()").next().unwrap_or(MAIN).lines() {
+            let line = line.trim();
+            if line.starts_with("mod ") {
+                if !line.starts_with("mod android_picker") {
+                    assert!(
+                        !attrs.contains("cfg"),
+                        "unexpected platform gate before {line}: {attrs}"
+                    );
+                }
+                attrs.clear();
+            } else if line.starts_with("use ") || line.starts_with("fn ") {
+                attrs.clear();
+            } else if !line.starts_with("//") {
+                attrs.push_str(line);
             }
         }
     }
@@ -184,7 +196,7 @@ mod packaging_tests {
         const ACTIVITY: &str = include_str!("../android/MainActivity.kt");
         let body = ACTIVITY
             .split_once("fun setKeepScreenOn(on: Boolean)")
-            .map(|(_, rest)| rest)
+            .map(|(_, rest)| rest.split("    fun ").next().unwrap_or(rest))
             .expect("MainActivity.kt declares setKeepScreenOn");
         assert!(
             body.contains("runOnUiThread"),
@@ -192,6 +204,9 @@ mod packaging_tests {
         );
         assert!(body.contains("FLAG_KEEP_SCREEN_ON"));
         assert!(body.contains("addFlags") && body.contains("clearFlags"));
+        assert!(body.starts_with(": Boolean"));
+        assert!(body.contains("task.get(") && body.contains("task.cancel(false)"));
+        assert!(include_str!("android_picker.rs").contains("\"(Z)Z\""));
     }
 
     #[test]
@@ -232,36 +247,57 @@ mod packaging_tests {
         }
     }
 
-    /// Every permission the manifest grants must still be the one the configuration asks for; a
-    /// new `[permissions]` entry in `Dioxus.toml` has to be added here as well.
+    /// The manifest grants exactly what `Dioxus.toml` asks for: every `[permissions]` entry maps
+    /// to its Android permissions here, so a new entry fails this test until it is mapped (and
+    /// pinned in the manifest), and a manifest permission nobody asks for fails it too.
     #[test]
     fn the_permissions_match_the_configuration() {
-        for permission in [
-            "android.permission.INTERNET",
-            "android.permission.ACCESS_FINE_LOCATION",
-            "android.permission.ACCESS_COARSE_LOCATION",
-            "android.permission.BLUETOOTH_CONNECT",
-            "android.permission.BLUETOOTH_SCAN",
-        ] {
-            assert!(
-                MANIFEST.contains(&format!(r#"android:name="{permission}""#)),
-                "{permission} is missing from the pinned manifest"
-            );
+        use std::collections::BTreeSet;
+        let expands = |entry: &str| -> Option<&'static [&'static str]> {
+            Some(match entry {
+                "bluetooth" => &[
+                    "android.permission.BLUETOOTH_CONNECT",
+                    "android.permission.BLUETOOTH_SCAN",
+                    "android.permission.BLUETOOTH",
+                    "android.permission.BLUETOOTH_ADMIN",
+                ],
+                "location" => &[
+                    "android.permission.ACCESS_FINE_LOCATION",
+                    "android.permission.ACCESS_COARSE_LOCATION",
+                ],
+                _ => return None,
+            })
+        };
+        let section = DIOXUS_TOML
+            .split_once("[permissions]")
+            .map(|(_, rest)| rest.split("\n[").next().unwrap_or(rest))
+            .expect("Dioxus.toml has a [permissions] table");
+        let entries: Vec<&str> = section
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .filter_map(|line| line.split_once('=').map(|(key, _)| key.trim()))
+            .collect();
+        assert!(!entries.is_empty());
+        // the internet is not a runtime permission: the manifest always declares it
+        let mut wanted: BTreeSet<&str> = BTreeSet::from(["android.permission.INTERNET"]);
+        for entry in &entries {
+            let mapped = expands(entry).unwrap_or_else(|| {
+                panic!("Dioxus.toml asks for `{entry}`: map it here and pin it in the manifest")
+            });
+            wanted.extend(mapped.iter().copied());
         }
+        let granted: BTreeSet<&str> = MANIFEST
+            .split("<uses-permission")
+            .skip(1)
+            .filter_map(|tag| tag.split("android:name=\"").nth(1)?.split('"').next())
+            .collect();
+        assert_eq!(granted, wanted, "manifest permissions vs Dioxus.toml");
         // Android 12+ only delivers scan results without a location permission when the scan
         // permission says it is never used for location
         assert!(
             MANIFEST.contains("neverForLocation"),
             "BLUETOOTH_SCAN needs usesPermissionFlags=neverForLocation"
         );
-        // the Bluetooth and location blocks of `Dioxus.toml` are what expands to the two pairs above
-        for requested in ["bluetooth", "location"] {
-            assert!(
-                DIOXUS_TOML
-                    .split_once("[permissions]")
-                    .is_some_and(|(_, rest)| rest.contains(requested)),
-                "Dioxus.toml no longer asks for {requested}: drop it from the manifest too"
-            );
-        }
     }
 }

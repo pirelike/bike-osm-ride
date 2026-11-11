@@ -5,6 +5,7 @@ use dioxus::prelude::*;
 use ride_i18n::{t, tf, tn};
 use ride_model::{GhostStatus, Settings};
 use ride_ui_kit::{Dialog, NumberField, Segmented, Slider, Switch};
+use ride_ui_streetview::imagestore::ImageOverview;
 
 use crate::helpers::{
     api_key_hint, check_api_key, ghost_hint, ghost_mode_from_value, ghost_mode_value,
@@ -456,9 +457,18 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
         s.ui.google_maps_key = normalize_api_key(&v);
     });
 
-    let mut storage = use_signal(ride_ui_streetview::imagestore::overview_default);
+    // Counting (and deleting) thousands of JPEGs is file work: it runs off the UI thread, and the
+    // delete asks once more first (the images came out of the rider's own Google quota).
+    let storage = use_signal(ImageOverview::default);
+    let busy = use_signal(|| false);
+    let mut confirm_clear = use_signal(|| false);
+    let request = use_signal(|| 0u64);
+    let storage_error = use_signal(|| None::<String>);
+    use_hook(move || refresh_storage(storage, busy, request, storage_error, false));
     let stored = storage();
-    let stored_text = if stored.images == 0 {
+    let stored_text = if let Some(error) = storage_error.read().as_ref() {
+        error.clone()
+    } else if stored.images == 0 {
         t("ui_dialogs.settings.meg_nincs_letoltott_kep").to_string()
     } else {
         let images = tn(
@@ -481,9 +491,8 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
         )
     };
     let clear_storage = move |_| {
-        let _ = ride_ui_streetview::imagestore::clear_all_default();
-        let _ = ride_ui_streetview::cache::clear_saved_default();
-        storage.set(ride_ui_streetview::imagestore::overview_default());
+        confirm_clear.set(false);
+        refresh_storage(storage, busy, request, storage_error, true);
     };
 
     rsx! {
@@ -534,16 +543,10 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
 
             ol { class: "dlg-howto",
                 li {
-                    {t("ui_dialogs.settings.nyiss_meg_egy_projektet_a")}
-                    strong { "Google Cloud Console" }
-                    {t("ui_dialogs.settings.ban_es_kapcsold_be_a_szamlazast_a_google_havi_ingyen")}
+                    {t("ui_dialogs.settings.cloud_project")}
                 }
                 li {
-                    {t("ui_dialogs.settings.az_api_library_oldalon_engedelyezd_a_ket_szolgaltata")}
-                    strong { "Maps Embed API" }
-                    {t("ui_dialogs.settings.es")}
-                    strong { "Street View Static API" }
-                    "."
+                    {t("ui_dialogs.settings.enable_apis")}
                 }
                 li { {t("ui_dialogs.settings.a_hitelesito_adatok_oldalon_hozz_letre_api_kulcsot_e")} }
                 li { {t("ui_dialogs.settings.masold_ide_a_kulcsot_csak_ezen_a_gepen_a_beallitasfa")} }
@@ -565,13 +568,29 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
                 row: true,
             }
             div { class: "dlg-storage",
-                span { class: "dlg-storage__text", "{stored_text}" }
-                button {
-                    class: "btn btn--ghost btn--sm",
-                    r#type: "button",
-                    disabled: stored.images == 0,
-                    onclick: clear_storage,
-                    {t("ui_dialogs.settings.torles")}
+                if confirm_clear() {
+                    span { class: "dlg-storage__text", {t("ui_dialogs.settings.biztosan_torlod_a_letoltott_kepeket")} }
+                    button {
+                        class: "btn btn--danger btn--sm",
+                        r#type: "button",
+                        onclick: clear_storage,
+                        {t("ui_dialogs.settings.torles")}
+                    }
+                    button {
+                        class: "btn btn--ghost btn--sm",
+                        r#type: "button",
+                        onclick: move |_| confirm_clear.set(false),
+                        {t("ui_dialogs.settings.megse")}
+                    }
+                } else {
+                    span { class: "dlg-storage__text", "{stored_text}" }
+                    button {
+                        class: "btn btn--ghost btn--sm",
+                        r#type: "button",
+                        disabled: stored.images == 0 || busy(),
+                        onclick: move |_| confirm_clear.set(true),
+                        {t("ui_dialogs.settings.torles")}
+                    }
                 }
             }
             p { class: "dlg-note",
@@ -582,9 +601,62 @@ fn StreetViewGroup(settings: Settings, on_change: EventHandler<Settings>) -> Ele
     }
 }
 
-/// `1 234 567` bytes as `1.2 MB` (or `345 kB`), with the language's decimal separator.
+/// Recounts the downloaded Street View images (after deleting them and the saved panorama ids
+/// when `clear`), on a blocking worker when a runtime is there; SSR and tests count in place.
+fn refresh_storage(
+    mut storage: Signal<ImageOverview>,
+    mut busy: Signal<bool>,
+    mut request: Signal<u64>,
+    mut error: Signal<Option<String>>,
+    clear: bool,
+) {
+    let id = request.peek().wrapping_add(1);
+    request.set(id);
+    let work = move || {
+        let mut errors = Vec::new();
+        if clear {
+            if let Err(e) = ride_ui_streetview::imagestore::clear_all_default() {
+                errors.push(e.to_string());
+            }
+            if let Err(e) = ride_ui_streetview::cache::clear_saved_default() {
+                errors.push(e.to_string());
+            }
+        }
+        (
+            ride_ui_streetview::imagestore::overview_default(),
+            (!errors.is_empty()).then(|| errors.join("; ")),
+        )
+    };
+    let mut apply = move |(overview, reason): (ImageOverview, Option<String>)| {
+        if *request.peek() != id {
+            return;
+        }
+        storage.set(overview);
+        error.set(reason.map(|reason| {
+            tf(
+                "ui_dialogs.settings.storage_clear_failed",
+                &[("reason", &reason)],
+            )
+        }));
+        busy.set(false);
+    };
+    if tokio::runtime::Handle::try_current().is_err() {
+        apply(work());
+        return;
+    }
+    busy.set(true);
+    spawn(async move {
+        match tokio::task::spawn_blocking(work).await {
+            Ok(result) => apply(result),
+            Err(e) => apply((ImageOverview::default(), Some(e.to_string()))),
+        }
+    });
+}
+
+/// `1 234 567` bytes as `1.2 MB` (or `345 kB`), with the language's decimal separator; decimal
+/// units both (a megabyte is 1 000 kB here, as the kB line implies).
 fn format_bytes(bytes: u64) -> String {
-    let mb = bytes as f64 / 1_048_576.0;
+    let mb = bytes as f64 / 1_000_000.0;
     if mb >= 1.0 {
         format!("{} MB", ride_i18n::decimal(mb, 1))
     } else {

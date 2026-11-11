@@ -75,19 +75,22 @@ pub fn PowerView(
     let period_now = *period.read();
 
     // the curve of every ticked ride; the watts of an estimated one are marked with a tilde
-    let ticked: Vec<(usize, String, bool, Vec<Option<f64>>)> = loaded
-        .read()
-        .iter()
-        .enumerate()
-        .map(|(slot, record)| {
-            (
-                slot,
-                chart::fmt_stamp(record.summary.started_unix_s),
-                record.power_estimated || record.simulated,
-                power_curve::mean_max(&record.points, &DURATIONS),
-            )
-        })
-        .collect();
+    let ticked = use_memo(move || -> Vec<(usize, String, bool, Vec<Option<f64>>)> {
+        loaded
+            .read()
+            .iter()
+            .enumerate()
+            .map(|(slot, record)| {
+                (
+                    slot,
+                    chart::fmt_stamp(record.summary.started_unix_s),
+                    record.power_estimated || record.simulated,
+                    power_curve::mean_max(&record.points, &DURATIONS),
+                )
+            })
+            .collect()
+    });
+    let ticked = ticked.read();
 
     let best_max = analysis_now
         .best

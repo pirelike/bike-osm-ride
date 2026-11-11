@@ -112,8 +112,10 @@ pub fn y_to_lat(y: f64, zoom: f64) -> f64 {
 /// * the fractional part is drawn by scaling the tile layer, so the level is rounded
 ///   (down-scaled tiles stay sharp, up-scaled ones are slightly soft — rounding keeps the
 ///   scale factor in `0.71..=1.41` instead of `1..=2`);
-/// * at a device pixel ratio of at least [`RETINA_DPR`] one level deeper tiles are requested
-///   so that one tile pixel never covers more than one device pixel;
+/// * at a device pixel ratio of at least [`RETINA_DPR`] one level deeper tiles are requested,
+///   so a tile pixel covers at most one device pixel up to a ratio of 2 (at 3× it covers 1.5:
+///   a second extra level would mean four times the tiles from the OSM servers for every view
+///   of a phone, which their tile policy asks apps not to do);
 /// * the result is clamped into [`MIN_ZOOM`]..=[`MAX_ZOOM`].
 pub fn tile_zoom(zoom: f64, dpr: f64) -> u8 {
     let base = clamp_zoom(zoom).round();

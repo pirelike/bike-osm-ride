@@ -12427,7 +12427,7 @@
    "name": "Seiler 4 × 8 minuti",
    "category": "vo2max",
    "goal": "Un grande volume di lavoro appena sopra la soglia: il protocollo vincente dello studio",
-   "description": "Quattro intervalli da otto minuti con due minuti di recupero all'intensità più alta ancora sostenibile (nello studio in media ~105–106% FTP). Nello studio di sette settimane di Seiler et al. questo gruppo è migliorato di più nel VO2peak e nella potenza alla soglia del lattato di 4 mmol, più dei gruppi 4 × 4 e 4 × 16 minuti. Il segreto è tanto lavoro duro ma non massimale.",
+   "description": "Quattro intervalli da otto minuti con due minuti di recupero all'intensità più alta ancora sostenibile (nello studio in media ~105–106% FTP). Nello studio di sette settimane di Seiler et al. (2013) questo gruppo è migliorato di più nel VO2peak e nella potenza alla soglia del lattato di 4 mmol, più dei gruppi 4 × 4 e 4 × 16 minuti. Il segreto è tanto lavoro duro ma non massimale.",
    "ftp_pct": 105,
    "duration_min": 66,
    "tags": [

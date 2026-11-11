@@ -15,7 +15,6 @@
 .PARAMETER Window      RIDE_WINDOW, e.g. 1600x900.
 .PARAMETER Theme       RIDE_THEME: dark | light.
 .PARAMETER Gpx         RIDE_GPX: load this GPX file at start-up.
-.PARAMETER BleLog      RIDE_BLE_LOG=1: write the BLE hex log to %LOCALAPPDATA%\bike-osm-ride\ble.log.
 .PARAMETER Dialog      RIDE_DIALOG: open devices | settings | workouts | about at start-up.
 .PARAMETER Workout     RIDE_WORKOUT: select this workout id at start-up (e.g. e-ramp-20w, c-threshold-2x20).
 .PARAMETER TimeScale   RIDE_TIMESCALE: run the ride clock this many times faster (1..200).
@@ -34,7 +33,6 @@ param(
     [string]$Window = '',
     [ValidateSet('', 'dark', 'light')][string]$Theme = '',
     [string]$Gpx = '',
-    [switch]$BleLog,
     [ValidateSet('', 'devices', 'settings', 'workouts', 'about')][string]$Dialog = '',
     [string]$Workout = '',
     [double]$TimeScale = 0,
@@ -73,7 +71,6 @@ if ($Sim -ge 0) { $hooks['RIDE_SIM'] = $Sim.ToString([System.Globalization.Cultu
 if ($Window) { $hooks['RIDE_WINDOW'] = $Window }
 if ($Theme) { $hooks['RIDE_THEME'] = $Theme }
 if ($Gpx) { $hooks['RIDE_GPX'] = (Resolve-Path -LiteralPath $Gpx).Path }
-if ($BleLog) { $hooks['RIDE_BLE_LOG'] = '1' }
 if ($Dialog) { $hooks['RIDE_DIALOG'] = $Dialog }
 if ($Workout) { $hooks['RIDE_WORKOUT'] = $Workout }
 if ($TimeScale -gt 0) { $hooks['RIDE_TIMESCALE'] = $TimeScale.ToString([System.Globalization.CultureInfo]::InvariantCulture) }

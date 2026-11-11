@@ -57,8 +57,7 @@ Nos nomes dos ficheiros, `<version>` é o número da versão (por exemplo `0.3.0
 | **Android 7+** | `bike-osm-ride-<version>-android.apk` | copia-o para o telemóvel e abre-o (tens de permitir a instalação a partir de origens desconhecidas), ou `adb install -r` |
 
 O programa **avisa-te** quando há uma versão nova: o botão *Atualização* aparece na barra superior (no Windows e
-como AppImage substitui-se a si próprio; nas outras plataformas abre a página da versão). O pacote para Android está assinado
-com uma chave de depuração, por isso, entre duas versões, pode ser preciso desinstalar a anterior.
+como AppImage substitui-se a si próprio; nas outras plataformas abre a página da versão). As versões para Android exigem uma chave de assinatura estável; a compilação falha se faltar. Desinstala uma versão antiga assinada com uma chave de depuração antes de instalar o APK de lançamento.
 
 ## Início rápido
 

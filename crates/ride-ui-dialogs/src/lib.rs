@@ -11,7 +11,7 @@
 //!
 //! * [`RouteDialog`] — drop zone, "GPX megnyitása", bikerouter link with validation,
 //!   recents with metadata + delete, demo route, busy state and an inline error line.
-//! * [`DevicesDialog`] — slot cards (trainer, heart rate, power meter, cadence) with state
+//! * [`DevicesDialog`] — slot cards (trainer, heart rate, power meter, cadence, shifter) with state
 //!   badges, scan button, discovered devices with RSSI + suggested kind and connect/disconnect.
 //! * [`VirtualRiderPanel`] — floating power control for the simulated rider.
 //! * [`SettingsDialog`] — grouped, immediately applied settings.

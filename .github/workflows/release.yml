@@ -11,7 +11,7 @@
 #
 # Android signing: an APK can only be updated in place by one signed with the same key. Put a
 # keystore into the repository secrets (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
-# ANDROID_KEY_ALIAS); without them the APK is signed with the throw-away debug key of the runner.
+# ANDROID_KEY_ALIAS); release packaging fails if any signing credential is missing.
 #
 # Linux is built on Ubuntu 22.04 (glibc 2.35) so both the AppImage and the .deb still start on
 # older distributions. macOS is built on one Apple Silicon runner that cross-compiles the Intel
@@ -122,7 +122,8 @@ jobs:
               --ks-key-alias "$KEY_ALIAS" --out "$out" aligned.apk
             rm release.jks
           else
-            cp "$apk" "$out"
+            echo "Release signing credentials are required; refusing a debug-signed APK." >&2
+            exit 1
           fi
       - uses: actions/upload-artifact@v4
         with:
@@ -173,7 +174,7 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
-          if [ -d target/dx ]; then
+          if [ "${{ steps.bundle.outcome }}" = success ] && [ -d target/dx ]; then
             appimage="$(find target/dx -name '*.AppImage' | head -n 1 || true)"
             deb="$(find target/dx -name '*.deb' | head -n 1 || true)"
             if [ -n "$appimage" ]; then
@@ -230,6 +231,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Publish integrity checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*

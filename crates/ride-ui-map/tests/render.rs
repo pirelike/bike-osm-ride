@@ -15,6 +15,8 @@ struct HarnessProps {
     snapshot: RideSnapshot,
     follow: bool,
     style: MapStyle,
+    #[props(default)]
+    compact: bool,
 }
 
 #[component]
@@ -35,6 +37,7 @@ fn Harness(props: HarnessProps) -> Element {
             snapshot,
             style,
             follow,
+            compact: props.compact,
             on_style: move |_| {},
             on_follow: move |_| {},
         }
@@ -47,6 +50,7 @@ fn render(route: Option<Arc<Route>>, snapshot: RideSnapshot, follow: bool) -> St
         snapshot,
         follow,
         style: MapStyle::Dark,
+        compact: false,
     };
     let mut vdom = VirtualDom::new_with_props(Harness, props);
     vdom.rebuild_in_place();
@@ -205,4 +209,26 @@ fn the_ghost_of_an_earlier_ride_gets_its_own_marker() {
     let plain = render(Some(route), snapshot, false);
     assert!(!plain.contains("map-marker--ghost"), "no ghost, no marker");
     assert!(plain.contains("map-marker--rider"));
+}
+
+#[test]
+fn compact_phone_map_keeps_the_route_and_rider_with_reduced_controls() {
+    let route = Arc::new(straight_route(&[(2000.0, 3.0)], 100.0));
+    let props = HarnessProps {
+        snapshot: riding_snapshot(&route, 900.0),
+        route: Some(route),
+        follow: true,
+        style: MapStyle::Dark,
+        compact: true,
+    };
+    let mut dom = VirtualDom::new_with_props(Harness, props);
+    dom.rebuild_in_place();
+    let html = dioxus_ssr::render(&dom);
+    assert!(html.contains("map--compact"));
+    assert!(html.contains("map-route"));
+    assert!(html.contains("map-marker--rider"));
+    assert!(html.contains("map-controls__style"));
+    assert!(ride_ui_map::CSS.contains(".map--compact .map-controls__style,"));
+    assert!(ride_ui_map::CSS.contains(".map-scale { display: none; }"));
+    assert!(!html.contains("NaN"));
 }

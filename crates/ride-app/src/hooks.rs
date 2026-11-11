@@ -8,7 +8,6 @@
 //! | `RIDE_WINDOW=1600x900` | initial window size |
 //! | `RIDE_THEME=light\|dark` | theme override (not written to the settings file unless the user changes it) |
 //! | `RIDE_GPX=<path>` | load a GPX file at start-up |
-//! | `RIDE_BLE_LOG=1` | write the raw BLE hex log to `%LOCALAPPDATA%/bike-osm-ride/ble.log` |
 //! | `RIDE_DIALOG=route|devices|settings|workouts|about` | open a dialog at start-up |
 //! | `RIDE_REVIEW=1` | open the review page at start-up |
 //! | `RIDE_WORKOUT=<id>` | select this workout at start-up (e.g. `e-ramp-20w`; ignored when unknown) |
@@ -35,7 +34,6 @@ pub struct Hooks {
     pub window: Option<(u32, u32)>,
     pub theme: Option<Theme>,
     pub gpx: Option<PathBuf>,
-    pub ble_log: bool,
     pub dialog: Option<DialogKind>,
     /// Open the review page at start-up (`RIDE_REVIEW=1`).
     pub review: bool,
@@ -56,7 +54,6 @@ impl Default for Hooks {
             window: None,
             theme: None,
             gpx: None,
-            ble_log: false,
             dialog: None,
             review: false,
             time_scale: 1.0,
@@ -106,7 +103,6 @@ impl Hooks {
             window: get("RIDE_WINDOW").and_then(|v| parse_window(&v)),
             theme: get("RIDE_THEME").and_then(|v| parse_theme(&v)),
             gpx: get("RIDE_GPX").map(PathBuf::from),
-            ble_log: flag("RIDE_BLE_LOG"),
             dialog: get("RIDE_DIALOG").and_then(|v| parse_dialog(&v)),
             review: flag("RIDE_REVIEW"),
             time_scale,
@@ -202,7 +198,6 @@ mod tests {
             ("RIDE_WINDOW", "1600x900"),
             ("RIDE_THEME", "light"),
             ("RIDE_GPX", "C:/x/út.gpx"),
-            ("RIDE_BLE_LOG", "true"),
             ("RIDE_DIALOG", "devices"),
             ("RIDE_TIMESCALE", "60"),
             ("RIDE_TILE_PROBE", "yes"),
@@ -212,7 +207,7 @@ mod tests {
         ]);
         assert_eq!(h.tile_base.as_deref(), Some("http://127.0.0.1:9"));
         assert_eq!(h.streetview_base.as_deref(), Some("http://127.0.0.1:9300"));
-        assert!(h.demo && h.ble_log && h.tile_probe);
+        assert!(h.demo && h.tile_probe);
         assert_eq!(h.sim_watts, Some(250.0));
         assert_eq!(h.window, Some((1600, 900)));
         assert_eq!(h.theme, Some(Theme::Light));

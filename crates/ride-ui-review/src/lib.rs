@@ -14,7 +14,7 @@
 //! rides are ticked and the file I/O belong to the app; it passes the loaded records in and gets
 //! events back. The numbers come from [`chart`] and `ride_sim::compare`, pure and tested.
 
-use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use dioxus::prelude::*;
@@ -52,7 +52,11 @@ const MAX_CLIMB_CHIPS: usize = 4;
 
 /// The stem of a stored record: its start time in whole seconds (see `ride_route::rides`).
 pub fn stem_of(record: &RideRecord) -> String {
-    format!("{:.0}", record.summary.started_unix_s.round())
+    let time = record.summary.started_unix_s;
+    if !time.is_finite() || time <= 0.0 || time >= 1e11 {
+        return String::new();
+    }
+    format!("{:.0}", time.round())
 }
 
 // ───────────────────────────── small helpers ─────────────────────────────
@@ -66,22 +70,6 @@ fn pct_text(value: f64) -> String {
     format!("{v:.3}%")
 }
 
-/// Measures the element behind `mounted` and stores its width (CSS pixels) in `width`.
-fn measure_width(mounted: Signal<Option<Rc<MountedData>>>, mut width: Signal<f64>) {
-    let handle = match &*mounted.peek() {
-        Some(handle) => handle.clone(),
-        None => return,
-    };
-    spawn(async move {
-        if let Ok(rect) = handle.get_client_rect().await {
-            let w = rect.size.width;
-            if w.is_finite() && w > 1.0 {
-                width.set(w);
-            }
-        }
-    });
-}
-
 /// Class of an axis numeral at `pct` percent of the width: centred on its tick, or pulled
 /// inside when it sits at an edge of the plot.
 fn edge_class(base: &str, pct: f64) -> String {
@@ -92,10 +80,6 @@ fn edge_class(base: &str, pct: f64) -> String {
     } else {
         base.to_string()
     }
-}
-
-fn pointer_frac(x: f64, width: f64) -> Option<f64> {
-    (width.is_finite() && width > 1.0 && x.is_finite()).then(|| (x / width).clamp(0.0, 1.0))
 }
 
 fn var_of(slot: usize) -> String {
@@ -144,106 +128,85 @@ fn kind_tags(meta: &RideMeta) -> Vec<&'static str> {
 /// there, since a finger has no hover to show the values with.
 #[component]
 fn HitLayer(
-    x0: f64,
-    x1: f64,
+    x0: ReadSignal<f64>,
+    x1: ReadSignal<f64>,
     on_cursor: EventHandler<Option<f64>>,
     on_select: EventHandler<(f64, f64)>,
 ) -> Element {
-    let width = use_signal(|| 0.0_f64);
-    let mut mounted = use_signal(|| None::<Rc<MountedData>>);
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let id = use_hook(|| format!("rv-hit-{}", NEXT_ID.fetch_add(1, Ordering::Relaxed)));
     let mut press = use_signal(|| None::<f64>);
     let mut live = use_signal(|| None::<f64>);
-    let mut touch = use_signal(|| false);
-    let dist_at = move |frac: f64| x0 + frac * (x1 - x0);
-
-    let finish = move |end: Option<f64>| {
-        let mut press = press;
-        let mut live = live;
-        let Some(start) = press.take() else {
-            return;
-        };
-        live.set(None);
-        let Some(end) = end else {
-            return;
-        };
-        let span = (x1 - x0).max(1.0);
-        let (a, b) = (start.min(end), start.max(end));
-        if (b - a) * span >= MIN_SELECT_M.max(span * 0.01) {
-            on_select.call((x0 + a * span, x0 + b * span));
-        }
-    };
-
+    let mount_id = id.clone();
     let drag = match (*press.read(), *live.read()) {
         (Some(a), Some(b)) => Some((a.min(b) * 100.0, (a - b).abs() * 100.0)),
         _ => None,
     };
-
     rsx! {
         div {
-            class: "rv-hit",
-            onmounted: move |event: MountedEvent| {
-                mounted.set(Some(event.data()));
-                measure_width(mounted, width);
-            },
-            onpointerdown: move |event: PointerEvent| {
-                if !event.is_primary() {
-                    return;
+            id, class: "rv-hit",
+            onmounted: move |_| {
+                // Measure synchronously in the webview for every event, including the first
+                // tap after a hidden tab opens. Pointer capture keeps drags outside the plot.
+                let script = format!(r#"
+                    const el = document.getElementById("{mount_id}");
+                    if (!el) return;
+                    const send = e => {{
+                        if (!e.isPrimary) return;
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width <= 1) return;
+                        if (e.type === 'pointerdown') el.setPointerCapture(e.pointerId);
+                        dioxus.send([e.type, Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)), e.pointerType === 'touch']);
+                    }};
+                    const types = ['pointerdown','pointermove','pointerup','pointercancel','pointerleave'];
+                    types.forEach(t => el.addEventListener(t, send));
+                    await new Promise(resolve => {{
+                        const observer = new MutationObserver(() => {{
+                            if (!el.isConnected) {{
+                                types.forEach(t => el.removeEventListener(t, send));
+                                observer.disconnect();
+                                resolve();
+                            }}
+                        }});
+                        observer.observe(document.body, {{childList:true, subtree:true}});
+                    }});
+                "#);
+                let eval = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| document::eval(&script)));
+                if let Ok(mut eval) = eval {
+                    spawn(async move {
+                        while let Ok((kind, frac, touch)) = eval.recv::<(String, f64, bool)>().await {
+                            let a = *x0.peek();
+                            let span = (*x1.peek() - a).max(1.0);
+                            match kind.as_str() {
+                                "pointerdown" => { press.set(Some(frac)); live.set(Some(frac)); }
+                                "pointermove" => {
+                                    on_cursor.call(Some(a + frac * span));
+                                    if press.peek().is_some() { live.set(Some(frac)); }
+                                }
+                                "pointerup" => {
+                                    on_cursor.call(Some(a + frac * span));
+                                    let start = press.take();
+                                    live.set(None);
+                                    if let Some(start) = start {
+                                        if (frac - start).abs() * span >= MIN_SELECT_M.min(span * 0.5).max(span * 0.01) {
+                                            on_select.call((a + start.min(frac) * span, a + start.max(frac) * span));
+                                        }
+                                    }
+                                }
+                                "pointercancel" => { press.set(None); live.set(None); }
+                                "pointerleave" if !touch && press.peek().is_none() => on_cursor.call(None),
+                                _ => {}
+                            }
+                        }
+                    });
                 }
-                touch.set(event.pointer_type() == "touch");
-                measure_width(mounted, width);
-                if let Some(frac) = pointer_frac(event.element_coordinates().x, *width.peek()) {
-                    press.set(Some(frac));
-                    live.set(Some(frac));
-                }
-            },
-            onpointermove: move |event: PointerEvent| {
-                if !event.is_primary() {
-                    return;
-                }
-                if let Some(frac) = pointer_frac(event.element_coordinates().x, *width.peek()) {
-                    on_cursor.call(Some(dist_at(frac)));
-                    if press.peek().is_some() {
-                        live.set(Some(frac));
-                    }
-                }
-            },
-            onpointerup: move |event: PointerEvent| {
-                if !event.is_primary() {
-                    return;
-                }
-                let end = pointer_frac(event.element_coordinates().x, *width.peek());
-                if *touch.peek() {
-                    // a tap (or the end of a drag) leaves the cursor where the finger was
-                    if let Some(frac) = end {
-                        on_cursor.call(Some(dist_at(frac)));
-                    }
-                }
-                finish(end);
-            },
-            onpointercancel: move |_| {
-                // the browser took the gesture over (a vertical swipe scrolls the page)
-                press.set(None);
-                live.set(None);
-            },
-            onpointerleave: move |_| {
-                // a finger leaves after every lift: keep its cursor, only a mouse clears it
-                if !*touch.peek() {
-                    on_cursor.call(None);
-                }
-                let end = *live.peek();
-                finish(end);
             },
             if let Some((left, wide)) = drag {
-                div {
-                    class: "rv-drag",
-                    style: "left: {pct_text(left)}; width: {pct_text(wide)}",
-                }
+                div { class: "rv-drag", style: "left: {pct_text(left)}; width: {pct_text(wide)}" }
             }
         }
     }
 }
-
-// ───────────────────────────── overview ─────────────────────────────
 
 /// The whole route as an elevation profile; the selected section is a band over it.
 #[component]
@@ -256,10 +219,9 @@ fn Overview(
     on_select: EventHandler<(f64, f64)>,
 ) -> Element {
     let total = route.total_dist.max(1.0);
-    let markup = use_memo({
-        let route = route.clone();
-        move || geom::build_geometry(&route, 0.0, total, theme).markup
-    });
+    let markup = use_memo(use_reactive!(|route, theme| {
+        geom::build_geometry(&route, 0.0, route.total_dist.max(1.0), theme).markup
+    }));
     let (lo, hi) = geom::elevation_range(&route, 0.0, total)
         .map(|(lo, hi)| geom::y_range(lo, hi))
         .unwrap_or((0.0, 100.0));
@@ -468,7 +430,7 @@ pub fn ReviewPage(
     // Starts one ahead of the map, so the first fit is still owed when the map first has a real
     // size: on a phone it is hidden behind a tab until then, and a fit made at another size left
     // the start of the route under the scale bar.
-    let fit_seq = use_signal(|| 1u64);
+    let mut fit_seq = use_signal(|| 1u64);
     let mut tab = use_signal(|| "rides".to_string());
     let mut confirm_delete = use_signal(|| None::<String>);
     let mut estimating = use_signal(|| None::<String>);
@@ -479,24 +441,35 @@ pub fn ReviewPage(
     let follow = use_signal(|| false);
     let snapshot = use_signal(RideSnapshot::empty);
 
-    // A different route or a different set of rides starts from the whole route again.
+    // A route change resets the view; changing rides preserves the selected section.
     use_effect(move || {
         let _ = route_id.read();
         range.set(None);
         cursor.set(None);
         confirm_delete.set(None);
         estimating.set(None);
+        fit_seq.with_mut(|n| *n = n.wrapping_add(1));
     });
 
-    // Every loaded ride on the 10 m grid; a ride that cannot be put on it is left out.
+    // Preserve selected slots even when a record has no usable distance grid.
     let pairs = use_memo(move || -> Vec<(Arc<RideRecord>, Arc<DistSeries>)> {
         loaded
             .read()
             .iter()
             .take(SLOTS)
-            .filter_map(|record| {
-                DistSeries::from_points(&record.points, GRID_M)
-                    .map(|series| (record.clone(), Arc::new(series)))
+            .map(|record| {
+                let series =
+                    DistSeries::from_points(&record.points, GRID_M).unwrap_or(DistSeries {
+                        step_m: GRID_M,
+                        start_dist: 0.0,
+                        time_s: Vec::new(),
+                        speed_ms: Vec::new(),
+                        power_w: Vec::new(),
+                        cadence_rpm: Vec::new(),
+                        hr_bpm: Vec::new(),
+                        ele: Vec::new(),
+                    });
+                (record.clone(), Arc::new(series))
             })
             .collect()
     });
@@ -506,21 +479,27 @@ pub fn ReviewPage(
         let pairs = pairs.read();
         let from = pairs
             .iter()
+            .filter(|(_, s)| !s.is_empty())
             .map(|(_, s)| s.start_dist)
             .reduce(f64::min)
             .unwrap_or(0.0);
-        let to = pairs.iter().map(|(_, s)| s.end_dist()).reduce(f64::max);
+        let to = pairs
+            .iter()
+            .filter(|(_, s)| !s.is_empty())
+            .map(|(_, s)| s.end_dist())
+            .reduce(f64::max);
         let total = route.read().as_ref().map_or(0.0, |r| r.total_dist);
         (from, to.unwrap_or(total).max(from + 1.0))
     });
-    let window = range.read().unwrap_or(*full_span.read());
+    let window_memo = use_memo(move || range.read().unwrap_or(*full_span.read()));
 
     // Wide windows are smoothed more; the series are rebuilt only when that choice changes.
-    let smooth_m = ((window.1 - window.0) / 120.0 / GRID_M)
-        .round()
-        .clamp(1.0, 30.0)
-        * GRID_M;
     let smoothed = use_memo(move || -> Vec<Arc<DistSeries>> {
+        let window = *window_memo.read();
+        let smooth_m = ((window.1 - window.0) / 120.0 / GRID_M)
+            .round()
+            .clamp(1.0, 30.0)
+            * GRID_M;
         pairs
             .read()
             .iter()
@@ -529,11 +508,19 @@ pub fn ReviewPage(
     });
 
     let metric_now = *metric.read();
-    let geometry = {
+    let geometry = use_memo(move || {
+        let window = *window_memo.read();
+        let metric_now = *metric.read();
         let rides = smoothed.read();
         let lines = chart::lines(&rides, metric_now, window.0, window.1);
         chart::chart_geometry(metric_now, &lines, window.0, window.1)
-    };
+    });
+    let geometry = geometry.read().clone();
+    let rows = use_memo(move || {
+        let window = *window_memo.read();
+        let records: Vec<_> = pairs.read().iter().map(|(r, _)| r.clone()).collect();
+        chart::stats_rows(&records, window.0, window.1)
+    });
 
     let set_range = move |next: Option<(f64, f64)>| {
         let mut range = range;
@@ -584,17 +571,14 @@ pub fn ReviewPage(
     let tab_now = tab.read().clone();
     let view_now = view.read().clone();
     let power_view = view_now == "power";
-    let shared = chart::common_span(&smoothed.read());
-    let table_span = range.read().or(shared);
-    let rows = table_span
-        .map(|(a, b)| chart::stats_rows(&records, a, b))
-        .unwrap_or_default();
+    let table_span = chart::common_span(&smoothed.read());
+    let rows = rows.read();
     let climbs = route_now
         .as_ref()
         .map(|r| chart::climb_ranges(r, MAX_CLIMB_CHIPS))
         .unwrap_or_default();
     let rider_now = rider.read().clone();
-    let reference_is_estimated = records.iter().any(|r| r.power_estimated);
+    let reference_is_estimated = records.iter().any(|r| r.power_estimated || r.simulated);
 
     // legend: one chip per ride with the value under the cursor; without a cursor the mean over
     // the window ("Ø", the time difference at its end), so the legend is never a row of dashes
@@ -605,7 +589,15 @@ pub fn ReviewPage(
             let with_unit = |v: f64| format!("{} {}", metric_now.value_text(v), metric_now.unit());
             let value = match cursor_now {
                 Some(d) => chart::value_at(&smoothed.read(), slot, metric_now, d).map(with_unit),
-                None => chart::window_value(&smoothed.read(), slot, metric_now, window.0, window.1)
+                None => rows
+                    .get(slot)
+                    .and_then(|row| match metric_now {
+                        Metric::Delta => row.time_delta_s,
+                        Metric::Power => row.stats.and_then(|s| s.avg_power_w),
+                        Metric::HeartRate => row.stats.and_then(|s| s.avg_hr),
+                        Metric::Cadence => row.stats.and_then(|s| s.avg_cadence),
+                        Metric::Speed => row.stats.map(|s| s.avg_speed_ms),
+                    })
                     .map(|v| {
                         if metric_now == Metric::Delta {
                             with_unit(v)
@@ -615,7 +607,8 @@ pub fn ReviewPage(
                     }),
             }
             .unwrap_or_else(|| DASH.to_string());
-            let estimated = record.power_estimated && metric_now == Metric::Power;
+            let estimated =
+                (record.power_estimated || record.simulated) && metric_now == Metric::Power;
             (
                 slot,
                 chart::fmt_stamp(record.summary.started_unix_s),
@@ -636,7 +629,9 @@ pub fn ReviewPage(
             .iter()
             .map(|row| match row.stats {
                 Some(stats) => {
-                    let estimated = records.get(row.slot).is_some_and(|r| r.power_estimated);
+                    let estimated = records
+                        .get(row.slot)
+                        .is_some_and(|r| r.power_estimated || r.simulated);
                     let mut cells = stats_cells(&stats, estimated);
                     cells.push(match row.time_delta_s {
                         Some(delta) if row.slot != 0 => fmt_delta_duration(delta),
@@ -740,7 +735,7 @@ pub fn ReviewPage(
                     class: if compact { "btn btn--icon" } else { "btn btn--sm" },
                     "aria-label": t("ui_review.edzes_importalasa"),
                     title: t("ui_review.edzes_importalasa").to_string(),
-                    disabled: busy_now || route_now.is_none() && !no_rides && current_id.is_none(),
+                    disabled: busy_now,
                     onclick: move |_| on_import.call(()),
                     Icon { name: IconName::Upload, size: if compact { 20 } else { 16 } }
                     if !compact {
@@ -903,6 +898,7 @@ pub fn ReviewPage(
                                                             let stem = stem.clone();
                                                             move |_| {
                                                                 confirm_delete.set(None);
+                                                                if estimating.peek().as_ref() == Some(&stem) { estimating.set(None); }
                                                                 on_delete.call(stem.clone());
                                                             }
                                                         },
@@ -1052,6 +1048,7 @@ pub fn ReviewPage(
                                     follow,
                                     on_style: move |style| on_map_style.call(style),
                                     on_follow: move |_| {},
+                                    show_follow: false,
                                     overlay,
                                 }
                             }
@@ -1212,7 +1209,7 @@ pub fn ReviewPage(
                                                         "{legend.get(row.slot).map(|l| l.1.clone()).unwrap_or_default()}"
                                                     }
                                                     if let Some(stats) = row.stats {
-                                                        for (i , cell) in stats_cells(&stats, records.get(row.slot).is_some_and(|r| r.power_estimated)).into_iter().enumerate() {
+                                                        for (i , cell) in stats_cells(&stats, records.get(row.slot).is_some_and(|r| r.power_estimated || r.simulated)).into_iter().enumerate() {
                                                             td { key: "c-{i}", class: "num", "{cell}" }
                                                         }
                                                         td { class: "num",

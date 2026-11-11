@@ -51,11 +51,13 @@ pub fn is_measured(meta: &RideMeta) -> bool {
 pub fn dense_power(points: &[RecordPoint]) -> Vec<f64> {
     let mut out: Vec<f64> = Vec::new();
     let mut previous: Option<(usize, f64)> = None;
+    let mut end = 0usize;
     for point in points {
         if !point.t.is_finite() || point.t < 0.0 {
             continue;
         }
-        let slot = point.t.round() as usize;
+        let slot = (point.t + 1e-9).floor() as usize;
+        end = end.max(slot.min(MAX_SLOTS));
         if slot >= MAX_SLOTS {
             break;
         }
@@ -69,7 +71,7 @@ pub fn dense_power(points: &[RecordPoint]) -> Vec<f64> {
                 if let Some(cell) = out.get_mut(slot) {
                     *cell = watts;
                 }
-                previous = Some((last, last_watts));
+                previous = Some((last, if slot == last { watts } else { last_watts }));
                 continue;
             }
             let hold = if (slot - last) as f64 <= MAX_SAMPLE_GAP_S {
@@ -84,6 +86,8 @@ pub fn dense_power(points: &[RecordPoint]) -> Vec<f64> {
         out.push(watts);
         previous = Some((slot, watts));
     }
+    // A point at t=N is an endpoint, not evidence for an extra second after N.
+    out.truncate(end);
     out
 }
 
@@ -145,7 +149,7 @@ pub fn index_numbers(record: &RideRecord) -> (Option<f64>, Option<Vec<Option<f32
 }
 
 /// The stored curve of an index entry, when it has one for the current [`DURATIONS`].
-fn stored_curve(meta: &RideMeta) -> Option<&[Option<f32>]> {
+pub fn stored_curve(meta: &RideMeta) -> Option<&[Option<f32>]> {
     meta.mmp
         .as_deref()
         .filter(|curve| curve.len() == DURATIONS.len())
@@ -267,7 +271,7 @@ pub fn analyze(all: &[RouteRides], now_unix_s: f64) -> Analysis {
 /// with what the rides of that period add up to. Simulated rides do not count at all; the TSS of a
 /// ride with estimated watts is left out (the time stays).
 pub fn bucket(rides: &[&RideMeta], period: Period, count: usize, until_unix_s: f64) -> Vec<Bucket> {
-    if count == 0 || !until_unix_s.is_finite() {
+    if count == 0 || count > 1200 || !valid_timestamp(until_unix_s) {
         return Vec::new();
     }
     let mut starts: Vec<i64> = Vec::with_capacity(count);
@@ -287,7 +291,7 @@ pub fn bucket(rides: &[&RideMeta], period: Period, count: usize, until_unix_s: f
         })
         .collect();
     for meta in rides {
-        if meta.simulated || !meta.started_unix_s.is_finite() {
+        if meta.simulated || !valid_timestamp(meta.started_unix_s) {
             continue;
         }
         let start = period_start(day_of(meta.started_unix_s), period);
@@ -302,6 +306,11 @@ pub fn bucket(rides: &[&RideMeta], period: Period, count: usize, until_unix_s: f
         }
     }
     out
+}
+
+/// Supported calendar range: 0001-01-01 through 9999-12-31 (UTC).
+pub fn valid_timestamp(value: f64) -> bool {
+    value.is_finite() && (-62_135_596_800.0..253_402_300_800.0).contains(&value)
 }
 
 /// Days since the Unix epoch of the UTC day containing the instant.
@@ -338,7 +347,7 @@ fn previous_start(start: i64, period: Period) -> i64 {
 
 /// `(year, month, day)` of a day count since 1970-01-01 (proleptic Gregorian).
 pub fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let z = days + 719_468;
+    let z = days.clamp(-3_652_425, 3_652_425) + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
     let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
@@ -382,9 +391,10 @@ mod tests {
         }
     }
 
-    /// One sample per second, `watts(t)` for `t` in `0..seconds`.
+    /// A ride of `seconds` seconds: one sample per second, `watts(t)` for `t` in `0..=seconds`
+    /// (the last sample is the end of the ride, not another second of it).
     fn ride(seconds: u32, watts: impl Fn(u32) -> f64) -> Vec<RecordPoint> {
-        (0..seconds)
+        (0..=seconds)
             .map(|t| point(f64::from(t), Some(watts(t))))
             .collect()
     }
@@ -474,16 +484,17 @@ mod tests {
 
     #[test]
     fn samples_are_placed_by_time_not_by_index() {
-        // the engine can skip a second under load: 0, 1, 2, 4, 5 (3 s is missing, a short gap)
+        // the engine can skip a second under load: 0, 1, 2, 4, 5 (3 s is missing, a short gap);
+        // the ride is 5 s long, so it has 5 one-second cells
         let points: Vec<_> = [0.0, 1.0, 2.0, 4.0, 5.0]
             .into_iter()
             .map(|t| point(t, Some(100.0)))
             .collect();
         let dense = dense_power(&points);
-        assert_eq!(dense.len(), 6);
+        assert_eq!(dense.len(), 5);
         assert!(dense.iter().all(|w| (*w - 100.0).abs() < 1e-9), "{dense:?}");
         // a long gap is a dropout: zeros
-        let gap: Vec<_> = [0.0, 1.0, 30.0]
+        let gap: Vec<_> = [0.0, 1.0, 30.0, 31.0]
             .into_iter()
             .map(|t| point(t, Some(100.0)))
             .collect();
@@ -553,6 +564,7 @@ mod tests {
             source: RideSource::Recorded,
             power_estimated: estimated,
             estimate: None,
+            measured_power: Vec::new(),
         }
     }
 

@@ -396,7 +396,7 @@ fn Page(props: PageProps) -> Element {
                         Icon { name: theme_icon, size: 14 }
                         "{theme_label}"
                     }
-                    span { class: "chip", "v0.1.0" }
+                    span { class: "chip", "v{env!(\"CARGO_PKG_VERSION\")}" }
                 }
             }
             for screen in props.screens.clone() {

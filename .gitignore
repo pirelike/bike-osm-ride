@@ -6,6 +6,7 @@
 /.claude/
 *.log
 /dist/
+/realgpxfiles/
 
 # generated translator context (node scripts/i18n/extract.mjs rebuilds it)
 /crates/ride-i18n/locales/_meta.json

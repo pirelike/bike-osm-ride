@@ -2,7 +2,7 @@
 //! map/data attributions. The content mirrors the README "Licenc" section one-to-one.
 
 use dioxus::prelude::*;
-use ride_ui_kit::{Dialog, Icon, IconName};
+use ride_ui_kit::Dialog;
 
 use crate::settings::Group;
 use ride_i18n::t;
@@ -15,7 +15,7 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const PROJECT_LICENSE: &str = "MIT OR Apache-2.0";
 
 /// Third-party code we build on: `(source, licence, what we use it for)`.
-pub fn third_party_code() -> [(&'static str, &'static str, &'static str); 5] {
+pub fn third_party_code() -> [(&'static str, &'static str, &'static str); 8] {
     [
         (
             "ftms",
@@ -36,6 +36,21 @@ pub fn third_party_code() -> [(&'static str, &'static str, &'static str); 5] {
             "iron-heart",
             "MIT",
             t("ui_dialogs.about.pulzusmero_kereses_es_ujracsatlakozas_mintaja"),
+        ),
+        (
+            "virtual-cog",
+            "Unlicense",
+            t("ui_dialogs.about.zwift_click_play_es_hub_ble_protokoll"),
+        ),
+        (
+            "p256, hkdf, sha2, aes, ccm (RustCrypto)",
+            "MIT / Apache-2.0",
+            t("ui_dialogs.about.zwift_click_kulcscsere_es_titkositas"),
+        ),
+        (
+            "Mozilla Firefox",
+            "MPL-2.0",
+            t("ui_dialogs.about.bongeszo_panel_a_telepitett_firefox"),
         ),
         (
             t("ui_dialogs.about.dioxus_btleplug_tokio_quick_xml_es_a_tobbi_rust_fugg"),
@@ -63,7 +78,7 @@ pub fn bundled_fonts() -> [(&'static str, &'static str, &'static str); 2] {
 }
 
 /// External map/data sources: `(source, licence, what we use it for)`.
-pub fn data_sources() -> [(&'static str, &'static str, &'static str); 5] {
+pub fn data_sources() -> [(&'static str, &'static str, &'static str); 6] {
     [
         (
             t("ui_dialogs.about.openstreetmap_kozremukodok"),
@@ -90,14 +105,19 @@ pub fn data_sources() -> [(&'static str, &'static str, &'static str); 5] {
             t("ui_dialogs.about.google_maps_platform_feltetelei"),
             t("ui_dialogs.about.opcionalis_utcakep_a_sajat_api_kulcsoddal_a_google_f"),
         ),
+        (
+            t("ui_dialogs.about.edzesleirasok"),
+            PROJECT_LICENSE,
+            t("ui_dialogs.about.edzesleirasok_sajat_szoveg"),
+        ),
     ]
 }
 
 /// The generated dependency-licence list (`THIRD_PARTY_LICENSES.md` in the repository root),
 /// produced by `scripts/third_party_licenses.ps1`. Embedded at compile time, so the dialog and
 /// the file can never disagree; regenerating the list is enough to update both.
-pub fn third_party_licenses_text() -> Option<&'static str> {
-    Some(include_str!("../../../THIRD_PARTY_LICENSES.md"))
+pub fn third_party_licenses_text() -> &'static str {
+    include_str!("../../../THIRD_PARTY_LICENSES.md")
 }
 
 /// "Névjegy és licencek": app name/version, project licence (MIT OR Apache-2.0),
@@ -156,22 +176,12 @@ pub fn AboutDialog(open: bool, on_close: EventHandler<()>) -> Element {
                     }
                     SourceTable { rows: data_sources().to_vec() }
                     p { class: "dlg-note",
-                        strong { "Google Maps Platform / Street View: " }
-                        {t("ui_dialogs.about.csak_akkor_ha_te_bekapcsolod_es_megadod_a_sajat_api_")}
+                        {t("ui_dialogs.about.streetview_notice")}
                     }
                 }
 
                 Group { title: t("ui_dialogs.about.teljes_fuggosegi_licenclista").to_string(),
-                    if let Some(text) = third_party_licenses_text() {
-                        pre { class: "dlg-about__licenses", "{text}" }
-                    } else {
-                        div { class: "dlg-about__hook",
-                            span { class: "dlg-about__hook-icon", Icon { name: IconName::Info, size: 14 } }
-                            span {
-                                {t("ui_dialogs.about.a_fuggosegek_teljes_automatikusan_generalt_listaja_t")}
-                            }
-                        }
-                    }
+                    pre { class: "dlg-about__licenses", "{third_party_licenses_text()}" }
                 }
             }
         }
@@ -239,6 +249,51 @@ mod tests {
             .any(|(_, licence, _)| licence.contains("Apache-2.0")));
     }
 
+    /// The first word of the source column of every row of the README's third-party table
+    /// ("Felhasznált nyílt forrású kód"): `ftms`, `virtual-cog`, `Mozilla`, ...
+    fn readme_sources() -> Vec<String> {
+        let readme = include_str!("../../../README.md");
+        let start = readme
+            .find("### Felhasznált nyílt forrású kód")
+            .expect("README third-party section");
+        let section = &readme[start..];
+        let end = section[4..].find("\n### ").map_or(section.len(), |i| i + 4);
+        section[..end]
+            .lines()
+            .filter(|line| line.starts_with("| [") || line.starts_with("| `"))
+            .filter_map(|line| {
+                let cell = line.trim_start_matches('|').trim();
+                let text = cell.strip_prefix('[')?.split(']').next()?;
+                let word = text.trim_matches('`').split_whitespace().next()?;
+                Some(word.trim_matches('`').to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_row_of_the_readme_table_is_in_the_dialog() {
+        let readme = readme_sources();
+        assert!(readme.len() >= 9, "{readme:?}");
+        let names: Vec<&str> = third_party_code()
+            .iter()
+            .chain(bundled_fonts().iter())
+            .map(|(name, _, _)| *name)
+            .collect();
+        for source in &readme {
+            assert!(
+                names.iter().any(|name| name.contains(source.as_str())),
+                "README lists {source}, the About dialog does not: {names:?}"
+            );
+        }
+        // and the other way round: nothing in the dialog that the README does not name
+        for name in third_party_code().iter().map(|(name, _, _)| *name) {
+            assert!(
+                readme.iter().any(|source| name.contains(source.as_str())),
+                "the About dialog lists {name}, the README does not"
+            );
+        }
+    }
+
     #[test]
     fn data_sources_mirror_the_readme_attributions() {
         let text = format!("{:?}", data_sources());
@@ -296,10 +351,12 @@ mod tests {
 
     #[test]
     fn generated_licence_list_hook_is_safe_to_embed() {
-        // Until the release pipeline generates THIRD_PARTY_LICENSES.md the dialog shows a note;
-        // when the crate-local copy is added, the embedded text must not be empty.
-        if let Some(text) = third_party_licenses_text() {
-            assert!(!text.trim().is_empty());
-        }
+        // the generated list is embedded and names the dependencies it covers
+        let text = third_party_licenses_text();
+        assert!(
+            text.contains("dioxus") && text.contains("btleplug"),
+            "{}",
+            &text[..text.len().min(200)]
+        );
     }
 }

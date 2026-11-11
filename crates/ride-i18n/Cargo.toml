@@ -3,6 +3,8 @@ name = "ride-i18n"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+publish = false
 description = "Language registry and text catalogs for bike-osm-ride"
 
 [dependencies]

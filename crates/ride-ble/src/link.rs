@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use futures::future::BoxFuture;
 use ride_model::{ConnState, DeviceInfo, DeviceKind};
 use tokio::sync::{mpsc, watch};
+use tokio::task::JoinHandle;
 
 use crate::control::ControlConfig;
 use crate::error::{bounded, BleError};
@@ -37,6 +38,14 @@ pub fn kind_label(kind: DeviceKind) -> &'static str {
         DeviceKind::Shifter => t("ble.link.valto"),
     }
 }
+
+/// How long a connect may take on Android before we give up on it. It must outlast everything
+/// btleplug's Android backend (droidplug) does inside one `connect`: a quick failure (status 133
+/// within 10 s) is retried twice, and the last attempt can run into the system's own 30 s
+/// direct-connect timeout, so up to 2 × 10 s + 30 s. Droidplug runs its commands one after
+/// another and cannot cancel one: a connect abandoned earlier stays at the head of the queue, and
+/// the next disconnect and connect wait behind it.
+const ANDROID_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// All timing knobs in one place so tests can run the real code paths in milliseconds.
 #[derive(Debug, Clone)]
@@ -83,10 +92,13 @@ impl Default for HubConfig {
             tick: Duration::from_millis(100),
             stale_after: crate::merge::STALE_AFTER,
             emit_min_interval: Duration::from_millis(90),
-            // Android's own direct connect gives up after about 30 s (and btleplug retries a failed
-            // attempt up to twice), and discovering the services of a trainer takes seconds there:
-            // the desktop limits cut a link that was about to come up.
-            connect_timeout: Duration::from_secs(if cfg!(target_os = "android") { 30 } else { 12 }),
+            // Android: see `ANDROID_CONNECT_TIMEOUT`; discovering the services of a trainer also
+            // takes seconds there. The desktop limits cut a link that was about to come up.
+            connect_timeout: if cfg!(target_os = "android") {
+                ANDROID_CONNECT_TIMEOUT
+            } else {
+                Duration::from_secs(12)
+            },
             io_timeout: Duration::from_secs(if cfg!(target_os = "android") { 12 } else { 6 }),
             read_timeout: Duration::from_secs(3),
             health_interval: Duration::from_secs(2),
@@ -99,13 +111,27 @@ impl Default for HubConfig {
                 Duration::from_secs(10),
             ],
             stable_after: Duration::from_secs(30),
-            shutdown_flush: Duration::from_secs(2),
+            // Neutral and Stop each wait for their answer (`response_timeout`, 3 s) one write gap
+            // apart; the hand-back ends as soon as both are through, so a quick trainer is not
+            // slowed down by the margin.
+            shutdown_flush: Duration::from_secs(7),
             rescan_burst: Duration::from_secs(2),
             scan_silence_restart: Duration::from_secs(30),
             scan_emit_interval: Duration::from_millis(500),
             scan_forget_after: Duration::from_secs(60),
             control: ControlConfig::default(),
         }
+    }
+}
+
+impl HubConfig {
+    /// The longest a device task can take before it notices a stop and hands its link back:
+    /// the connect, the capability reads, the notification stream and the (up to eight)
+    /// subscriptions run before the dialogue loop that watches the stop, then the hand-back, the
+    /// unsubscriptions and the disconnect. A new task of the same device waits this long for its
+    /// predecessor, so two connections never overlap on one device.
+    pub fn task_teardown_bound(&self) -> Duration {
+        self.connect_timeout + self.read_timeout * 3 + self.io_timeout * 18 + self.shutdown_flush
     }
 }
 
@@ -208,6 +234,8 @@ pub(crate) struct Ctx {
     /// Roles the hub wants from this device (the session narrows this after discovery).
     roles: Arc<Mutex<Vec<DeviceKind>>>,
     connected_once: Arc<AtomicBool>,
+    /// When the current link came up (`connected`); cleared before every attempt.
+    connected_at: Arc<Mutex<Option<Instant>>>,
 }
 
 impl Ctx {
@@ -234,7 +262,14 @@ impl Ctx {
             rescan,
             roles: Arc::new(Mutex::new(roles)),
             connected_once: Arc::new(AtomicBool::new(false)),
+            connected_at: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// The shared role list: the hub writes the roles it actually granted into it, so the
+    /// session decides by the same set the hub accepts data for.
+    pub(crate) fn roles_handle(&self) -> Arc<Mutex<Vec<DeviceKind>>> {
+        Arc::clone(&self.roles)
     }
 
     fn role_list(&self) -> MutexGuard<'_, Vec<DeviceKind>> {
@@ -281,7 +316,20 @@ impl Ctx {
     /// The link is up and subscribed.
     pub fn connected(&self) {
         self.connected_once.store(true, Ordering::Relaxed);
+        *self.connected_at.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
         self.state_all(ConnState::Connected);
+    }
+
+    /// How long the link of the last attempt was up; `None` when it never came up.
+    fn link_lifetime(&self) -> Option<Duration> {
+        self.connected_at
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .map(|at| at.elapsed())
+    }
+
+    fn forget_link(&self) {
+        *self.connected_at.lock().unwrap_or_else(|p| p.into_inner()) = None;
     }
 
     pub fn was_connected(&self) -> bool {
@@ -356,11 +404,28 @@ enum Final {
 }
 
 /// Run `session` against `p` until stopped or out of retries, reporting through `ctx`.
-pub(crate) async fn supervise<P, S>(p: P, mut session: S, ctx: Ctx, mut stop: watch::Receiver<bool>)
-where
+///
+/// `predecessor` is the previous task of the same device, if it may still be running. It is awaited
+/// first: on Android btleplug's `Peripheral` is a single serial command queue with one `connected`
+/// flag, so a connect issued while the old task is still unsubscribing and disconnecting would run
+/// in the middle of that teardown, and the old task's disconnect would then kill the new link.
+pub(crate) async fn supervise<P, S>(
+    p: P,
+    mut session: S,
+    ctx: Ctx,
+    mut stop: watch::Receiver<bool>,
+    predecessor: Option<JoinHandle<()>>,
+) where
     P: GattPeripheral,
     S: DeviceSession<P>,
 {
+    if let Some(previous) = predecessor {
+        // As long as the old task may still be busy with this device: before its dialogue loop
+        // it does not watch the stop (a connect, reads, subscriptions), and giving up earlier
+        // would let two connections overlap. A panic of the old task changes nothing.
+        let limit = ctx.cfg.task_teardown_bound();
+        let _ = tokio::time::timeout(limit, previous).await;
+    }
     let label = kind_label(ctx.kind);
     let max = ctx.cfg.reconnect_backoff.len() as u32;
     let mut attempt = 0u32;
@@ -369,7 +434,7 @@ where
             break Final::Stopped;
         }
         ctx.state_all(ConnState::Connecting);
-        let started = Instant::now();
+        ctx.forget_link();
         let result = session.run(&p, &ctx, &mut stop).await;
         // whatever happened, do not leave a half-open link behind
         let _ = bounded(
@@ -393,7 +458,12 @@ where
             Err(e) => (e.to_string(), e.is_link_lost()),
         };
         ctx.log.comment(&format!("{label}: {why}"));
-        if started.elapsed() >= ctx.cfg.stable_after {
+        // Stable means the *link* lasted, not the attempt: a slow connect (up to a minute on
+        // Android) followed by an immediate loss must use up the budget and end in `Failed`.
+        if ctx
+            .link_lifetime()
+            .is_some_and(|up| up >= ctx.cfg.stable_after)
+        {
             attempt = 0;
         }
         attempt += 1;
@@ -450,4 +520,17 @@ where
         }
     }
     ctx.finished();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_android_connect_budget_outlasts_the_systems_own_retries() {
+        // two quick failures (each under 10 s) retried by droidplug, then one attempt that may
+        // take the system's whole 30 s direct-connect timeout
+        let worst_case = Duration::from_secs(2 * 10 + 30);
+        assert!(ANDROID_CONNECT_TIMEOUT > worst_case);
+    }
 }

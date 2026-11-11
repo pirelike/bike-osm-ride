@@ -8,6 +8,47 @@ a dátumok a commitok dátumai.
 A **v0.2.0** és a **v0.2.2** címke megvan a tárolóban, de nincs hozzá kiadás: a kiadási futásuk elbukott, a tartalmuk a
 következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címkét nem mozgatunk; a javítás új patch-verzió.
 
+## [0.5.1] – 2026-11-11
+
+### Javítva
+- **A projektátvilágítás során feltárt hibák javítása.**
+  - *Edzés és eszközvezérlés.* Vezérlésvesztés után a görgő szüneteltetése és leállítása újrapróbálható. Aktív vagy
+    szüneteltetett menetben az edzés csak a menet befejezése után cserélhető. A Zwift Click/Play változásait valódi
+    eszközön még nem ellenőriztük.
+  - *Térkép és Street View.* A telefonos térkép és diagram érintéses kezelése javult. A képletöltés külön jelzi a
+    tárhelyhibákat, a haladásjelző pedig a ténylegesen mentett képeket számolja.
+  - *Frissítés és kiadás.* Az automatikus frissítő ellenőrzi a letöltés SHA-256 ellenőrzőösszegét. Az Android-kiadás
+    állandó aláírókulcsot igényel. A korábban debug-kulccsal aláírt APK-ról váltás előtt készíts biztonsági mentést
+    az alkalmazásban, majd távolítsd el a régi verziót. Az új APK telepítése után állítsd vissza a mentést.
+  - *Értékelés/újrabecslés:* a részben mért wattú importált menet újrabecslése már nem írja felül a mért másodperceket
+    (a rekord új, elhagyható `measured_power` mezője őrzi őket), és az újrabecslés ugyanazt a menetet frissíti, nem hoz
+    létre másodikat a következő másodperc fájlnevén.
+  - *Import:* egy komment vagy sávnév szava többé nem teszi TCX-szé az érvényes GPX-et (a gyökérelem dönt); a negatív
+    vagy előjeles óra/perc/másodperc/időzóna-mező érvénytelen időbélyeg; a 2000 m alatti / 20 000 m feletti magasság
+    sérült adat, nem terep, és elmarad, így nem keletkezik a mentés után visszaolvashatatlan útvonal.
+  - *Mentés és visszaállítás:* az indulási takarítás nem törli egy másik futó példány éppen írt ideiglenes fájlját
+    (csak a 10 percnél régebbieket); a visszaállítás a JSON-ként olvasható, de üres helyi menetrekordot is a mentés
+    jó példányából javítja, és a második olvasási kör nem fut ki a méretkeretből félig kiírt állapotban.
+  - *Elemzés:* a hibás hosszúságú teljesítménygörbe újraszámolódik, az ismeretlen (0-s) rekordverzió figyelmen kívül
+    marad, az emelkedő-felismerés az elutasított rövid emelkedők sokaságánál is lineáris idejű.
+  - A motor, a TCX-export, a teljesítménygörbe és a szakaszösszegzés hibáit (cél utáni elszámolás, szünet utáni
+    időbélyeg, 260 rpm, kiesett adat) az átvilágítás óta már javították; regressziós tesztek védik őket
+    (`crates/ride-sim/tests/audit_regressions.rs`, `crates/ride-route/tests/audit_regressions.rs`).
+- **Telefonon a leválasztás utáni újracsatlakozás nem ütközik a régi kapcsolat lebontásával.** Ha a „Leválasztás”
+  után azonnal újra csatlakoztál, az új kapcsolat a régi leválasztásának *közepén* indult el ugyanazon az eszközön.
+  Androidon a btleplug eszközönként egyetlen, megszakíthatatlan parancssort használ, így a régi feladat leválasztása
+  az újonnan felépült kapcsolatot is lebonthatta. Az új
+  csatlakozás mostantól megvárja ugyanannak az eszköznek az előző feladatát, és a hub közben tovább kiszolgálja a
+  parancsokat (korábban akár 38 másodpercig állt).
+- **A „Leválasztás” azonnal véget vet a függő csatlakozásnak és a szolgáltatás-felderítésnek**, nem vár az
+  időkorlátra.
+- **Androidon a csatlakozás időkerete 30 s-ról 60 s-ra nőtt.** A rendszer saját újrapróbálkozásai együtt akár 50 s-ig
+  tarthatnak; a korábban feladott csatlakozás elárvult parancsként a sor elején maradt, és minden további leválasztás
+  és csatlakozás mögötte várt.
+- Ezek a javítások csak a hálózat nélküli, memóriában futó BLE-szimulációval vannak tesztelve; **telefonon még nem
+  ellenőriztük**. Ha az újracsatlakozás továbbra is akadozik, a `ble.log` mutatja meg a következő lépést
+  (`docs/BLUETOOTH.md` §7).
+
 ## [0.5.0] – 2026-11-07
 
 ### Új

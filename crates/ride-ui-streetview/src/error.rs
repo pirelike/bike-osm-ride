@@ -27,6 +27,8 @@ pub enum SvError {
     BadResponse,
     /// The endpoint is not a Google (or loopback test) address; nothing was sent.
     UntrustedEndpoint,
+    /// Local image persistence failed; stop before spending more image quota.
+    Storage(std::io::ErrorKind),
 }
 
 impl SvError {
@@ -41,6 +43,7 @@ impl SvError {
             SvError::Network => t("ui_streetview.error.nincs_kapcsolat_a_google_lel"),
             SvError::Server => t("ui_streetview.error.a_google_atmenetileg_nem_valaszol"),
             SvError::BadResponse => t("ui_streetview.error.varatlan_valasz_a_google_tol"),
+            SvError::Storage(_) => t("ui_streetview.error.storage_failed"),
             SvError::UntrustedEndpoint => t("ui_streetview.error.nem_engedelyezett_cim"),
         }
     }
@@ -56,6 +59,13 @@ impl SvError {
             SvError::Network => t("ui_streetview.error.nincs_kapcsolat"),
             SvError::Server => t("ui_streetview.error.google_hiba"),
             SvError::BadResponse => t("ui_streetview.error.varatlan_valasz"),
+            SvError::Storage(std::io::ErrorKind::StorageFull) => {
+                t("ui_streetview.error.storage_full")
+            }
+            SvError::Storage(std::io::ErrorKind::PermissionDenied) => {
+                t("ui_streetview.error.storage_denied")
+            }
+            SvError::Storage(_) => t("ui_streetview.error.storage_failed"),
             SvError::UntrustedEndpoint => t("ui_streetview.error.nem_engedelyezett_cim"),
         }
     }
@@ -83,6 +93,7 @@ impl SvError {
             }
             SvError::Server => t("ui_streetview.error.hamarosan_automatikusan_ujraprobaljuk"),
             SvError::BadResponse => t("ui_streetview.error.hamarosan_automatikusan_ujraprobaljuk"),
+            SvError::Storage(_) => t("ui_streetview.error.storage_hint"),
             SvError::UntrustedEndpoint => {
                 t("ui_streetview.error.a_street_view_csak_a_google_szolgaltatasaihoz_kapcso")
             }
@@ -98,6 +109,7 @@ impl SvError {
                 | SvError::KeyRejected
                 | SvError::InvalidRequest
                 | SvError::UntrustedEndpoint
+                | SvError::Storage(_)
         )
     }
 
@@ -164,7 +176,7 @@ impl std::error::Error for SvError {}
 mod tests {
     use super::*;
 
-    const ALL: [SvError; 9] = [
+    const ALL: [SvError; 10] = [
         SvError::MissingKey,
         SvError::KeyRejected,
         SvError::InvalidRequest,
@@ -174,6 +186,7 @@ mod tests {
         SvError::Server,
         SvError::BadResponse,
         SvError::UntrustedEndpoint,
+        SvError::Storage(std::io::ErrorKind::Other),
     ];
 
     #[test]

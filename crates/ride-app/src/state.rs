@@ -3,7 +3,7 @@
 //! UI crates receive these as `ReadSignal` props and never own business state. The
 //! controller (see `controller.rs`) is the only writer of the ride-related signals.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -39,14 +39,28 @@ pub enum DialogKind {
 
 /// How `RIDE_THEME` changed the persisted UI settings, so that the override is never
 /// written to the settings file unless the user changes the theme / map style themselves.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// The `*_touched` flags latch once a value to be saved differs from the override: from then on
+/// the field is the user's choice, even when they come back to the overridden value.
+#[derive(Debug)]
 struct HookUi {
     theme_override: Theme,
     theme_persisted: Theme,
+    theme_touched: AtomicBool,
     style_override: MapStyle,
     style_persisted: MapStyle,
+    style_touched: AtomicBool,
     workout_override: Option<String>,
     workout_persisted: Option<String>,
+    workout_touched: AtomicBool,
+}
+
+/// `true` once `value` has differed from `overridden`, i.e. the user has changed the field.
+fn touched<T: PartialEq>(flag: &AtomicBool, value: &T, overridden: &T) -> bool {
+    if value != overridden {
+        flag.store(true, Ordering::Relaxed);
+    }
+    flag.load(Ordering::Relaxed)
 }
 
 /// Read once at start-up (before the window exists): test hooks and persisted settings.
@@ -69,10 +83,13 @@ impl Boot {
             let mut h = HookUi {
                 theme_override: settings.ui.theme,
                 theme_persisted: settings.ui.theme,
+                theme_touched: AtomicBool::new(false),
                 style_override: settings.ui.map_style,
                 style_persisted: settings.ui.map_style,
+                style_touched: AtomicBool::new(false),
                 workout_override: settings.ui.workout_id.clone(),
                 workout_persisted: settings.ui.workout_id.clone(),
+                workout_touched: AtomicBool::new(false),
             };
             if let Some(theme) = hooks.theme {
                 settings.ui.theme = theme;
@@ -91,6 +108,26 @@ impl Boot {
             }
             hook_ui = Some(h);
         }
+        // A selected workout that cannot be found any more (an imported file deleted or
+        // replaced) would leave the ride screen in workout mode with an empty workout panel and
+        // no gears: it is dropped here, so "with a workout" means one that exists.
+        if let Some(id) = settings.ui.workout_id.clone() {
+            let imported = guarded("store::list_workouts", || {
+                ride_route::store::Store::default_location().list_workouts()
+            })
+            .unwrap_or_default();
+            if ride_model::WorkoutLibrary::with_imported(imported)
+                .get(&id)
+                .is_none()
+            {
+                settings.ui.workout_id = None;
+                if let Some(h) = hook_ui.as_mut() {
+                    if h.workout_override.as_deref() == Some(id.as_str()) {
+                        h.workout_override = None;
+                    }
+                }
+            }
+        }
         Self {
             hooks,
             settings,
@@ -101,13 +138,17 @@ impl Boot {
     /// The settings as they should be written to disk.
     pub fn for_disk(&self, mut settings: Settings) -> Settings {
         if let Some(h) = &self.hook_ui {
-            if settings.ui.theme == h.theme_override {
+            if !touched(&h.theme_touched, &settings.ui.theme, &h.theme_override) {
                 settings.ui.theme = h.theme_persisted;
             }
-            if settings.ui.map_style == h.style_override {
+            if !touched(&h.style_touched, &settings.ui.map_style, &h.style_override) {
                 settings.ui.map_style = h.style_persisted;
             }
-            if settings.ui.workout_id == h.workout_override {
+            if !touched(
+                &h.workout_touched,
+                &settings.ui.workout_id,
+                &h.workout_override,
+            ) {
                 settings.ui.workout_id = h.workout_persisted.clone();
             }
         }
@@ -425,7 +466,7 @@ pub fn apply_slot(
 
 pub fn kind_label(kind: DeviceKind) -> &'static str {
     match kind {
-        DeviceKind::Trainer => "Trainer",
+        DeviceKind::Trainer => t("app.state.trainer"),
         DeviceKind::HeartRate => t("app.state.pulzusmero"),
         DeviceKind::PowerMeter => t("app.state.teljesitmenymero"),
         DeviceKind::Cadence => t("app.state.kadenciaszenzor"),
@@ -508,10 +549,13 @@ mod tests {
         let hook = HookUi {
             theme_override: Theme::Light,
             theme_persisted: Theme::Dark,
+            theme_touched: AtomicBool::new(false),
             style_override: MapStyle::Light,
             style_persisted: MapStyle::Dark,
+            style_touched: AtomicBool::new(false),
             workout_override: Some("hooked".into()),
             workout_persisted: None,
+            workout_touched: AtomicBool::new(false),
         };
         let boot = Boot {
             hooks: Hooks::default(),
@@ -533,7 +577,10 @@ mod tests {
         assert_eq!(boot.for_disk(s.clone()).ui.map_style, MapStyle::Osm);
         // The user toggled the theme to dark in this session: kept as chosen.
         s.ui.theme = Theme::Dark;
-        assert_eq!(boot.for_disk(s).ui.theme, Theme::Dark);
+        assert_eq!(boot.for_disk(s.clone()).ui.theme, Theme::Dark);
+        // ... and back to light, the overridden value: still the user's choice now.
+        s.ui.theme = Theme::Light;
+        assert_eq!(boot.for_disk(s).ui.theme, Theme::Light);
     }
 
     #[test]
@@ -544,10 +591,13 @@ mod tests {
             hook_ui: Some(HookUi {
                 theme_override: Theme::Dark,
                 theme_persisted: Theme::Dark,
+                theme_touched: AtomicBool::new(false),
                 style_override: MapStyle::Dark,
                 style_persisted: MapStyle::Dark,
+                style_touched: AtomicBool::new(false),
                 workout_override: Some("e-ramp-20w".into()),
                 workout_persisted: None,
+                workout_touched: AtomicBool::new(false),
             }),
         };
         let mut s = Settings::default();

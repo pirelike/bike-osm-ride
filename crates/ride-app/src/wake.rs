@@ -5,8 +5,7 @@
 //! never keep a PC awake forever.
 //!
 //! * **Windows**: `SetThreadExecutionState` is per thread, so every call must come from the same
-//!   thread (the UI thread, where the whole controller runs). The state is released when the
-//!   thread ends.
+//!   dedicated owner thread. The state is released when that thread ends.
 //! * **Linux**: `org.freedesktop.ScreenSaver.Inhibit` on the session bus (works under GNOME,
 //!   KDE, Xfce, … — the interface is the de-facto standard). The cookie is released with
 //!   `UnInhibit`; closing the bus connection releases it too.
@@ -28,6 +27,24 @@ mod imp {
     }
 
     pub fn set(on: bool) -> bool {
+        use std::sync::{mpsc, OnceLock};
+        type Request = (bool, mpsc::SyncSender<bool>);
+        static TX: OnceLock<mpsc::Sender<Request>> = OnceLock::new();
+        let tx = TX.get_or_init(|| {
+            let (tx, rx) = mpsc::channel::<Request>();
+            std::thread::spawn(move || {
+                while let Ok((on, reply)) = rx.recv() {
+                    let _ = reply.send(apply(on));
+                }
+                apply(false);
+            });
+            tx
+        });
+        let (reply, result) = mpsc::sync_channel(1);
+        tx.send((on, reply)).is_ok() && result.recv().unwrap_or(false)
+    }
+
+    fn apply(on: bool) -> bool {
         let flags = if on {
             ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
         } else {
@@ -40,7 +57,6 @@ mod imp {
 
 #[cfg(target_os = "linux")]
 mod imp {
-    use std::cell::RefCell;
     use std::time::Duration;
 
     use dbus::blocking::Connection;
@@ -57,37 +73,35 @@ mod imp {
     /// The screen saver answers in microseconds; a stuck one must not freeze the UI for long.
     const TIMEOUT: Duration = Duration::from_secs(1);
 
-    thread_local! {
-        /// The live inhibition. Dropping the connection (release, exit, crash) also drops the
-        /// inhibition, which is why the cookie is stored together with it.
-        static INHIBIT: RefCell<Option<(Connection, u32)>> = const { RefCell::new(None) };
-    }
-
+    /// The owner returns the OS result, rather than merely acknowledging the queue.
     pub fn set(on: bool) -> bool {
-        if on {
-            INHIBIT.with(|slot| {
-                let Ok(mut slot) = slot.try_borrow_mut() else {
-                    return false;
-                };
-                if slot.is_some() {
-                    return true; // already inhibited: never stack two cookies
-                }
-                match inhibit() {
-                    Some(pair) => {
-                        *slot = Some(pair);
-                        true
+        use std::sync::{mpsc, OnceLock};
+        type Request = (bool, mpsc::SyncSender<bool>);
+        static TX: OnceLock<mpsc::Sender<Request>> = OnceLock::new();
+        let tx = TX.get_or_init(|| {
+            let (tx, rx) = mpsc::channel::<Request>();
+            std::thread::spawn(move || {
+                let mut live = None;
+                while let Ok((on, reply)) = rx.recv() {
+                    let accepted = if on {
+                        if live.is_none() {
+                            live = inhibit();
+                        }
+                        live.is_some()
+                    } else {
+                        live.take()
+                            .is_none_or(|(conn, cookie)| release(&conn, cookie))
+                    };
+                    if !accepted {
+                        eprintln!("[ride-app] screensaver inhibition failed");
                     }
-                    None => false,
+                    let _ = reply.send(accepted);
                 }
-            })
-        } else {
-            let taken =
-                INHIBIT.with(|slot| slot.try_borrow_mut().ok().and_then(|mut slot| slot.take()));
-            match taken {
-                None => true, // nothing to release
-                Some((conn, cookie)) => release(&conn, cookie),
-            }
-        }
+            });
+            tx
+        });
+        let (reply, result) = mpsc::sync_channel(1);
+        tx.send((on, reply)).is_ok() && result.recv().unwrap_or(false)
     }
 
     fn inhibit() -> Option<(Connection, u32)> {

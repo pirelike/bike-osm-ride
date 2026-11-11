@@ -15,11 +15,15 @@
 //! way out and ignored on the way back in (a secret must not travel in a file the rider mails
 //! to themselves).
 //!
-//! Restoring only **merges**: nothing that exists is overwritten or deleted. A route is a content
-//! hash, so the same id is the same route; a ride is keyed by its start time. The restore has two
-//! phases. The first reads every entry, bounded in size, and checks it (names, JSON, versions);
-//! nothing is written. Only when the whole archive passed does the second write, under the store
-//! lock, with the recent list last. An entry's name is never used as a path: it is mapped onto the
+//! Restoring only **merges**: nothing usable that exists is overwritten or deleted (a local file
+//! that cannot be read any more is replaced by the archive's copy). A route is a content hash, so
+//! the same id is the same route; a ride is keyed by its start time, and its index line is
+//! computed again from the record (as `save_ride` does), never taken from the archive. The
+//! restore has two phases. The first reads every entry, bounded in size, and checks it (names,
+//! JSON, versions, ids); nothing is written. Only when the whole archive passed does the second
+//! write, under the store lock, with the recent list last; a file that cannot be written is
+//! counted ([`RestoreReport::failed`]) and the rest still goes in. Every restored route gets an
+//! entry in the recent list, so it can be opened. An entry's name is never used as a path: it is mapped onto the
 //! whitelist, and the path is rebuilt from the validated ids. That is what keeps a crafted archive
 //! (`../../x`, absolute paths, drive letters) from reaching anywhere outside the data folder.
 //!
@@ -31,12 +35,12 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
-use ride_model::{RecentRoute, RideMeta, RideRecord, Route, Settings, Workout};
+use ride_model::{RecentRoute, RideRecord, Route, Settings, Workout};
 use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-use crate::rides::{valid_stem, INDEX_FILE, RIDES_DIR};
+use crate::rides::{self, valid_stem, INDEX_FILE, RIDES_DIR};
 use crate::store::{self, valid_id, Store, MAX_FILE_BYTES};
 use ride_i18n::{t, tf};
 
@@ -84,6 +88,8 @@ pub struct ExportReport {
     pub routes: usize,
     pub rides: usize,
     pub workouts: usize,
+    /// Files of the data folder that could not go in: unreadable, or larger than the store reads.
+    pub omitted: usize,
 }
 
 /// What a restore added. Everything that was already there is not counted.
@@ -94,6 +100,8 @@ pub struct RestoreReport {
     pub workouts: usize,
     /// Entries left out: unknown names, unreadable JSON, rides of a newer version, ...
     pub skipped: usize,
+    /// Files that passed the check but could not be written (a full disk, a locked file).
+    pub failed: usize,
     /// The settings of the backup, sanitised, with the Google key empty. `None` when the archive
     /// had none (or they were unreadable).
     pub settings: Option<Settings>,
@@ -158,8 +166,11 @@ pub fn export<W: Write + Seek>(
 
     // One consistent snapshot: a ride saved in the middle of the copy waits for the lock.
     let _guard = store::lock();
-    if let Some(bytes) = store::read_limited(&store.dir().join(RECENT)) {
+    let recent_path = store.dir().join(RECENT);
+    if let Some(bytes) = store::read_limited(&recent_path) {
         add(&mut zip, options, RECENT, &bytes)?;
+    } else if recent_path.exists() {
+        report.omitted += 1;
     }
     for (id, path) in json_files(&store.dir().join(ROUTES_DIR)) {
         if !valid_id(&id) {
@@ -173,6 +184,8 @@ pub fn export<W: Write + Seek>(
                 &bytes,
             )?;
             report.routes += 1;
+        } else {
+            report.omitted += 1;
         }
     }
     for route_dir in sub_dirs(&store.dir().join(RIDES_DIR)) {
@@ -192,6 +205,8 @@ pub fn export<W: Write + Seek>(
                 if let Some(bytes) = store::read_limited(&path) {
                     add(&mut zip, options, &name, &bytes)?;
                     report.rides += 1;
+                } else {
+                    report.omitted += 1;
                 }
             }
         }
@@ -208,6 +223,8 @@ pub fn export<W: Write + Seek>(
                 &bytes,
             )?;
             report.workouts += 1;
+        } else {
+            report.omitted += 1;
         }
     }
     zip.finish().map_err(|err| {
@@ -331,7 +348,6 @@ struct Plan {
     routes: BTreeMap<String, usize>,
     workouts: BTreeMap<String, usize>,
     rides: BTreeMap<(String, String), usize>,
-    indexes: BTreeMap<String, Vec<RideMeta>>,
 }
 
 /// Merges the backup in `input` into the store (see the module docs).
@@ -344,29 +360,59 @@ pub fn restore_with<R: Read + Seek>(
     input: R,
     limits: &Limits,
 ) -> Result<RestoreReport, String> {
+    let mut input = input;
+    // The entry count the archive declares is checked before the zip reader allocates one
+    // record per entry of a central directory that may come from anywhere.
+    if declared_entries(&mut input).is_some_and(|n| n > limits.max_entries as u64) {
+        return Err(too_many_entries());
+    }
     let mut archive = ZipArchive::new(input)
         .map_err(|_| t("route.backup.ez_a_fajl_nem_ervenyes_zip_vagy_serult").to_string())?;
     if archive.len() > limits.max_entries {
-        return Err(
-            t("route.backup.a_mentes_gyanusan_sok_fajlt_tartalmaz_nem_allitom_vi").to_string(),
-        );
+        return Err(too_many_entries());
     }
 
     let mut report = RestoreReport::default();
-    let plan = validate(&mut archive, limits, &mut report)?;
-    write_plan(store, &mut archive, limits, plan, &mut report)?;
+    // `max_total_bytes` is what one pass may unpack. The writing pass reads a subset of the
+    // entries the validating pass has already read within the limit, so with a budget of its own it
+    // cannot run out half way through the writes and leave a half restored folder behind.
+    let mut total = 0_u64;
+    let plan = validate(&mut archive, limits, &mut total, &mut report)?;
+    let mut total = 0_u64;
+    write_plan(store, &mut archive, limits, &mut total, plan, &mut report)?;
     Ok(report)
+}
+
+fn too_many_entries() -> String {
+    t("route.backup.a_mentes_gyanusan_sok_fajlt_tartalmaz_nem_allitom_vi").to_string()
+}
+
+/// The entry count of the zip's end-of-central-directory record, read without parsing the
+/// directory itself. `None` when the record is not found (the zip reader then decides) or the
+/// archive is a zip64 one (its count field is a placeholder). The stream is rewound.
+fn declared_entries<R: Read + Seek>(input: &mut R) -> Option<u64> {
+    const EOCD: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
+    let len = input.seek(io::SeekFrom::End(0)).ok()?;
+    let tail_len = len.min(22 + 65_535);
+    input.seek(io::SeekFrom::Start(len - tail_len)).ok()?;
+    let mut tail = Vec::new();
+    input.by_ref().take(tail_len).read_to_end(&mut tail).ok()?;
+    input.seek(io::SeekFrom::Start(0)).ok()?;
+    let at = tail.windows(4).rposition(|w| w == EOCD)?;
+    let field = tail.get(at + 10..at + 12)?;
+    let count = u16::from_le_bytes([field[0], field[1]]);
+    (count != u16::MAX).then_some(u64::from(count))
 }
 
 fn validate<R: Read + Seek>(
     archive: &mut ZipArchive<R>,
     limits: &Limits,
+    total: &mut u64,
     report: &mut RestoreReport,
 ) -> Result<Plan, String> {
     let mut plan = Plan::default();
     let mut seen: HashSet<String> = HashSet::new();
     let mut manifest_seen = false;
-    let mut total = 0_u64;
 
     for index in 0..archive.len() {
         let (name, is_dir, is_symlink) = {
@@ -376,7 +422,8 @@ fn validate<R: Read + Seek>(
         let kind = classify(&name).map_err(|()| {
             t("route.backup.a_mentes_ervenytelen_fajlnevet_tartalmaz_nem_allitom").to_string()
         })?;
-        if !seen.insert(name.clone()) {
+        // Case-folded: on Windows `routes/A.json` and `routes/a.json` are the same file.
+        if !seen.insert(name.to_ascii_lowercase()) {
             return Err(
                 t("route.backup.a_mentesben_egy_fajl_ketszer_szerepel_nem_allitom_vi").to_string(),
             );
@@ -388,7 +435,7 @@ fn validate<R: Read + Seek>(
             report.skipped += 1;
             continue;
         };
-        let bytes = read_entry(archive, index, limits, &mut total)?;
+        let bytes = read_entry(archive, index, limits, total)?;
         match kind {
             Kind::Manifest => {
                 let manifest: Manifest = serde_json::from_slice(&bytes).map_err(|_| {
@@ -416,7 +463,7 @@ fn validate<R: Read + Seek>(
                 Err(_) => report.skipped += 1,
             },
             Kind::Route(id) => match serde_json::from_slice::<Route>(&bytes) {
-                Ok(route) if route.id == id && usable_route(&route) => {
+                Ok(route) if route.id == id && store::usable_route(&route) => {
                     plan.routes.insert(id, index);
                 }
                 _ => report.skipped += 1,
@@ -428,18 +475,18 @@ fn validate<R: Read + Seek>(
                 _ => report.skipped += 1,
             },
             Kind::Ride(route_id, stem) => match serde_json::from_slice::<RideRecord>(&bytes) {
-                // a record of a newer version may mean something else: leave it out
-                Ok(r) if r.version <= ride_model::RIDE_RECORD_VERSION && !r.points.is_empty() => {
+                // a record of a newer version may mean something else: leave it out, and so a
+                // record filed under another route (a moved or edited archive)
+                Ok(r)
+                    if rides::usable_record(&r)
+                        && (r.route_id.is_empty() || r.route_id == route_id) =>
+                {
                     plan.rides.insert((route_id, stem), index);
                 }
                 _ => report.skipped += 1,
             },
-            Kind::RideIndex(route_id) => match serde_json::from_slice::<Vec<RideMeta>>(&bytes) {
-                Ok(metas) => {
-                    plan.indexes.insert(route_id, metas);
-                }
-                Err(_) => report.skipped += 1,
-            },
+            // The index lines are computed again from the records when they are written.
+            Kind::RideIndex(_) => {}
         }
     }
     if !manifest_seen {
@@ -449,11 +496,6 @@ fn validate<R: Read + Seek>(
     }
     report.settings = plan.settings.take();
     Ok(plan)
-}
-
-/// The same test `Store::load_recent` applies to a stored route.
-fn usable_route(route: &Route) -> bool {
-    route.points.len() >= 2 && route.total_dist.is_finite() && route.total_dist > 0.0
 }
 
 /// One entry, read through a counter: the sizes in the header are only a claim.
@@ -488,101 +530,140 @@ fn write_plan<R: Read + Seek>(
     store: &Store,
     archive: &mut ZipArchive<R>,
     limits: &Limits,
+    total: &mut u64,
     plan: Plan,
     report: &mut RestoreReport,
 ) -> Result<(), String> {
-    let write_err = |err: io::Error| {
-        io_err(
-            t("route.backup.a_visszaallitas_kozben_hiba_tortent_amit_addig_vissz"),
-            &err,
-        )
-    };
-    let mut total = 0_u64;
     let _guard = store::lock();
+    let written = |path: &Path, bytes: &[u8], report: &mut RestoreReport| -> bool {
+        match store::write_atomic(path, bytes) {
+            Ok(()) => true,
+            Err(err) => {
+                eprintln!("[ride-route] restore: {}: {err}", path.display());
+                report.failed += 1;
+                false
+            }
+        }
+    };
 
+    // Routes: a usable local copy stays, a missing or unreadable one is restored.
+    let mut restored_routes: Vec<Route> = Vec::new();
     for (id, index) in &plan.routes {
         let Some(path) = store.route_path(id) else {
             continue;
         };
-        if path.is_file() {
+        if store.load_recent_unlocked(id).is_some() {
             continue;
         }
-        let bytes = read_entry(archive, *index, limits, &mut total)?;
-        store::write_atomic(&path, &bytes).map_err(write_err)?;
-        report.routes += 1;
+        let bytes = read_entry(archive, *index, limits, total)?;
+        if written(&path, &bytes, report) {
+            report.routes += 1;
+            if let Ok(route) = serde_json::from_slice::<Route>(&bytes) {
+                restored_routes.push(route);
+            }
+        }
     }
 
-    let route_ids: BTreeSet<&String> = plan
-        .indexes
-        .keys()
-        .chain(plan.rides.keys().map(|(route_id, _)| route_id))
-        .collect();
-    let mut used: HashSet<(&String, &String)> = HashSet::new();
+    // Rides, per route: the index line of every restored record is computed from the record
+    // and the route, like `save_ride` does; a usable local record that the index already lists
+    // stays as it is.
+    let route_ids: BTreeSet<&String> = plan.rides.keys().map(|(route_id, _)| route_id).collect();
     for route_id in route_ids {
+        let route = store.load_recent_unlocked(route_id);
         let dir = store.dir().join(RIDES_DIR).join(route_id);
         let mut index = store.read_ride_index(&dir);
-        let mut known: HashSet<String> = index.iter().map(|m| m.stem.clone()).collect();
-        let before = index.len();
-        for meta in plan.indexes.get(route_id).map(Vec::as_slice).unwrap_or(&[]) {
-            if !valid_stem(&meta.stem) || known.contains(&meta.stem) {
+        let mut changed = false;
+        for ((_, stem), entry) in plan.rides.iter().filter(|((id, _), _)| id == route_id) {
+            let file = dir.join(format!("{stem}.json"));
+            // the same test as `load_ride`: a record that parses but holds no recording is as
+            // unusable as a damaged one, and the backup's copy replaces it
+            let local_ok = store::read_limited(&file)
+                .and_then(|bytes| serde_json::from_slice::<RideRecord>(&bytes).ok())
+                .is_some_and(|record| rides::usable_record(&record));
+            if local_ok && index.iter().any(|m| m.stem == *stem) {
                 continue;
             }
-            let Some((key, entry)) = plan
-                .rides
-                .get_key_value(&(route_id.clone(), meta.stem.clone()))
+            let bytes = read_entry(archive, *entry, limits, total)?;
+            let Some(meta) = serde_json::from_slice::<RideRecord>(&bytes)
+                .ok()
+                .and_then(|record| rides::meta_of(&record, route.as_ref(), stem.clone()))
             else {
+                report.skipped += 1;
                 continue;
             };
-            used.insert((&key.0, &key.1));
-            let file = dir.join(format!("{}.json", meta.stem));
-            if !file.is_file() {
-                let bytes = read_entry(archive, *entry, limits, &mut total)?;
-                store::write_atomic(&file, &bytes).map_err(write_err)?;
+            if !local_ok {
+                if !written(&file, &bytes, report) {
+                    continue;
+                }
                 report.rides += 1;
             }
-            known.insert(meta.stem.clone());
-            index.push(meta.clone());
+            index.retain(|m| m.stem != *stem);
+            index.push(meta);
+            changed = true;
         }
-        if index.len() != before {
+        if changed {
             index.sort_by(|a, b| b.started_unix_s.total_cmp(&a.started_unix_s));
-            let json = serde_json::to_vec_pretty(&index)
-                .map_err(|err| write_err(io::Error::other(err)))?;
-            store::write_atomic(&dir.join(INDEX_FILE), &json).map_err(write_err)?;
+            match serde_json::to_vec_pretty(&index) {
+                Ok(json) => {
+                    written(&dir.join(INDEX_FILE), &json, report);
+                }
+                Err(_) => report.failed += 1,
+            }
         }
     }
-    // a record the index of the archive does not list could not be shown anywhere
-    report.skipped += plan
-        .rides
-        .keys()
-        .filter(|(route_id, stem)| !used.contains(&(route_id, stem)))
-        .count();
 
     for (id, index) in &plan.workouts {
         let Some(path) = store.workout_path(id) else {
             continue;
         };
-        if path.is_file() {
+        let local_ok = store::read_limited(&path)
+            .and_then(|bytes| serde_json::from_slice::<Workout>(&bytes).ok())
+            .is_some_and(|w| w.is_imported() && !w.steps.is_empty());
+        if local_ok {
             continue;
         }
-        let bytes = read_entry(archive, *index, limits, &mut total)?;
-        store::write_atomic(&path, &bytes).map_err(write_err)?;
-        report.workouts += 1;
+        let bytes = read_entry(archive, *index, limits, total)?;
+        if written(&path, &bytes, report) {
+            report.workouts += 1;
+        }
     }
 
-    // Last: an entry of the recent list needs its route file. No cap here: the normal housekeeping
+    // Last: an entry of the recent list needs its route file. Every restored route gets one,
+    // from the archive's list or made up from the route itself (an archive without a usable
+    // `recent.json` must not leave its routes unreachable). No cap here: the normal housekeeping
     // trims the list the next time a route is opened, and a restore never deletes anything.
     let mut recent = store.read_index();
-    let have: HashSet<String> = recent.iter().map(|r| r.id.clone()).collect();
     let before = recent.len();
-    for entry in plan.recent {
+    let add = |entry: RecentRoute, recent: &mut Vec<RecentRoute>| {
         let present = store.route_path(&entry.id).is_some_and(|p| p.is_file());
-        if present && !have.contains(&entry.id) && entry.last_opened_unix.is_finite() {
+        if present && !recent.iter().any(|r| r.id == entry.id) && entry.last_opened_unix.is_finite()
+        {
             recent.push(entry);
         }
+    };
+    for entry in plan.recent {
+        add(entry, &mut recent);
+    }
+    let now = store::now_unix();
+    for route in restored_routes {
+        add(
+            RecentRoute {
+                id: route.id.clone(),
+                name: route.name.clone(),
+                total_dist: route.total_dist,
+                ascent: route.ascent,
+                source: route.source,
+                last_opened_unix: now,
+            },
+            &mut recent,
+        );
     }
     if recent.len() != before {
         recent.sort_by(|a, b| b.last_opened_unix.total_cmp(&a.last_opened_unix));
-        store.write_index(&recent).map_err(write_err)?;
+        if let Err(err) = store.write_index(&recent) {
+            eprintln!("[ride-route] restore: recent list: {err}");
+            report.failed += 1;
+        }
     }
     Ok(())
 }
@@ -652,6 +733,7 @@ mod tests {
             source: RideSource::Recorded,
             power_estimated: false,
             estimate: None,
+            measured_power: Vec::new(),
         }
     }
 
@@ -1048,6 +1130,128 @@ mod tests {
         let other = tempfile::tempdir().expect("tmp");
         let report = restore(&Store::at(other.path()), Cursor::new(bytes)).expect("restore");
         assert_eq!((report.workouts, report.skipped), (0, 1));
+    }
+
+    #[test]
+    fn an_index_entry_without_its_file_is_healed() {
+        let src = tempfile::tempdir().expect("tmp");
+        let bytes = make_backup(&filled(src.path()));
+        let dst = tempfile::tempdir().expect("tmp");
+        let store = filled(dst.path());
+        // the index still lists the ride, the record itself is gone
+        std::fs::remove_file(dst.path().join("rides/aaaa/1700000000.json")).expect("rm");
+        let report = restore(&store, Cursor::new(&bytes)).expect("restore");
+        assert_eq!(report.rides, 1);
+        assert!(store.load_ride("aaaa", "1700000000").is_some());
+        assert_eq!(store.list_rides("aaaa").len(), 2);
+    }
+
+    #[test]
+    fn a_damaged_local_route_is_replaced_and_every_route_gets_into_the_list() {
+        let src = tempfile::tempdir().expect("tmp");
+        let bytes = make_backup(&filled(src.path()));
+        let dst = tempfile::tempdir().expect("tmp");
+        let store = Store::at(dst.path());
+        std::fs::create_dir_all(dst.path().join("routes")).expect("mkdir");
+        std::fs::write(dst.path().join("routes/aaaa.json"), b"{ cut").expect("write");
+        // an archive without its recent list
+        let without_recent: Vec<(String, Vec<u8>)> = {
+            let mut archive = ZipArchive::new(Cursor::new(&bytes)).expect("zip");
+            (0..archive.len())
+                .filter_map(|i| {
+                    let mut entry = archive.by_index(i).ok()?;
+                    let name = entry.name().to_string();
+                    let mut data = Vec::new();
+                    entry.read_to_end(&mut data).ok()?;
+                    (name != RECENT).then_some((name, data))
+                })
+                .collect()
+        };
+        let entries: Vec<(&str, &[u8])> = without_recent
+            .iter()
+            .map(|(n, b)| (n.as_str(), b.as_slice()))
+            .collect();
+        let report = restore(&store, Cursor::new(archive(&entries))).expect("restore");
+        assert_eq!(report.routes, 2);
+        assert!(
+            store.load_recent("aaaa").is_some(),
+            "the damaged copy was replaced"
+        );
+        let listed: Vec<String> = store.list_recent().into_iter().map(|r| r.id).collect();
+        assert!(listed.contains(&"aaaa".to_string()) && listed.contains(&"bbbb".to_string()));
+    }
+
+    #[test]
+    fn a_ride_filed_under_another_route_is_skipped() {
+        let ride = serde_json::to_vec(&record("bbbb", 1_700_000_000.0)).expect("json");
+        let bytes = archive(&[
+            ("backup.json", &manifest()),
+            ("rides/aaaa/1700000000.json", &ride),
+        ]);
+        let dst = tempfile::tempdir().expect("tmp");
+        let store = Store::at(dst.path());
+        let report = restore(&store, Cursor::new(bytes)).expect("restore");
+        assert_eq!(report.rides, 0);
+        assert_eq!(report.skipped, 1);
+    }
+
+    #[test]
+    fn case_variants_of_one_name_are_refused() {
+        let a = serde_json::to_vec(&route("Abcd")).expect("json");
+        let b = serde_json::to_vec(&route("abcd")).expect("json");
+        let bytes = archive(&[
+            ("backup.json", &manifest()),
+            ("routes/Abcd.json", &a),
+            ("routes/abcd.json", &b),
+        ]);
+        let dst = tempfile::tempdir().expect("tmp");
+        assert!(restore(&Store::at(dst.path()), Cursor::new(bytes)).is_err());
+    }
+
+    #[test]
+    fn a_route_with_distances_going_backwards_is_skipped() {
+        let mut broken = route("cccc");
+        broken.points.swap(1, 2);
+        let json = serde_json::to_vec(&broken).expect("json");
+        let bytes = archive(&[("backup.json", &manifest()), ("routes/cccc.json", &json)]);
+        let dst = tempfile::tempdir().expect("tmp");
+        let report = restore(&Store::at(dst.path()), Cursor::new(bytes)).expect("restore");
+        assert_eq!(report.routes, 0);
+        assert_eq!(report.skipped, 1);
+    }
+
+    #[test]
+    fn an_unreadable_file_is_reported_as_left_out_of_the_backup() {
+        let src = tempfile::tempdir().expect("tmp");
+        let store = filled(src.path());
+        let big = vec![b' '; (MAX_FILE_BYTES + 1) as usize];
+        std::fs::write(src.path().join("routes/zzzz.json"), &big).expect("oversized route");
+        std::fs::write(src.path().join("workouts/imported-big.json"), &big)
+            .or_else(|_| {
+                std::fs::create_dir_all(src.path().join("workouts"))?;
+                std::fs::write(src.path().join("workouts/imported-big.json"), &big)
+            })
+            .expect("write");
+        let mut out = Cursor::new(Vec::new());
+        let report = export(&store, &settings(), "t", 1, &mut out).expect("export");
+        assert_eq!(report.omitted, 2, "oversized route and workout: {report:?}");
+        assert_eq!(report.routes, 2);
+    }
+
+    #[test]
+    fn the_declared_entry_count_is_checked_first() {
+        let bytes = archive(&[
+            ("backup.json", &manifest()),
+            ("x.txt", b"x"),
+            ("y.txt", b"y"),
+        ]);
+        assert_eq!(declared_entries(&mut Cursor::new(&bytes)), Some(3));
+        let limits = Limits {
+            max_entries: 2,
+            ..Limits::default()
+        };
+        let dst = tempfile::tempdir().expect("tmp");
+        assert!(restore_with(&Store::at(dst.path()), Cursor::new(bytes), &limits).is_err());
     }
 
     #[test]

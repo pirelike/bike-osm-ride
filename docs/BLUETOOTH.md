@@ -114,17 +114,26 @@ one byte.
 
 | Setting | Value | Setting | Value |
 |---|---|---|---|
-| hub tick | 100 ms | connect timeout | 12 s |
-| stale value | 3 s | I/O timeout (discover, subscribe, write) | 6 s |
+| hub tick | 100 ms | connect timeout | 12 s (Android 60 s, §7) |
+| stale value | 3 s | I/O timeout (discover, subscribe, write) | 6 s (Android 12 s) |
 | `Sample` rate limit | 90 ms | optional read timeout (feature, ranges) | 3 s |
 | health poll (`is_connected`) | 2 s | trainer watchdog (no packet at all) | 10 s |
 | sensor watchdog (strap, meter) | 30 s | reconnect backoff | 1.5 s, 4 s, 10 s |
 | budget reset after a stable link | 30 s | short re-scan before a try | 2 s |
-| graceful stop flush | 2 s | | |
+| graceful stop flush | 7 s | | |
 
 A lost link is retried three times with a toast per try; a link that stayed up for 30 s gets its budget back.
 Before retrying a vanished device the hub scans briefly again, because on Windows a device that dropped off
 needs the scanner to see it once more (an iron-heart lesson).
+
+**One task per device at a time.** `Disconnect` stops a device's task without waiting for it (the hub keeps serving
+commands) and remembers its handle (`Hub::retiring`); the next `Connect` to that device hands the old handle to the
+new task (`supervise(.., predecessor)`), which awaits it up to `task_teardown_bound()`:
+`connect_timeout + 3 × read_timeout + 18 × io_timeout + shutdown_flush` before its first connect. A rider who taps "disconnect" by mistake and connects again at once therefore
+never starts a connect in the middle of the old link's hand-back. A stop also ends a pending connect or service
+discovery at once (`MultiSession::run_connected`), instead of after its timeout. Tests: `hub_tests::a_quick_reconnect_*`,
+`connecting_again_to_a_live_device_*`, `a_disconnect_ends_a_connect_that_pends_at_once` (the fake records the order of
+`connect` / `disconnect:begin` / `disconnect:end`).
 
 ## 6. Zwift Click and Play
 
@@ -152,7 +161,31 @@ is not enough either: droidplug looks them up with the thread's context class lo
 natively attached hub thread both are the system class loader, which does not see the APK's dex (same error, seen on
 a real phone). `android_ble::use_app_class_loader` sets the activity's class loader on that thread before
 `platform::init`, which looks every class up once and caches it globally; see
-[`ANDROID.md`](ANDROID.md). Never exercised on a real phone.
+[`ANDROID.md`](ANDROID.md). Reported from a real phone on 2026-11-08: the trainer was found and connected at the
+first try, but after a disconnect it could only be reconnected after killing the app several times (no log kept; the
+code changes below are the response, **not confirmed on a phone**).
+
+**What droidplug does that matters for reconnects** (read from `btleplug-0.13.5/src/droidplug/java/.../Peripheral.java`,
+the version in `Cargo.lock`):
+
+- Every command of a device (`connect`, `disconnect`, each read, write and subscribe, and the MTU request that Rust
+  `connect` appends) goes through **one serial queue** (`executingCommand` / `commandQueue`) and **cannot be cancelled**.
+  A Rust `timeout` only drops the Rust future: the Java command stays at the head of the queue, and the following
+  `disconnect` and `connect` wait behind it. Hence `ANDROID_CONNECT_TIMEOUT` (60 s) must outlast everything one Java
+  `connect` can do: up to two retried quick failures (status 133 within 10 s) plus a last attempt that runs into the
+  system's own 30 s direct-connect timeout. And hence the predecessor rule above: with two tasks on one device their
+  commands interleave, and `connect` on a link that is still up returns at once, only for the old task's queued
+  `disconnect` to follow it.
+- `disconnect()` does nothing when its `connected` flag is already false, and `Callback.onConnectionStateChange` closes
+  the `BluetoothGatt` on a drop only when a command is in flight. A link lost while idle (the usual case: the session
+  only subscribes and, now and then, writes) therefore leaves a stale `gatt`, and the next `connect()` takes the
+  `gatt.connect()` branch, which Android runs as a background *auto-connect* with no timeout of its own. **That cannot
+  be repaired from Rust** (btleplug offers no way to close a gatt, and `clear_peripherals` is global): it needs a
+  patch of `Peripheral.java` (close the gatt on a drop with no command in flight, and in `disconnect()` when not
+  connected), applied by `packaging/android/resoverlay.sh` and built into an APK to be tested. Not done yet; if
+  reconnects stay unreliable after the changes above, this is the next suspect, and the hex log (`<files>/ble.log`,
+  `adb shell run-as hu.borbelyhuba.bikeosmride cat files/ble.log` on a debuggable build) shows whether the retries
+  end in `Timeout`, `NotConnected` or `NotFound`.
 
 A scan can start without any error and still deliver nothing: on Android 12+ that is what `BLUETOOTH_SCAN` without
 `usesPermissionFlags="neverForLocation"` does when no location permission is held (the pinned manifest now sets the
@@ -174,7 +207,7 @@ beyond 8 MB). One line per packet, `#` for decisions of the session:
 
 Directions are `NOTIFY`, `INDICATE`, `READ` and `WRITE`. Control Point responses read `80 <request opcode>
 <result>`; result `01` success, `02` op code not supported, `03` invalid parameter, `04` operation failed,
-`05` control not permitted. The `RIDE_BLE_LOG` variable no longer does anything.
+`05` control not permitted. There is no switch for it (the former `RIDE_BLE_LOG` variable was removed); the file is rotated to `ble.log.1` beyond 8 MB, at start-up and while it is written.
 
 ## 9. What a real trainer taught us
 

@@ -1,7 +1,7 @@
 # Development guide
 
 How to build, run, debug and change bike-osm-ride. Everything here was checked against the repository
-on 2026-11-04 (version 0.3.0). For the big picture read [`ARCHITECTURE.md`](ARCHITECTURE.md) first;
+on 2026-11-10 (source references for version 0.5.0). For the big picture read [`ARCHITECTURE.md`](ARCHITECTURE.md) first;
 for how to prove a change works read [`TESTING.md`](TESTING.md).
 
 ## 1. Prerequisites
@@ -62,7 +62,6 @@ scenario can be reproduced without clicking, and so screenshots can be scripted.
 | `RIDE_TILE_PROBE=1` | load one map tile through the `tiles` protocol at start-up and print the result |
 | `RIDE_STREETVIEW_BASE=http://127.0.0.1:<port>` | send every Street View request to a local mock (loopback only; anything else is ignored): `node scripts/streetview_mock.mjs 9300` |
 | `RIDE_DEBUG_PORT=<port>` | Windows only: open the WebView2 DevTools protocol on that port (>= 1024) |
-| `RIDE_BLE_LOG` | **has no effect any more**: the BLE hex log is always written (`<data>/ble.log`, rotated to `ble.log.1` at start-up beyond 8 MB). The variable is still parsed but nothing reads it |
 
 `WEBKIT_DISABLE_DMABUF_RENDERER=1` is set by the app itself on Linux when it is unset (an empty window
 on some NVIDIA/Wayland setups); an explicit value wins.
@@ -172,10 +171,10 @@ cargo tree --offline --locked -p ride-app --target aarch64-linux-android -i cssp
 
 Reduce `meta.json` to the packages reachable from the workspace through normal and build dependencies and
 look at their `license` expressions. Result on 2026-11-04 (`--filter-platform`): Windows (GNU) 396 external
-crates, Linux 458, macOS (aarch64) 400, Android (aarch64) 449; no GPL/AGPL/LGPL anywhere. The only
+crates, Linux 458, macOS (aarch64) 400, Android (aarch64) 449; no mandatory GPL/AGPL/LGPL terms (`r-efi` offers MIT/Apache-2.0 alternatives). The only
 copyleft crates are MPL-2.0, used unmodified: `option-ext` (through `tray-icon` → `dirs`) on Linux and
 macOS, `selectors`, `cssparser`, `cssparser-macros`, `dtoa-short` (through `wry` → `kuchikiki`) on
-Android, none on Windows. `THIRD_PARTY_LICENSES.md` (all platforms together) lists 638 packages.
+Android, none on Windows. `THIRD_PARTY_LICENSES.md` (all platforms together) contains the current package list; do not duplicate its changing count here.
 
 ## 10. Keeping the docs true
 

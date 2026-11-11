@@ -56,8 +56,7 @@ Nei nomi dei file, al posto di `<version>` c'è il numero della versione (per es
 | **Android 7+** | `bike-osm-ride-<version>-android.apk` | copialo sul telefono e aprilo (devi consentire l'installazione da origini sconosciute), oppure `adb install -r` |
 
 Il programma **ti avvisa** quando c'è una nuova versione: nella barra superiore compare il pulsante *Aggiorna* (su Windows e
-come AppImage si sostituisce da solo, sulle altre piattaforme apre la pagina della release). Il pacchetto Android è firmato con
-una chiave di debug, perciò tra due versioni può capitare di dover prima disinstallare quella vecchia.
+come AppImage si sostituisce da solo, sulle altre piattaforme apre la pagina della release). Le versioni Android richiedono una chiave di firma stabile; la compilazione si interrompe se manca. Disinstalla una vecchia versione firmata con una chiave di debug prima di installare l’APK di rilascio.
 
 ## Avvio rapido
 

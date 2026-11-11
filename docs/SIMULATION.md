@@ -40,7 +40,13 @@ m_eff     = m + 1.5 kg                      rotating mass of the wheels
 
 - `start` only from `Ready`; `finish` from `Riding`/`Paused`; **the ride finishes by itself** when the
   distance reaches the end of the route; `reset` returns to `Ready` at 0 m with an empty history.
-- The timer excludes pauses. `seek` works only when not riding (click on the profile).
+- The timer excludes pauses. `seek` works only in `Ready`, before the start (click on the profile): during a
+  pause the timer, the recording and the statistics belong to what was ridden, and a jump over a climb would make a
+  fake segment time; after the finish the summary is what gets saved.
+- A ride may start after a seek: the summary's distance, average speed and ascent count from where it started
+  (`summary.dist` = metres ridden), while the snapshot's `dist` stays the route position the map and the profile need.
+- The recording always ends on the point where the ride stopped (the finish line, or a manual finish), not up to a
+  second before it.
 - A workout and a ghost set cannot be swapped under a running ride; `set_workout` / `set_ghost` are ignored
   while `Riding` or `Paused`.
 - In every state the live sensor values still appear in the snapshot.
@@ -52,7 +58,7 @@ m_eff     = m + 1.5 kg                      rotating mass of the wheels
 | Value | Definition |
 |---|---|
 | 3 s power | time-weighted average of the samples within the last 3 s of *engine clock*; empty when fewer than two samples fall inside (which is why `RIDE_TIMESCALE` above ~20 empties it) |
-| Normalised power | 4th root of the mean of the 4th powers of the 30 s rolling average (Allen/Coggan) |
+| Normalised power | 4th root of the mean of the 4th powers of the 30 s rolling average (Allen/Coggan), over 1 s *time slots*: a second without a power value counts as 0 W, seconds skipped by a long step hold the last value (up to 5 s); the same rule as `power_curve::dense_power`, shared by the engine and `analysis::normalized_power` |
 | Work, kcal | work in kJ; kcal is taken equal to kJ (about 24 % efficiency) |
 | IF, TSS | IF = NP / FTP; TSS = elapsed × IF² / 3600 × 100 |
 | Power zones | Coggan, % of FTP: Z1 < 55, Z2 55-75, Z3 76-90, Z4 91-105, Z5 106-120, Z6 121-150, Z7 > 150 (`ride_model::power_zone_of_pct`, used by the engine, the charts and the workout picker alike) |
@@ -121,8 +127,9 @@ Shifts: `←`/`→`, the Váltó panel, the phone gear buttons, or a Zwift Click
 
 - A ride shorter than 60 s or 200 m is not stored. `Route::id` is a stable hash of the geometry, so the same
   GPX finds its own history. Deleting a recent route keeps its rides.
-- **Segments are the detected climbs.** `segment_key` is the climb's start/end in 10 m steps (`"430-1130"`), so a
-  re-processed route with a metre of jitter keeps its history. A segment time is stored only when the ride went
+- **Segments are the detected climbs.** `segment_key` is the climb's start/end in 10 m steps (`"430-1130"`), and
+  keys are matched with one step of tolerance on each end (`same_segment`, `best_for`), so a re-processed route
+  with a metre of jitter keeps its history even when the jitter crosses a rounding boundary. A segment time is stored only when the ride went
   through the **whole** climb; entry and exit are interpolated from the 1 Hz samples. The PR is the best
   stored time among non-simulated rides.
 - **Ghost.** A `Track` is the ride's `(t, dist)` trace, both axes monotone, looked up by binary search and
@@ -130,7 +137,9 @@ Shifts: `←`/`→`, the Váltó panel, the phone gear buttons, or a Zwift Click
   (t_ghost(dist) - offset)`, positive meaning the rider is behind. Modes (`GhostMode`): `Off`; `Route` (the GPX's
   own `<time>` stamps, available before the first ride); `Last` (most recent, simulated included); `Best` (the
   fastest complete non-simulated ride; with none complete, the furthest partial one, which then stops at its own
-  end). The default is `Best`. The settings dialog explains in one line why there is currently no ghost.
+  end). `Last` and `Best` only take rides that started on the start line (within `COVER_EPS_M`): a ride started
+  by a seek cannot be aligned there, and choosing it would leave the rider with no ghost while the settings
+  promise one. The default is `Best`. The settings dialog explains in one line why there is currently no ghost.
 - A ride is `simulated` when the virtual rider took part, or when `RIDE_DEMO`/`RIDE_SIM` is set; the flag is sticky
   for the ride. Simulated rides are stored, shown in the summary, but never PRs and never the Best ghost.
 - **App wiring** (`ride-app/src/history.rs`): after a route load, a ghost-mode change and a finished ride, a

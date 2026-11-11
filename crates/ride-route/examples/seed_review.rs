@@ -52,6 +52,7 @@ fn ride(route: &Arc<ride_model::Route>, base: f64, started: f64) -> RideRecord {
         source: RideSource::Recorded,
         power_estimated: false,
         estimate: None,
+        measured_power: Vec::new(),
     }
 }
 

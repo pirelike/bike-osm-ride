@@ -39,18 +39,18 @@ pub fn bikerouter_hint(text: &str) -> Option<String> {
             t("ui_dialogs.helpers.illessz_be_egy_bikerouter_de_linket_vagy_nyiss_meg_e").into(),
         );
     }
+    // The loader takes every documented form: a bikerouter.de or other brouter-web share link,
+    // a raw BRouter API URL and a bare `lonlats=…` string. What they share is the waypoint list.
     let lower = trimmed.to_lowercase();
-    if !lower.contains("bikerouter.de") {
-        return Some(
-            t("ui_dialogs.helpers.ez_nem_bikerouter_de_link_a_bikerouter_de_megosztas_").into(),
-        );
+    if lower.contains("lonlats=") {
+        return None;
     }
-    if !lower.contains("lonlats=") {
+    if lower.contains("bikerouter") || lower.contains("brouter") {
         return Some(
             t("ui_dialogs.helpers.a_linkbol_hianyzik_az_utvonal_lonlats_nyisd_meg_a_bi").into(),
         );
     }
-    None
+    Some(t("ui_dialogs.helpers.ez_nem_bikerouter_de_link_a_bikerouter_de_megosztas_").into())
 }
 
 /// `true` when [`bikerouter_hint`] finds nothing to complain about.
@@ -304,9 +304,12 @@ pub fn slot_state(slots: &[DeviceSlot], kind: DeviceKind) -> ConnState {
         .unwrap_or(ConnState::Disconnected)
 }
 
-/// `true` when the slot of `kind` holds the device with this display name.
+/// `true` when the slot of `kind` is connected to the device with this display name. A slot
+/// whose connect failed keeps the name for its card, but the device is not connected: its row
+/// offers "connect" (a retry) again, not "disconnect".
 pub fn slot_matches(slots: &[DeviceSlot], kind: DeviceKind, name: &str) -> bool {
-    slot_name(slots, kind).is_some_and(|connected| connected == name)
+    slot_state(slots, kind) == ConnState::Connected
+        && slot_name(slots, kind).is_some_and(|connected| connected.trim() == name.trim())
 }
 
 /// `true` when the slot of `kind` is connecting to the device with this display name. Other
@@ -344,8 +347,10 @@ pub fn shared_slot_names(slots: &[DeviceSlot]) -> Vec<String> {
 
 // ───────────────────────────── virtual rider ─────────────────────────────
 
-/// Highest power the virtual rider panel can set.
-pub const VIRTUAL_RIDER_MAX_W: f64 = 1000.0;
+/// Highest power the virtual rider panel can set: the simulated rider's own limit
+/// (`ride_ble::sim::MAX_VIRTUAL_POWER_W`, which the app's controller applies too), so a value set
+/// elsewhere is never shown clamped.
+pub const VIRTUAL_RIDER_MAX_W: f64 = 2000.0;
 /// Slider / keyboard grid of the virtual rider panel.
 pub const VIRTUAL_RIDER_STEP_W: f64 = 5.0;
 
@@ -354,7 +359,11 @@ pub fn virtual_quick() -> [(&'static str, f64, &'static str); 4] {
     [
         ("Z2", 150.0, t("ui_dialogs.helpers.z2_allokepesseg_150_w")),
         ("Z4", 250.0, t("ui_dialogs.helpers.z4_kuszob_250_w")),
-        (t("ui_dialogs.helpers.sprint"), 700.0, "Sprint, 700 W"),
+        (
+            t("ui_dialogs.helpers.sprint"),
+            700.0,
+            t("ui_dialogs.helpers.sprint_700_w"),
+        ),
         (
             t("ui_dialogs.helpers.szabad"),
             0.0,
@@ -363,7 +372,7 @@ pub fn virtual_quick() -> [(&'static str, f64, &'static str); 4] {
     ]
 }
 
-/// Clamps to `0..=1000 W` and snaps to the 5 W grid; NaN becomes 0.
+/// Clamps to `0..=`[`VIRTUAL_RIDER_MAX_W`] and snaps to the 5 W grid; NaN becomes 0.
 pub fn clamp_virtual_power(watts: f64) -> f64 {
     format::snap_to_step(watts, 0.0, VIRTUAL_RIDER_MAX_W, VIRTUAL_RIDER_STEP_W)
 }
@@ -524,10 +533,14 @@ pub fn ghost_hint(status: GhostStatus, mode: GhostMode) -> String {
     );
     if status.replayable {
         if status.partial {
-            return tf(
-                "ui_dialogs.helpers.rides_de_egyik_sem_ert_celba_a_szellem_a_legtovabb_j",
-                &[("rides", &rides)],
-            );
+            // "Last" replays the latest ride whatever earlier ones did; only "Best" falls back
+            // to the furthest one because none finished
+            let key = if mode == GhostMode::Last {
+                "ui_dialogs.helpers.rides_a_legutobbi_nem_ert_celba"
+            } else {
+                "ui_dialogs.helpers.rides_de_egyik_sem_ert_celba_a_szellem_a_legtovabb_j"
+            };
+            return tf(key, &[("rides", &rides)]);
         }
         if status.simulated > 0 {
             return tf(
@@ -671,7 +684,7 @@ fn zone_bars(secs: impl Iterator<Item = f64>) -> Vec<ZoneBar> {
         .collect()
 }
 
-/// Summary date + time of day line: `2026.10.31. · 1:42:09` (elapsed handled separately).
+/// Summary start date and elapsed duration: `2026.10.31. · 1:42:09`.
 pub fn summary_headline(summary: &RideSummary) -> String {
     format!(
         "{} · {}",
@@ -803,6 +816,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_partial_ghost_is_explained_by_its_mode() {
+        let status = GhostStatus {
+            loaded: true,
+            rides: 3,
+            simulated: 0,
+            replayable: true,
+            partial: true,
+            route_time_s: None,
+        };
+        let best = ghost_hint(status, GhostMode::Best);
+        let last = ghost_hint(status, GhostMode::Last);
+        assert!(best.contains("egyik sem ért célba"), "{best}");
+        assert!(last.contains("legutóbbi"), "{last}");
+        assert!(!last.contains("egyik sem"), "{last}");
+    }
+
     // ── bikerouter link validation ──
 
     #[test]
@@ -825,9 +855,16 @@ mod tests {
     }
 
     #[test]
-    fn foreign_link_is_rejected() {
-        let hint =
-            bikerouter_hint("https://example.com/route?lonlats=19.0,47.5").unwrap_or_default();
+    fn every_form_the_loader_takes_is_accepted_and_text_without_waypoints_is_not() {
+        // another brouter-web instance, a raw BRouter API URL, a bare parameter string
+        for link in [
+            "https://brouter.m11n.de/#map=12/47.5/19.0/standard&lonlats=19.0,47.5;19.1,47.6",
+            "https://brouter.de/brouter?lonlats=19.0,47.5|19.1,47.6&profile=trekking&format=gpx",
+            "lonlats=19.04,47.49;19.1,47.5&profile=fastbike",
+        ] {
+            assert!(is_valid_bikerouter_link(link), "{link}");
+        }
+        let hint = bikerouter_hint("https://example.com/x").unwrap_or_default();
         assert!(hint.contains("bikerouter.de"), "{hint}");
         assert!(!is_valid_bikerouter_link("https://example.com/x"));
     }
@@ -1025,6 +1062,13 @@ mod tests {
         assert!(slot_matches(&slots, DeviceKind::Trainer, "KICKR"));
         assert!(!slot_matches(&slots, DeviceKind::Trainer, "NEO"));
         assert!(!slot_matches(&slots, DeviceKind::HeartRate, "Polar"));
+        // a failed connect keeps the name, but the device is not connected (its row retries)
+        let failed = [DeviceSlot {
+            kind: DeviceKind::Trainer,
+            state: ConnState::Failed("x".into()),
+            name: Some("KICKR".into()),
+        }];
+        assert!(!slot_matches(&failed, DeviceKind::Trainer, "KICKR"));
     }
 
     /// The simulated rider lists every role, so "the Trainer role is connecting" must not make its

@@ -22,9 +22,26 @@ pub const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
 /// Image requests in flight at any moment from one fetcher.
 const MAX_IN_FLIGHT: usize = 4;
 
-/// Is this the start of a JPEG file?
+/// Decode the complete JPEG with bounded dimensions and allocation before trusting it.
 pub fn is_jpeg(bytes: &[u8]) -> bool {
-    bytes.len() >= 4 && bytes.starts_with(&[0xFF, 0xD8, 0xFF])
+    if bytes.len() > MAX_IMAGE_BYTES
+        || !bytes.starts_with(&[0xFF, 0xD8, 0xFF])
+        || !bytes.ends_with(&[0xFF, 0xD9])
+    {
+        return false;
+    }
+    let mut decoder = jpeg_decoder::Decoder::new(std::io::Cursor::new(bytes));
+    decoder.set_max_decoding_buffer_size(8 * 1024 * 1024);
+    if decoder.read_info().is_err() {
+        return false;
+    }
+    if !decoder
+        .info()
+        .is_some_and(|i| (64..=1280).contains(&i.width) && (64..=1280).contains(&i.height))
+    {
+        return false;
+    }
+    decoder.decode().is_ok()
 }
 
 /// Cheap to clone (shares the connection pool and the concurrency gate).
@@ -80,6 +97,9 @@ impl ImageFetcher {
         size_px: u32,
     ) -> Result<Vec<u8>, SvError> {
         let url = self.endpoints.static_url(&self.key, target, view, size_px);
+        if url.is_empty() {
+            return Err(SvError::InvalidRequest);
+        }
         if !self.endpoints.trusts(&url) {
             return Err(SvError::UntrustedEndpoint);
         }
@@ -218,7 +238,9 @@ mod tests {
 
     #[test]
     fn jpeg_magic() {
-        assert!(is_jpeg(&[0xFF, 0xD8, 0xFF, 0xE0]));
+        assert!(!is_jpeg(&[0xFF, 0xD8, 0xFF, 0xE0]));
+        assert!(is_jpeg(MOCK_JPEG));
+        assert!(!is_jpeg(&MOCK_JPEG[..MOCK_JPEG.len() / 2]));
         assert!(!is_jpeg(&[0x89, 0x50, 0x4E, 0x47]));
         assert!(!is_jpeg(&[]));
     }

@@ -461,6 +461,8 @@ pub struct ControlSession {
     /// The trainer never answered Request Control with an indication: control is assumed and
     /// writes are not waited for (what other trainer apps do with such trainers).
     silent: bool,
+    /// A pause / stop asked for while control was not ours: carried out on the next grant.
+    pending_relax: Option<Intent>,
     /// Consecutive transport-level write failures of the current target (ATT "insufficient
     /// resources" from busy trainers); the write is retried while this stays small.
     failed_streak: u32,
@@ -498,6 +500,7 @@ impl ControlSession {
             stops: Storm::default(),
             restart_at: None,
             silent: false,
+            pending_relax: None,
             failed_streak: 0,
             closing: false,
             warned: Vec::new(),
@@ -573,9 +576,13 @@ impl ControlSession {
         self.user_paused = false;
         self.device_blocked = false;
         self.wants_run = true;
+        // a relax asked for while control was not ours is moot once the ride goes on
+        self.pending_relax = None;
         if self.phase == Phase::Refused {
             self.phase = Phase::NeedControl;
             self.control_attempts = 0;
+            // a manual retry is a fresh start: the losses before it no longer count
+            self.reclaims = 0;
             self.retry_at = None;
         }
         if self.phase == Phase::Controlled {
@@ -592,11 +599,15 @@ impl ControlSession {
         self.user_paused = true;
         self.wants_run = false;
         self.queue.retain(|i| matches!(i, Intent::RequestControl));
-        if self.phase == Phase::Controlled
-            && (self.device_started || self.last_target_bytes.is_some())
-        {
-            self.push_unique(Intent::Neutral);
-            self.push_unique(Intent::Pause);
+        if self.phase == Phase::Controlled {
+            if self.device_started || self.last_target_bytes.is_some() {
+                self.push_unique(Intent::Neutral);
+                self.push_unique(Intent::Pause);
+            }
+        } else {
+            // Control is being (re)gained: the trainer may still hold the last target. The pause
+            // is carried out as soon as control is ours again.
+            self.pending_relax = Some(Intent::Pause);
         }
     }
 
@@ -606,11 +617,19 @@ impl ControlSession {
         self.wants_run = false;
         self.closing = true;
         self.queue.clear();
-        if self.phase == Phase::Controlled
-            && (self.device_started || self.last_target_bytes.is_some())
-        {
-            self.push_unique(Intent::Neutral);
-            self.push_unique(Intent::Stop);
+        if self.phase == Phase::Controlled {
+            if self.device_started || self.last_target_bytes.is_some() {
+                self.push_unique(Intent::Neutral);
+                self.push_unique(Intent::Stop);
+            }
+        } else {
+            self.pending_relax = Some(Intent::Stop);
+            if self.phase == Phase::Refused {
+                // One final bounded attempt can still hand the device back safely.
+                self.phase = Phase::NeedControl;
+                self.retry_at = None;
+                self.control_attempts = self.cfg.control_retries.saturating_sub(1);
+            }
         }
     }
 
@@ -752,32 +771,38 @@ impl ControlSession {
         self.ensure_target_intent();
     }
 
-    /// A Control Point write failed at the transport level (not a trainer rejection).
-    pub fn on_write_failed(&mut self, now: Instant) {
+    /// A Control Point write failed at the transport level (not a trainer rejection). Returns
+    /// the notices to show (a Request Control that keeps failing ends in `Refused`).
+    pub fn on_write_failed(&mut self, now: Instant) -> Vec<Out> {
+        let mut outs = Vec::new();
         let Some(inflight) = self.inflight.take() else {
-            return;
+            return outs;
         };
         match inflight.intent {
-            Intent::RequestControl => {
-                self.phase = Phase::NeedControl;
-                self.retry_at = Some(now + self.cfg.retry_delay);
-            }
+            // counted like a timeout: `control_retries` bounds the attempts either way
+            Intent::RequestControl => self.control_failed(now, &mut outs),
             // Busy trainers refuse writes now and then (ATT 0x11); try again after the write gap.
-            Intent::Start | Intent::Sim | Intent::Target
-                if self.failed_streak < MAX_WRITE_RETRIES =>
-            {
+            // A relax (neutral, pause, stop) is retried as well: losing it would leave the
+            // trainer on the last ERG target or grade.
+            intent if self.failed_streak < MAX_WRITE_RETRIES => {
                 self.failed_streak += 1;
-                if matches!(inflight.intent, Intent::Sim | Intent::Target) {
+                if matches!(intent, Intent::Sim | Intent::Target | Intent::Neutral) {
                     // the value never arrived: it must not count as sent
                     self.last_target_bytes = None;
                     self.last_target_sent = None;
                 }
-                if !self.queue.contains(&inflight.intent) {
-                    self.queue.push_front(inflight.intent);
+                if !self.queue.contains(&intent) {
+                    self.queue.push_front(intent);
                 }
             }
+            Intent::Neutral | Intent::Pause | Intent::Stop => self.warn(
+                now,
+                t("ble.control.a_trainer_nem_valaszolt_idoben_egy_vezerloparancsra"),
+                &mut outs,
+            ),
             _ => {}
         }
+        outs
     }
 
     // ── time ──
@@ -795,21 +820,30 @@ impl ControlSession {
             };
             if now.saturating_duration_since(inf.sent_at) >= timeout {
                 self.inflight = None;
-                if inf.intent == Intent::RequestControl
-                    && self.control_attempts >= self.cfg.control_retries
-                {
-                    // Never an answer, not a refusal: drive the trainer without confirmations.
-                    self.silent = true;
-                    self.grant(now, &mut outs);
+                if inf.intent == Intent::RequestControl {
+                    if self.control_attempts >= self.cfg.control_retries {
+                        // Never an answer, not a refusal: drive the trainer without
+                        // confirmations.
+                        self.silent = true;
+                        self.grant(now, &mut outs);
+                    } else {
+                        if !self.silent {
+                            self.warn(
+                                now,
+                                t("ble.control.a_trainer_nem_valaszolt_idoben_egy_vezerloparancsra"),
+                                &mut outs,
+                            );
+                        }
+                        // also for a silent trainer: after a control loss it is asked again,
+                        // and granted again once the retries are used up, as on connect
+                        self.control_failed(now, &mut outs);
+                    }
                 } else if !self.silent {
                     self.warn(
                         now,
                         t("ble.control.a_trainer_nem_valaszolt_idoben_egy_vezerloparancsra"),
                         &mut outs,
                     );
-                    if inf.intent == Intent::RequestControl {
-                        self.control_failed(now, &mut outs);
-                    }
                 }
             } else {
                 return outs;
@@ -817,7 +851,7 @@ impl ControlSession {
         }
 
         if self.phase == Phase::NeedControl
-            && !self.closing
+            && (!self.closing || self.pending_relax.is_some())
             && self.retry_at.is_none_or(|t| now >= t)
             && !self.queue.contains(&Intent::RequestControl)
         {
@@ -855,13 +889,19 @@ impl ControlSession {
         let mut best: Option<Instant> = None;
         let mut consider = |t: Instant| best = Some(best.map_or(t, |b| b.min(t)));
         if let Some(inf) = self.inflight {
-            consider(inf.sent_at + self.cfg.response_timeout);
+            // the same timeout `poll` applies
+            let timeout = if self.silent {
+                self.cfg.min_write_gap
+            } else {
+                self.cfg.response_timeout
+            };
+            consider(inf.sent_at + timeout);
         } else {
             let gap_end = self.last_write.map_or(now, |t| t + self.cfg.min_write_gap);
             if !self.queue.is_empty() {
                 consider(gap_end.max(now));
             }
-            if self.phase == Phase::NeedControl && !self.closing {
+            if self.phase == Phase::NeedControl && (!self.closing || self.pending_relax.is_some()) {
                 consider(self.retry_at.unwrap_or(now).max(gap_end).max(now));
             }
             if self.keepalive_armed() {
@@ -1066,6 +1106,13 @@ impl ControlSession {
         self.granted_at = Some(now);
         self.restart_at = None;
         outs.push(Out::ControlGranted);
+        if let Some(relax) = self.pending_relax.take() {
+            if self.user_paused {
+                self.push_unique(Intent::Neutral);
+                self.push_unique(relax);
+                return;
+            }
+        }
         if !self.user_paused && !self.device_blocked && (self.wants_run || self.mode != Mode::None)
         {
             self.push_unique(Intent::Start);
@@ -1089,10 +1136,20 @@ impl ControlSession {
         self.control_failed(now, outs);
     }
 
+    /// Gives up on control: always told, whatever the notice cooldown (the rider has to know
+    /// that only data flows now and that `Start` tries again).
+    fn refuse(&mut self, now: Instant, text: &'static str, outs: &mut Vec<Out>) {
+        if self.phase == Phase::Refused {
+            return; // already told
+        }
+        self.phase = Phase::Refused;
+        self.warned.retain(|(known, _)| *known != text);
+        self.warn(now, text, outs);
+    }
+
     fn control_failed(&mut self, now: Instant, outs: &mut Vec<Out>) {
         if self.control_attempts >= self.cfg.control_retries {
-            self.phase = Phase::Refused;
-            self.warn(
+            self.refuse(
                 now,
                 t("ble.control.a_trainer_nem_adta_at_a_vezerlest_ezert_csak_adatot_"),
                 outs,
@@ -1104,6 +1161,13 @@ impl ControlSession {
     }
 
     fn lose_control(&mut self, now: Instant, hostile: bool, outs: &mut Vec<Out>) {
+        if self.user_paused {
+            self.pending_relax = Some(if self.closing {
+                Intent::Stop
+            } else {
+                Intent::Pause
+            });
+        }
         self.queue.clear();
         self.inflight = None;
         self.device_started = false;
@@ -1115,8 +1179,7 @@ impl ControlSession {
             self.reclaims += 1;
         }
         if self.reclaims > self.cfg.reclaim_limit {
-            self.phase = Phase::Refused;
-            self.warn(
+            self.refuse(
                 now,
                 t("ble.control.tobbszor_is_elvesztettuk_a_trainer_vezerleset_talan_"),
                 outs,
@@ -1727,12 +1790,16 @@ mod tests {
         assert_eq!(writes(&s.poll(at)), vec![vec![0x08, 0x01]]);
         s.on_indication(&ok(0x08), at);
         assert!(s.is_idle());
-        // never controlled: nothing to hand back, and no control is requested while closing
+        // Even without control, shutdown requests it once more to relax the trainer.
         let mut fresh = ControlSession::new(ControlConfig::default());
         fresh.on_connected(TrainerCaps::UNKNOWN, Limits::FALLBACK, t);
         fresh.shutdown(t);
-        assert!(fresh.poll(t).is_empty());
-        assert_eq!(fresh.next_deadline(t), None);
+        assert_eq!(writes(&fresh.poll(t)), vec![vec![0x00]]);
+        fresh.on_indication(&ok(0x00), t);
+        assert_eq!(
+            writes(&fresh.poll(t + Duration::from_millis(300)))[0][0],
+            0x11
+        );
     }
 
     #[test]
@@ -2141,16 +2208,184 @@ mod tests {
 
     #[test]
     fn queue_never_grows_beyond_the_distinct_intents() {
-        let t = Instant::now();
-        let mut s = ControlSession::new(ControlConfig::default());
-        s.on_connected(TrainerCaps::UNKNOWN, Limits::FALLBACK, t);
-        // hammer all inputs without ever polling
+        // under control (the queue only fills then), hammered without ever polling
+        let (mut s, t) = running(Instant::now());
+        let mut longest = 0;
         for i in 0..10_000 {
             s.set_simulation(sim(f64::from(i % 20)), t);
             s.set_target_power(f64::from(i % 400), t);
             s.start(t);
+            longest = longest.max(s.queue.len());
             s.pause(t);
+            longest = longest.max(s.queue.len());
         }
-        assert!(s.queue.len() <= 7, "{} queued intents", s.queue.len());
+        assert!(longest >= 1, "the queue was exercised");
+        assert!(longest <= 7, "{longest} queued intents");
+        // a NaN target is not a target
+        let before = s.target_power;
+        s.set_target_power(f64::NAN, t);
+        assert_eq!(s.target_power, before);
+    }
+
+    /// Polls every 100 ms for `secs`, returning the writes and the notices.
+    fn drive(s: &mut ControlSession, from: Instant, secs: u64) -> (Vec<Vec<u8>>, Vec<String>) {
+        let (mut sent, mut notices) = (Vec::new(), Vec::new());
+        let mut at = from;
+        while at < from + Duration::from_secs(secs) {
+            let outs = s.poll(at);
+            sent.extend(writes(&outs));
+            notices.extend(outs.into_iter().filter_map(|o| match o {
+                Out::Notice(m) => Some(m),
+                _ => None,
+            }));
+            at += Duration::from_millis(100);
+        }
+        (sent, notices)
+    }
+
+    #[test]
+    fn a_silent_trainer_gets_control_back_after_a_loss() {
+        let t = Instant::now();
+        let mut s = ControlSession::new(ControlConfig::default());
+        s.on_connected(TrainerCaps::UNKNOWN, Limits::FALLBACK, t);
+        s.start(t);
+        s.set_target_power(150.0, t);
+        drive(&mut s, t, 20);
+        assert!(s.has_control() && s.silent, "driven without confirmations");
+        let at = t + Duration::from_secs(20);
+        s.on_machine_status(MachineStatus::ControlPermissionLost, at);
+        assert!(!s.has_control());
+        let (sent, _) = drive(&mut s, at, 20);
+        assert!(
+            s.has_control(),
+            "control is assumed again, not stuck in Requesting"
+        );
+        assert!(
+            sent.iter().any(|w| w.first() == Some(&0x05)),
+            "the ERG target goes out again"
+        );
+    }
+
+    #[test]
+    fn a_failing_request_control_write_ends_in_refused() {
+        let t = Instant::now();
+        let mut s = ControlSession::new(ControlConfig::default());
+        s.on_connected(TrainerCaps::UNKNOWN, Limits::FALLBACK, t);
+        s.start(t);
+        let mut at = t;
+        let mut notices = Vec::new();
+        let mut writes_seen = 0;
+        for _ in 0..200 {
+            let outs = s.poll(at);
+            if !writes(&outs).is_empty() {
+                writes_seen += 1;
+                for o in s.on_write_failed(at) {
+                    if let Out::Notice(m) = o {
+                        notices.push(m);
+                    }
+                }
+            }
+            at += Duration::from_millis(100);
+        }
+        assert_eq!(s.phase, Phase::Refused);
+        assert!(
+            writes_seen <= 3,
+            "{writes_seen} writes, not an endless loop"
+        );
+        assert_eq!(notices.len(), 1, "{notices:?}");
+    }
+
+    #[test]
+    fn a_failed_pause_write_is_retried() {
+        let (mut s, t) = running(Instant::now());
+        let at = t + Duration::from_millis(300);
+        s.pause(at);
+        let first = writes(&s.poll(at));
+        assert_eq!(first.len(), 1, "the neutral grade goes out first");
+        s.on_write_failed(at);
+        let mut now = at;
+        let mut sent = Vec::new();
+        for _ in 0..10 {
+            now += Duration::from_millis(300);
+            let w = writes(&s.poll(now));
+            if let Some(op) = w.first().and_then(|w| w.first()).copied() {
+                s.on_indication(&ok(op), now);
+            }
+            sent.extend(w);
+        }
+        assert!(
+            sent.iter().any(|w| w.first() == Some(&0x11)),
+            "neutral again"
+        );
+        assert!(sent.iter().any(|w| w == &vec![0x08, 0x02]), "and the pause");
+    }
+
+    #[test]
+    fn a_pause_during_a_control_loss_is_carried_out_on_the_grant() {
+        let (mut s, t) = running(Instant::now());
+        let at = t + Duration::from_millis(300);
+        s.on_machine_status(MachineStatus::ControlPermissionLost, at);
+        s.pause(at);
+        let mut now = at + Duration::from_secs(2);
+        assert_eq!(writes(&s.poll(now)), vec![vec![0x00]]);
+        s.on_indication(&ok(0x00), now);
+        let mut sent = Vec::new();
+        for _ in 0..10 {
+            now += Duration::from_millis(300);
+            let w = writes(&s.poll(now));
+            if let Some(op) = w.first().and_then(|w| w.first()).copied() {
+                s.on_indication(&ok(op), now);
+            }
+            sent.extend(w);
+        }
+        assert!(sent.iter().any(|w| w.first() == Some(&0x11)), "{sent:?}");
+        assert!(sent.iter().any(|w| w == &vec![0x08, 0x02]), "{sent:?}");
+        assert!(
+            !sent.iter().any(|w| w == &vec![0x07]),
+            "no Start while paused"
+        );
+    }
+
+    #[test]
+    fn a_control_loss_after_pause_preserves_the_relax_commands() {
+        let (mut s, t) = running(Instant::now());
+        let at = t + Duration::from_millis(300);
+        s.pause(at);
+        s.on_machine_status(MachineStatus::ControlPermissionLost, at);
+        let mut now = at + Duration::from_secs(2);
+        assert_eq!(writes(&s.poll(now)), vec![vec![0x00]]);
+        s.on_indication(&ok(0x00), now);
+        let mut sent = Vec::new();
+        for _ in 0..10 {
+            now += Duration::from_millis(300);
+            let w = writes(&s.poll(now));
+            if let Some(op) = w.first().and_then(|w| w.first()).copied() {
+                s.on_indication(&ok(op), now);
+            }
+            sent.extend(w);
+        }
+        assert!(sent.iter().any(|w| w.first() == Some(&0x11)), "{sent:?}");
+        assert!(sent.contains(&vec![0x08, 0x02]), "{sent:?}");
+        assert!(!sent.contains(&vec![0x07]));
+    }
+
+    #[test]
+    fn a_manual_retry_resets_the_reclaim_budget_and_refusals_are_always_told() {
+        let (mut s, t) = running(Instant::now());
+        let mut at = t;
+        let mut refused_notices = 0;
+        for _ in 0..10 {
+            at += Duration::from_millis(100);
+            for o in s.on_machine_status(MachineStatus::ControlPermissionLost, at) {
+                if matches!(&o, Out::Notice(m) if m.contains("Többször")) {
+                    refused_notices += 1;
+                }
+            }
+        }
+        assert_eq!(s.phase, Phase::Refused);
+        assert_eq!(refused_notices, 1);
+        s.start(at);
+        assert_eq!(s.reclaims, 0);
+        assert_eq!(s.phase, Phase::NeedControl);
     }
 }

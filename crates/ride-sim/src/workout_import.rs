@@ -15,7 +15,7 @@
 //! minute.
 
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::Reader;
+use quick_xml::{Reader, XmlVersion};
 use ride_i18n::{t, tf};
 use ride_model::{
     StepKind, StepMessage, StepTarget, Workout, WorkoutCategory, WorkoutStep, IMPORT_PREFIX,
@@ -74,11 +74,20 @@ struct Draft {
 // ───────────────────────────── XML (ZWO / MyWhoosh) ─────────────────────────────
 
 /// The element currently being read: a step block and its coaching messages (seconds from the
-/// start of the block, text).
+/// start of the block, text). `nested` counts the open child elements (a paired
+/// `<textevent>…</textevent>`), whose end tags must not close the block.
 struct Pending {
     element: String,
     attributes: Vec<(String, String)>,
     messages: Vec<(f64, String)>,
+    nested: usize,
+}
+
+/// The header field whose text is being collected, and the text so far (a name can arrive in
+/// several pieces: text, entity references, CDATA).
+struct Collecting {
+    field: &'static str,
+    text: String,
 }
 
 /// One `<start>`/`<empty>` element: the workout header fields, a step block or a coaching note.
@@ -86,18 +95,29 @@ fn handle_start(
     draft: &mut Draft,
     in_workout: &mut bool,
     pending: &mut Option<Pending>,
-    text_for: &mut Option<&'static str>,
+    text_for: &mut Option<Collecting>,
     e: &BytesStart<'_>,
     empty: bool,
 ) {
     let local = e.local_name().as_ref().to_lowercase();
+    // A paired child of a block (`<textevent …>…</textevent>`, or anything unknown) is counted,
+    // so that its end tag is not taken for the end of the block.
+    if !empty {
+        if let Some(pending) = pending.as_mut() {
+            pending.nested += 1;
+        }
+    }
     match local.as_str() {
         "workout" => *in_workout = true,
-        "name" | "description" if !*in_workout => {
-            *text_for = Some(if local == "name" {
-                "name"
-            } else {
-                "description"
+        // `<name/>` has no text: nothing is collected (the file name stays the fallback)
+        "name" | "description" if !*in_workout && !empty => {
+            *text_for = Some(Collecting {
+                field: if local == "name" {
+                    "name"
+                } else {
+                    "description"
+                },
+                text: String::new(),
             });
         }
         "textevent" => {
@@ -116,7 +136,7 @@ fn handle_start(
                 }
             }
         }
-        _ if *in_workout => {
+        _ if *in_workout && pending.is_none() => {
             let attributes = attributes(e);
             if empty {
                 // `<SteadyState …/>`: a complete block without a body
@@ -128,6 +148,7 @@ fn handle_start(
                     element: local,
                     attributes,
                     messages: Vec::new(),
+                    nested: 0,
                 });
             }
         }
@@ -141,7 +162,7 @@ fn parse_xml(text: &str) -> Result<Draft, String> {
     let mut in_workout = false;
     let mut pending: Option<Pending> = None;
     // "name" / "description" while their text is being collected
-    let mut text_for: Option<&'static str> = None;
+    let mut text_for: Option<Collecting> = None;
 
     loop {
         let event = match reader.read_event() {
@@ -172,18 +193,33 @@ fn parse_xml(text: &str) -> Result<Draft, String> {
             ),
             Event::End(e) => {
                 let local = e.local_name().as_ref().to_lowercase();
+                if let Some(open) = pending.as_mut() {
+                    if open.nested > 0 {
+                        // the end of a child of the block, not of the block itself
+                        open.nested -= 1;
+                        continue;
+                    }
+                }
                 match local.as_str() {
                     "workout" => in_workout = false,
-                    "name" | "description" => text_for = None,
-                    _ if in_workout => {
-                        if let Some(pending) = pending.take() {
-                            if pending.element == local {
-                                if let Some(mut steps) =
-                                    step_from(&pending.element, &pending.attributes)
-                                {
-                                    attach_messages(&mut steps, pending.messages);
-                                    draft.steps.extend(steps);
+                    "name" | "description" => {
+                        if let Some(done) = text_for.take() {
+                            match done.field {
+                                "name" => {
+                                    let name = done.text.trim();
+                                    if !name.is_empty() {
+                                        draft.name = Some(name.to_string());
+                                    }
                                 }
+                                _ => draft.description.push_str(&done.text),
+                            }
+                        }
+                    }
+                    _ if in_workout && pending.as_ref().is_some_and(|p| p.element == local) => {
+                        if let Some(block) = pending.take() {
+                            if let Some(mut steps) = step_from(&block.element, &block.attributes) {
+                                attach_messages(&mut steps, block.messages);
+                                draft.steps.extend(steps);
                             }
                         }
                     }
@@ -191,20 +227,28 @@ fn parse_xml(text: &str) -> Result<Draft, String> {
                 }
             }
             Event::Text(t) => {
-                if let Some(field) = text_for {
-                    let value = t.xml10_content();
-                    match field {
-                        "name" => draft.name = Some(value.trim().to_string()),
-                        _ => draft.description.push_str(&value),
-                    }
+                if let Some(collecting) = text_for.as_mut() {
+                    collecting.text.push_str(&t.xml10_content());
                 }
             }
             Event::CData(t) => {
-                if let Some(field) = text_for {
-                    let value = t.xml10_content();
-                    match field {
-                        "name" => draft.name = Some(value.trim().to_string()),
-                        _ => draft.description.push_str(&value),
+                if let Some(collecting) = text_for.as_mut() {
+                    collecting.text.push_str(&t.xml10_content());
+                }
+            }
+            Event::GeneralRef(r) => {
+                if let Some(collecting) = text_for.as_mut() {
+                    if let Ok(Some(ch)) = r.resolve_char_ref() {
+                        collecting.text.push(ch);
+                    } else {
+                        match &*r {
+                            "amp" => collecting.text.push('&'),
+                            "lt" => collecting.text.push('<'),
+                            "gt" => collecting.text.push('>'),
+                            "quot" => collecting.text.push('"'),
+                            "apos" => collecting.text.push('\''),
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -255,7 +299,12 @@ fn attributes(e: &BytesStart<'_>) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for attribute in e.attributes().with_checks(false).flatten() {
         let key = attribute.key.local_name().as_ref().to_lowercase();
-        let value = attribute.value.trim().to_string();
+        // `&amp;` / `&#233;` in a coaching message are resolved; a value that cannot be is kept
+        // as written
+        let value = attribute
+            .normalized_value(XmlVersion::Implicit1_0)
+            .map(|v| v.trim().to_string())
+            .unwrap_or_else(|_| attribute.value.trim().to_string());
         out.push((key, value));
     }
     out
@@ -282,10 +331,11 @@ fn cadence(attributes: &[(String, String)]) -> Option<u16> {
         .map(|value| value.round() as u16)
 }
 
-/// A power attribute as a percentage of FTP. ZWO stores fractions (`0.50`); a file written with
-/// percentages (`50`) is accepted too.
+/// A power attribute as a percentage of FTP. ZWO stores fractions (`0.50`, a sprint `2.2`); a
+/// file written with percentages (`50`) is accepted too. Nobody rides at 10 % of FTP, and nobody at
+/// ten times FTP, so `10` divides the two readings.
 fn pct(value: f64) -> f64 {
-    let pct = if value.abs() <= 2.0 {
+    let pct = if value.abs() < 10.0 {
         value * 100.0
     } else {
         value
@@ -529,10 +579,16 @@ fn parse_json(text: &str) -> Result<Draft, String> {
 
 fn build(draft: Draft, source: &str) -> Result<Workout, String> {
     let mut steps = Vec::new();
+    if draft.steps.len() > MAX_STEPS {
+        return Err(tf(
+            "sim.workout_import.tul_sok_blokk",
+            &[
+                ("count", &draft.steps.len().to_string()),
+                ("max", &MAX_STEPS.to_string()),
+            ],
+        ));
+    }
     for step in draft.steps {
-        if steps.len() >= MAX_STEPS {
-            break;
-        }
         if !(step.duration_s.is_finite() && step.duration_s >= 1.0) {
             continue;
         }
@@ -703,6 +759,60 @@ mod tests {
         { "StepType": "E_Normal", "Power": 0.75, "StartPower": 0, "EndPower": 0, "Time": 120, "Rpm": 0 }
       ]
     }"#;
+
+    #[test]
+    fn a_paired_child_element_does_not_drop_its_block() {
+        let xml = r#"<workout_file><name>Paired</name><workout>
+            <SteadyState Duration="120" Power="0.6">
+              <textevent timeoffset="10" message="Hello"></textevent>
+              <unknown><deeper/></unknown>
+            </SteadyState>
+            <SteadyState Duration="60" Power="0.8"/>
+        </workout></workout_file>"#;
+        let workout = from_bytes(xml.as_bytes(), "paired.zwo").unwrap();
+        assert_eq!(workout.steps.len(), 2, "{:?}", workout.steps);
+        assert_eq!(workout.steps[0].duration_s, 120);
+        assert_eq!(workout.steps[0].messages.len(), 1);
+    }
+
+    #[test]
+    fn entities_and_split_text_are_kept_whole() {
+        let xml = r#"<workout_file><name>Coach&apos;s &amp; <![CDATA[choice]]> &#233;</name>
+            <description>A &lt; B</description><workout>
+            <SteadyState Duration="120" Power="0.6">
+              <textevent timeoffset="0" message="Don&apos;t stop &amp; smile"/>
+            </SteadyState>
+        </workout></workout_file>"#;
+        let workout = from_bytes(xml.as_bytes(), "e.zwo").unwrap();
+        assert_eq!(workout.name, "Coach's & choice é");
+        assert_eq!(workout.description, "A < B");
+        assert_eq!(workout.steps[0].messages[0].text, "Don't stop & smile");
+    }
+
+    #[test]
+    fn an_empty_name_element_falls_back_to_the_file_name() {
+        let xml = r#"<workout_file><name/><sportType>bike</sportType><workout>
+            <SteadyState Duration="120" Power="0.6"/>
+        </workout></workout_file>"#;
+        let workout = from_bytes(xml.as_bytes(), "fallback.zwo").unwrap();
+        assert_ne!(workout.name, "bike");
+    }
+
+    #[test]
+    fn fractions_above_two_are_still_fractions() {
+        assert_eq!(pct(2.2), 220.0);
+        assert_eq!(pct(1.2), 120.0);
+        assert_eq!(pct(50.0), 50.0);
+        assert_eq!(pct(120.0), 120.0);
+    }
+
+    #[test]
+    fn too_many_blocks_are_refused_not_cut() {
+        let blocks = r#"<IntervalsT Repeat="40" OnDuration="30" OffDuration="30" OnPower="1.2" OffPower="0.5"/>"#
+            .repeat(4);
+        let xml = format!("<workout_file><workout>{blocks}</workout></workout_file>");
+        assert!(from_bytes(xml.as_bytes(), "long.zwo").is_err());
+    }
 
     #[test]
     fn a_zwift_style_xml_becomes_a_workout() {

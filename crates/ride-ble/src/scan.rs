@@ -182,12 +182,15 @@ impl DiscoveryTable {
         before != self.visible_signature(&id) || rssi_moved
     }
 
-    fn visible_signature(&self, id: &str) -> Option<(Option<String>, usize, bool)> {
+    /// What the list shows of a device: its name, its roles (the set, not just how many: a
+    /// Zwift Hub first classified as a Shifter turns into a Trainer) and whether it is heard.
+    fn visible_signature(&self, id: &str) -> Option<(Option<String>, Vec<DeviceKind>, bool)> {
         let e = self.entries.get(id)?;
         let services: Vec<Uuid> = e.services.iter().copied().collect();
-        let kinds = classify_with(e.name.as_deref(), &services, e.zwift);
+        let mut kinds = classify_with(e.name.as_deref(), &services, e.zwift);
         let visible = Self::is_visible(e, &kinds);
-        visible.then(|| (e.name.clone(), kinds.len(), e.rssi.is_some()))
+        kinds.sort_by_key(|k| *k as u8);
+        visible.then(|| (e.name.clone(), kinds, e.rssi.is_some()))
     }
 
     fn is_visible(e: &Entry, kinds: &[DeviceKind]) -> bool {

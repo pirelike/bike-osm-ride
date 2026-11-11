@@ -356,6 +356,7 @@ impl Node {
             Node::Split { axis, ratio, a, b } => {
                 if matches!(*a, Node::Leaf(x) if x == id) {
                     let home = Home {
+                        sibling: (*b).clone(),
                         target: DropTarget {
                             onto: b.first_leaf(),
                             zone: if axis == Axis::Cols {
@@ -370,6 +371,7 @@ impl Node {
                 }
                 if matches!(*b, Node::Leaf(x) if x == id) {
                     let home = Home {
+                        sibling: (*a).clone(),
                         target: DropTarget {
                             onto: a.first_leaf(),
                             zone: if axis == Axis::Cols {
@@ -402,6 +404,41 @@ impl Node {
         }
     }
 
+    fn restore(&mut self, id: PanelId, home: &Home) -> bool {
+        if *self == home.sibling {
+            self.wrap(id, home.target.zone, home.share);
+            return true;
+        }
+        match self {
+            Node::Split { a, b, .. } => a.restore(id, home) || b.restore(id, home),
+            Node::Leaf(_) => false,
+        }
+    }
+
+    fn wrap(&mut self, id: PanelId, zone: Zone, share: f64) {
+        let axis = if matches!(zone, Zone::Top | Zone::Bottom) {
+            Axis::Rows
+        } else {
+            Axis::Cols
+        };
+        let old = Box::new(self.clone());
+        *self = if matches!(zone, Zone::Left | Zone::Top) {
+            Node::Split {
+                axis,
+                ratio: share,
+                a: leaf(id),
+                b: old,
+            }
+        } else {
+            Node::Split {
+                axis,
+                ratio: 1.0 - share,
+                a: old,
+                b: leaf(id),
+            }
+        };
+    }
+
     /// Replaces the leaf `onto` by a split holding it and `new`, with `new` taking `share`.
     fn insert(&mut self, new: PanelId, target: DropTarget, share: f64) -> bool {
         match self {
@@ -412,7 +449,7 @@ impl Node {
                     Zone::Top => (Axis::Rows, true),
                     Zone::Bottom => (Axis::Rows, false),
                 };
-                let share = share.clamp(0.1, 0.9);
+                let share = share.clamp(0.0, 1.0);
                 let old = Box::new(Node::Leaf(*id));
                 *self = if new_first {
                     Node::Split {
@@ -519,8 +556,9 @@ fn divide(rect: Rect, axis: Axis, ratio: f64) -> (Rect, Rect) {
 }
 
 /// Where a panel was before it was closed, so that it comes back to the same place.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct Home {
+    sibling: Node,
     target: DropTarget,
     /// The panel's share of the split it was part of.
     share: f64,
@@ -771,38 +809,76 @@ impl Dock {
         let home = self
             .homes
             .iter()
-            .find(|(other, home)| *other == id && self.contains(home.target.onto))
-            .map(|(_, home)| *home);
-        let (target, share) = match (at, home) {
-            (Some(target), _) => (Some(target), self.share_for(id, target, 0.5, av)),
-            (None, Some(home)) => (Some(home.target), home.share),
-            (None, None) => match self.next_to_the_biggest(av) {
-                Some(target) => (Some(target), self.share_for(id, target, 0.5, av)),
-                None => (None, 0.5),
-            },
-        };
-        let placed = match (&mut self.root, target) {
-            (Some(root), Some(target)) => root.insert(id, target, share),
-            _ => false,
-        };
-        if !placed {
-            match &mut self.root {
-                Some(root) => {
-                    // nothing to put it next to (everything left is unavailable): beside the first leaf
-                    let onto = root.first_leaf();
-                    root.insert(
-                        id,
-                        DropTarget {
-                            onto,
-                            zone: Zone::Right,
-                        },
-                        0.5,
-                    );
+            .find(|(other, _)| *other == id)
+            .map(|(_, h)| h.clone());
+        if at.is_none() {
+            if let (Some(root), Some(home)) = (&mut self.root, home) {
+                if root.restore(id, &home) {
+                    self.homes.retain(|(other, _)| *other != id);
+                    return;
                 }
-                None => self.root = Some(Node::Leaf(id)),
             }
         }
-        self.homes.retain(|(other, _)| *other != id);
+        let layout = self.layout(av);
+        let mut targets = at.into_iter().collect::<Vec<_>>();
+        if let Some(target) = self.next_to_the_biggest(av) {
+            targets.push(target);
+        }
+        for tile in &layout.tiles {
+            for zone in [Zone::Right, Zone::Bottom] {
+                targets.push(DropTarget {
+                    onto: tile.id,
+                    zone,
+                });
+            }
+        }
+        for target in targets {
+            if let Some(share) = self.share_for(id, target, 0.5, av) {
+                if self
+                    .root
+                    .as_mut()
+                    .is_some_and(|root| root.insert(id, target, share))
+                {
+                    self.homes.retain(|(other, _)| *other != id);
+                    return;
+                }
+            }
+        }
+        // Splitting a whole subtree can provide enough room when no leaf can.
+        if let Some(root) = &self.root {
+            let old_min = root.min_size(av);
+            let new_min = id.min_size();
+            for (zone, len, new, old, cross, needed) in [
+                (
+                    Zone::Right,
+                    COLS,
+                    new_min.0,
+                    old_min.0,
+                    ROWS,
+                    new_min.1.max(old_min.1),
+                ),
+                (
+                    Zone::Bottom,
+                    ROWS,
+                    new_min.1,
+                    old_min.1,
+                    COLS,
+                    new_min.0.max(old_min.0),
+                ),
+            ] {
+                if new + old <= len && needed <= cross {
+                    let share = 0.5f64.max(new / len).min(1.0 - old / len);
+                    let mut candidate = root.clone();
+                    candidate.wrap(id, zone, share);
+                    self.root = Some(candidate);
+                    self.homes.retain(|(other, _)| *other != id);
+                    return;
+                }
+            }
+        } else {
+            self.root = Some(Node::Leaf(id));
+        }
+        // No feasible split: leave the panel parked instead of violating minimum sizes.
     }
 
     /// Moves a shown panel next to another one, or swaps the two when dropped in the middle. A
@@ -815,30 +891,48 @@ impl Dock {
             self.show(id, Some(target), av);
             return;
         }
+        let before = self.clone();
         if target.zone == Zone::Center {
             if let Some(root) = &mut self.root {
                 root.swap_leaves(id, target.onto);
+            }
+            let valid = self.layout(av).tiles.iter().all(|t| {
+                let (w, h) = t.id.min_size();
+                t.rect.w + 1e-6 >= w && t.rect.h + 1e-6 >= h
+            });
+            if !valid {
+                *self = before;
             }
             return;
         }
         self.hide(id);
         self.homes.retain(|(other, _)| *other != id);
         self.show(id, Some(target), av);
+        if !self.contains(id) {
+            *self = before;
+        }
     }
 
     /// The share a new panel needs of the split it is dropped into so that it is not smaller than
     /// its minimum (a browser is useless at 300 px): `share` or more, at most 0.8.
-    fn share_for(&self, id: PanelId, target: DropTarget, share: f64, av: Availability) -> f64 {
-        let Some(rect) = self.layout(av).tile(target.onto).map(|t| t.rect) else {
-            return share;
+    fn share_for(
+        &self,
+        id: PanelId,
+        target: DropTarget,
+        share: f64,
+        av: Availability,
+    ) -> Option<f64> {
+        let rect = self.layout(av).tile(target.onto)?.rect;
+        let (nw, nh) = id.min_size();
+        let (ow, oh) = target.onto.min_size();
+        let (len, new, old, cross, need) = match target.zone {
+            Zone::Top | Zone::Bottom => (rect.h, nh, oh, rect.w, nw.max(ow)),
+            _ => (rect.w, nw, ow, rect.h, nh.max(oh)),
         };
-        let (min_w, min_h) = id.min_size();
-        let need = match target.zone {
-            Zone::Left | Zone::Right => min_w / rect.w,
-            Zone::Top | Zone::Bottom => min_h / rect.h,
-            Zone::Center => 0.0,
-        };
-        share.max(need).min(0.8)
+        if new + old > len || need > cross {
+            return None;
+        }
+        Some(share.max(new / len).min(1.0 - old / len))
     }
 
     /// Splits the biggest shown panel along its longer side.
@@ -968,6 +1062,28 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn exact_panel_minimums_do_not_invert_the_split_bounds() {
+        use super::*;
+        let saved = ride_model::TileNode::Split {
+            rows: false,
+            ratio: 68.0 / 96.0,
+            a: Box::new(ride_model::TileNode::Leaf {
+                panel: "map".into(),
+            }),
+            b: Box::new(ride_model::TileNode::Leaf {
+                panel: "profile".into(),
+            }),
+        };
+        let mut dock = Dock::from_settings(Some(&saved));
+        dock.show(PanelId::Browser, None, Availability::default());
+        assert!(dock
+            .layout(Availability::default())
+            .tiles
+            .iter()
+            .any(|t| t.id == PanelId::Browser));
+    }
+
     use super::*;
 
     const ALL_THERE: Availability = Availability {

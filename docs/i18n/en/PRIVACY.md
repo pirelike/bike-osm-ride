@@ -11,7 +11,7 @@ out and what is on your machine. The statements are based on the source code (20
 
 | Address | When | What it receives | Note |
 |---|---|---|---|
-| `tile.openstreetmap.org` | when the map requests tiles | the tile's coordinates (zoom, x, y) and the program's name in the User-Agent (`bike-osm-ride/0.1 (desktop app)`) | cached locally for 30 days; no bulk prefetching (because of the OSM tile policy) |
+| `tile.openstreetmap.org` | when the map requests tiles | the tile's coordinates (zoom, x, y) and the program's name in the User-Agent (`bike-osm-ride/<version> (desktop app or Android)`) | Tiles are fresh for 30 days; stale offline copies stay on disk up to 90 days / 512 MiB total, with cleanup at startup and hourly during use. |
 | `brouter.de` | if you paste a bikerouter link | the points read from the link (longitude, latitude), the profile and the avoidances | the route is calculated by their server |
 | `api.open-meteo.com` | only if the GPX has no usable elevation data | the coordinates of the route's sample points (at most 100 per request) | CC BY 4.0, for non-commercial use |
 | `api.github.com` | on start, five seconds later | the latest release query, `User-Agent: bike-osm-ride/<version>` | it goes quiet silently if it fails; **it cannot be switched off in the settings** |

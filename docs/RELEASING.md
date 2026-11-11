@@ -21,8 +21,8 @@ workflow header and the README table together.
 The updater reads the repository from the `repository` field of `Cargo.toml` at compile time, asks
 `https://api.github.com/repos/<owner>/<repo>/releases/latest` five seconds after the start, ignores drafts,
 pre-releases, foreign URLs and garbage, and compares versions numerically (`v0.3.0` against the compiled
-version). It is silent on any failure. **It verifies nothing beyond TLS, the file magic and a minimum size**: no
-checksum, no signature (see §6).
+version). It is silent on check failures. Before installing, it requires the release's `SHA256SUMS`
+asset, verifies SHA-256, checks file magic and a minimum size. There is no publisher signature (see §6).
 
 ## 2. Checklist
 
@@ -37,7 +37,7 @@ checksum, no signature (see §6).
    `workflow_dispatch` only; it has not been switched to `push: tags` yet (the comment in the file says to do that
    once a run has been checked end to end). A run on a branch builds the artifacts but publishes nothing: the
    `release` job runs only when `github.ref` starts with `refs/tags/v`.
-7. When it is green, check the release has all five assets, then download and start the Windows exe once.
+7. When it is green, check the release has all six assets (five packages plus `SHA256SUMS`), then download and start the Windows exe once.
 
 **Never move or delete a pushed tag.** A fix after a pushed tag is a new patch version. (`v0.2.0` and `v0.2.2`
 exist as tags without a release because their runs failed; removing a tag is the owner's job, with
@@ -49,7 +49,7 @@ exist as tags without a release because their runs failed; removing a tag is the
 |---|---|---|
 | `test` | `windows-latest`, `ubuntu-22.04`, `macos-15` (`fail-fast: false`: one red platform must not hide the others) | on Linux install `libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libdbus-1-dev pkg-config`; `cargo test --workspace` |
 | `windows` | `windows-latest` | `cargo build --release -p ride-app` with `RUSTFLAGS=-C target-feature=+crt-static`; copy to the asset name |
-| `android` | `ubuntu-latest` | Rust target `aarch64-linux-android`; Temurin 21; `setup-android` with `packages: platform-tools`; `sdkmanager "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"`; Dioxus CLI 0.7.10 (binstall, fallback to `cargo install --locked`); `dx bundle --platform android --package-types apk --release --target aarch64-linux-android`; `resoverlay.sh`; sign with the keystore secrets if set, else keep the debug-signed APK |
+| `android` | `ubuntu-latest` | Rust target `aarch64-linux-android`; Temurin 21; `setup-android` with `packages: platform-tools`; `sdkmanager "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0"`; Dioxus CLI 0.7.10 (binstall, fallback to `cargo install --locked`); `dx bundle --platform android --package-types apk --release --target aarch64-linux-android`; `resoverlay.sh`; require the keystore secrets and sign the release APK; fail if credentials are missing |
 | `linux` | `ubuntu-22.04` | build dependencies and `xvfb`; plain `cargo build --release -p ride-app`; **smoke test**: run the binary with `RIDE_DEMO=1` under `xvfb-run -a timeout 20` and require exit code 124 (still running, nothing crashed); `dx bundle --platform linux --package-types appimage --package-types deb` (`continue-on-error`); `fallback.sh` when that failed; name and verify both files exist |
 | `macos` | `macos-15` | Rust targets `aarch64-apple-darwin` and `x86_64-apple-darwin`; `bundle.sh`; check that `Info.plist` lints, holds `NSBluetoothAlwaysUsageDescription` (without it macOS kills the app the moment it touches CoreBluetooth) and that `lipo -archs` is `x86_64 arm64` |
 | `release` | `ubuntu-latest` | needs all of the above; only on a `v*` tag; `softprops/action-gh-release` with generated release notes |
@@ -69,8 +69,8 @@ exist as tags without a release because their runs failed; removing a tag is the
   Gatekeeper still quarantines the download, so users open it with right click → Megnyitás or
   `xattr -dr com.apple.quarantine /Applications/bike-osm-ride.app`. `iconutil` needs the exact `.iconset` names,
   which `bundle.sh` creates from `packaging/icons/`. The first Bluetooth scan asks for permission.
-- **Android.** See [`ANDROID.md`](ANDROID.md). Without keystore secrets the APK is signed with the runner's debug
-  key, so each release is a different signature: installing over an older release can need an uninstall first.
+- **Android.** See [`ANDROID.md`](ANDROID.md). Release packaging requires the repository's stable keystore
+  secrets and refuses debug signing. Moving from an older debug-signed build requires uninstalling that build.
 
 ## 5. Failures so far (each cost a patch version)
 
@@ -92,8 +92,9 @@ packaging fails with `'Version' field value 'main'` because the version comes fr
 - **No CI on push or pull request.** `release.yml` is the only workflow and it is started by hand, so nothing
   stops a red `cargo test` from reaching `main`. A small `ci.yml` (fmt, clippy, test on the three desktop systems)
   would close that.
-- **Update integrity.** The updater trusts GitHub and TLS. Publishing SHA-256 checksums with the assets and
-  verifying them before the swap (or signing the exe) would be the next step.
-- **macOS is not notarised** and **Android is debug-signed** (no update in place across signatures).
+- **Update integrity.** SHA-256 is checked against `SHA256SUMS` from the same release. This detects damaged
+  downloads; it still trusts the GitHub release publisher. An independent publisher signature is not implemented.
+- **macOS is not notarised**. Android releases require stable signing credentials; older debug-signed builds
+  cannot be upgraded in place to that signature.
 - The macOS and Linux apps are built (and, on Linux, smoke-tested) by CI; there is no record of the maintainer running them on a real machine.
 - The workflow header and the in-app/README tables must be kept equal by hand.

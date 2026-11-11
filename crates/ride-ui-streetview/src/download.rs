@@ -43,6 +43,8 @@ pub struct Progress {
     pub done: usize,
     /// Buckets whose request failed (they stay missing).
     pub failed: usize,
+    /// Actual images available (excludes buckets without a panorama).
+    pub stored: usize,
     /// Bytes written in this run.
     pub bytes: u64,
     pub running: bool,
@@ -79,7 +81,7 @@ impl Progress {
             );
         }
         if self.total > 0 && self.done >= self.total {
-            let count = self.total - self.failed;
+            let count = self.stored;
             return tn(
                 "ui_streetview.download.offline_street_view_kesz_kep",
                 count as i64,
@@ -193,8 +195,9 @@ impl Downloader {
             total,
             done: already.min(total),
             failed: 0,
+            stored: already.min(total),
             bytes: 0,
-            running: false,
+            running: tokio::runtime::Handle::try_current().is_ok(),
             stopped: None,
         });
         let task = tokio::runtime::Handle::try_current().ok().map(|rt| {
@@ -222,6 +225,7 @@ async fn run(
         total,
         done: 0,
         failed: 0,
+        stored: 0,
         bytes: 0,
         running: true,
         stopped: None,
@@ -229,6 +233,7 @@ async fn run(
     for bucket in 0..total as u32 {
         if store.get_at(bucket, now_unix()).is_some() {
             state.done += 1;
+            state.stored += 1;
         }
     }
     progress.send_replace(state);
@@ -266,6 +271,7 @@ async fn run(
             Ok((_, Ok((stored, bytes)))) => {
                 state.done += 1;
                 if stored {
+                    state.stored += 1;
                     state.bytes = state.bytes.saturating_add(bytes);
                 }
             }
@@ -286,11 +292,19 @@ async fn run(
         }
     }
 
-    // Drain whatever is still running so the files are complete.
+    // Stop queued requests immediately on a permanent failure.
+    if state.stopped.is_some() {
+        set.abort_all();
+    }
+    // Drain the remaining tasks before publishing the final storage count.
     while set.join_next().await.is_some() {}
+    state.stored = store.len();
     state.running = false;
     progress.send_replace(state);
-    let _ = store.flush();
+    if let Err(e) = store.flush() {
+        state.stopped = Some(SvError::Storage(e.kind()));
+        progress.send_replace(state);
+    }
 }
 
 /// One bucket: panorama id (cache first), then the image, then the file.
@@ -324,7 +338,7 @@ async fn download_one(
         .await?;
     store
         .put(bucket, &pano, heading, &bytes)
-        .map_err(|_| SvError::BadResponse)?;
+        .map_err(|e| SvError::Storage(e.kind()))?;
     Ok((true, bytes.len() as u64))
 }
 
@@ -449,6 +463,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_storage_failure_stops_before_spending_the_whole_quota() {
+        let server = MockServer::streetview(StreetviewMock::default());
+        let data = tempfile::tempdir().unwrap();
+        let r = route(2000.0);
+        let (meta, images) = clients(&server, "GOODKEY");
+        let cache = Arc::new(PanoCache::memory(&r.id));
+        let store = Arc::new(ImageStore::open(data.path(), &r.id, r.total_dist).unwrap());
+        let folder = data.path().join("streetview/img").join(&r.id);
+        if folder.is_dir() {
+            std::fs::remove_dir_all(&folder).unwrap();
+        }
+        std::fs::create_dir_all(folder.parent().unwrap()).unwrap();
+        std::fs::write(&folder, b"blocks the image directory").unwrap();
+        let h = Downloader::spawn(meta, images, cache, Arc::clone(&store), r);
+        assert!(
+            h.progress().running,
+            "running is published before spawn returns"
+        );
+        assert!(wait_until(|| !h.is_running(), 10).await);
+        assert!(matches!(h.progress().stopped, Some(SvError::Storage(_))));
+        assert_eq!(h.progress().stored, 0);
+        assert!(
+            server
+                .request_lines()
+                .iter()
+                .filter(|line| !line.contains("metadata?"))
+                .count()
+                <= MAX_CONCURRENT
+        );
+    }
+
+    #[tokio::test]
     async fn cancelling_stops_the_requests() {
         let server = MockServer::streetview(StreetviewMock {
             delay_ms: 40,
@@ -476,6 +522,7 @@ mod tests {
             total: 10,
             done: 4,
             failed: 1,
+            stored: 3,
             bytes: 100,
             running: true,
             stopped: None,
@@ -486,6 +533,7 @@ mod tests {
             total: 10,
             done: 10,
             failed: 1,
+            stored: 9,
             running: false,
             ..p
         };

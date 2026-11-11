@@ -17,7 +17,7 @@
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
-use crate::gpx::{decode_bytes, parse_iso8601, parse_number};
+use crate::gpx::{decode_bytes, parse_elevation, parse_iso8601, parse_number};
 use crate::{err, geo, Result};
 use ride_i18n::{t, tf};
 
@@ -79,15 +79,64 @@ pub fn from_bytes(bytes: &[u8]) -> Result<Activity> {
     if text.is_empty() {
         return err(t("route.activity.a_fajl_ures"));
     }
-    let head: String = text.chars().take(4096).collect();
-    if head.contains("<TrainingCenterDatabase") {
+    // Case-insensitive like the parsers themselves, and far enough in to get past a long
+    // declaration or comment block; a namespace prefix (`<tcx:TrainingCenterDatabase`) counts.
+    let head = text
+        .chars()
+        .take(65_536)
+        .collect::<String>()
+        .to_ascii_lowercase();
+    // The root element decides, not a word somewhere in a comment, a track name or the metadata.
+    let is_tcx = match root_element(&head) {
+        Some(root) => root == "trainingcenterdatabase",
+        None => {
+            head.contains("<trainingcenterdatabase") || head.contains(":trainingcenterdatabase")
+        }
+    };
+    if is_tcx {
         parse_tcx(text)
-    } else if head.to_ascii_lowercase().contains("<gpx") {
+    } else if head.contains("<gpx") || head.contains(":gpx") {
         parse_gpx(text)
     } else {
         err(t(
             "route.activity.a_fajl_sem_gpx_sem_tcx_fajl_az_edzes_importalasahoz_",
         ))
+    }
+}
+
+/// The local name (no namespace prefix) of the first element of an XML text, already lowercased:
+/// the declaration, processing instructions, comments and the doctype in front of it are skipped.
+/// `None` when no element start is found in `text`.
+fn root_element(text: &str) -> Option<&str> {
+    let mut rest = text;
+    loop {
+        let open = rest.find('<')?;
+        rest = &rest[open..];
+        if let Some(after) = rest.strip_prefix("<!--") {
+            rest = &after[after.find("-->")? + 3..];
+        } else if let Some(after) = rest.strip_prefix("<?") {
+            rest = &after[after.find("?>")? + 2..];
+        } else if rest.starts_with("<!") {
+            // a doctype may carry an internal subset in brackets, which can contain '>'
+            let mut depth = 0usize;
+            let end = rest.char_indices().find_map(|(i, c)| {
+                match c {
+                    '[' => depth += 1,
+                    ']' => depth = depth.saturating_sub(1),
+                    '>' if depth == 0 => return Some(i),
+                    _ => {}
+                }
+                None
+            })?;
+            rest = &rest[end + 1..];
+        } else {
+            let name = &rest[1..];
+            let end = name
+                .find(|c: char| c.is_whitespace() || matches!(c, '>' | '/'))
+                .unwrap_or(name.len());
+            let name = &name[..end];
+            return Some(name.rsplit(':').next().unwrap_or(name));
+        }
     }
 }
 
@@ -267,7 +316,7 @@ pub fn parse_gpx(text: &str) -> Result<Activity> {
                         }
                     }
                     ("time", Some(p)) => p.time = parse_iso8601(&buf),
-                    ("ele", Some(p)) => p.ele = parse_number(&buf),
+                    ("ele", Some(p)) => p.ele = parse_elevation(&buf),
                     ("hr" | "heartrate", Some(p)) => p.hr = parse_number(&buf),
                     ("cad" | "cadence", Some(p)) => p.cadence = parse_number(&buf),
                     ("power" | "watts" | "powerinwatts", Some(p)) => p.power = parse_number(&buf),
@@ -378,7 +427,7 @@ pub fn parse_tcx(text: &str) -> Result<Activity> {
                     ("time", Some(p)) => p.time = parse_iso8601(&buf),
                     ("latitudedegrees", Some(p)) => p.lat = parse_number(&buf),
                     ("longitudedegrees", Some(p)) => p.lon = parse_number(&buf),
-                    ("altitudemeters", Some(p)) => p.ele = parse_number(&buf),
+                    ("altitudemeters", Some(p)) => p.ele = parse_elevation(&buf),
                     ("value", Some(p)) if parent == Some("heartratebpm") => {
                         p.hr = parse_number(&buf)
                     }
@@ -419,6 +468,25 @@ fn clean(s: &str) -> String {
 mod tests {
     use super::*;
     use ride_model::{RecordPoint, RideSummary};
+
+    #[test]
+    fn the_root_element_skips_comments_declarations_and_the_doctype() {
+        assert_eq!(root_element("<?xml version=\"1.0\"?><gpx>"), Some("gpx"));
+        assert_eq!(
+            root_element("<!-- <trainingcenterdatabase> --><?xml-stylesheet?><gpx a=\"1\">"),
+            Some("gpx")
+        );
+        assert_eq!(
+            root_element(
+                "<!doctype x [ <!entity a \"b\"> ]>
+<tcx:trainingcenterdatabase xmlns:tcx=\"u\">"
+            ),
+            Some("trainingcenterdatabase")
+        );
+        assert_eq!(root_element("<gpx/>"), Some("gpx"));
+        assert_eq!(root_element("no markup"), None);
+        assert_eq!(root_element("<!-- never closed <gpx>"), None);
+    }
 
     fn strava_gpx(points: usize) -> String {
         let mut s = String::from(
@@ -548,6 +616,18 @@ mod tests {
         assert!((s.lat - 47.501).abs() < 1e-6);
         assert!((s.ele.unwrap() - 123.0).abs() < 0.06);
         assert!((s.time - 1_700_000_010.0).abs() < 1e-6);
+
+        // another writer's spelling: a lower-case root, after a long comment block
+        let other = format!(
+            "<?xml version=\"1.0\"?>\n<!-- {} -->\n{}",
+            "x".repeat(5_000),
+            tcx.split_once('\n')
+                .map_or(tcx.as_str(), |(_, rest)| rest)
+                .replace("TrainingCenterDatabase", "trainingcenterdatabase")
+        );
+        let b = from_bytes(other.as_bytes()).unwrap();
+        assert_eq!(b.format, ActivityFormat::Tcx);
+        assert_eq!(b.samples.len(), 60);
     }
 
     #[test]

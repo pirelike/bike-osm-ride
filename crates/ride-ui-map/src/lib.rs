@@ -225,10 +225,7 @@ pub fn ghost_position(route: &Route, snapshot: &RideSnapshot) -> Option<RoutePos
             ..ghost.pos
         });
     }
-    ghost
-        .dist
-        .is_finite()
-        .then(|| route.locate(ghost.dist.clamp(0.0, route.total_dist)))
+    ghost.dist.is_finite().then(|| route.locate(ghost.dist))
 }
 
 /// One `<img>` of the tile grid: its world position inside the transformed layer is fixed,
@@ -283,6 +280,56 @@ struct Drag {
     y: f64,
     center: GeoPoint,
     zoom: f64,
+}
+
+/// A two-finger gesture: the finger distance and the camera when it began.
+#[derive(Clone, Copy, Debug)]
+struct Pinch {
+    distance: f64,
+    camera: Camera,
+}
+
+/// The fingers (or the mouse) on the map: pointer id and position in element pixels.
+type Pointers = Vec<(i32, f64, f64)>;
+
+fn finger_distance(pointers: &Pointers) -> Option<(f64, (f64, f64))> {
+    let [(_, x0, y0), (_, x1, y1), ..] = pointers.as_slice() else {
+        return None;
+    };
+    let distance = (x1 - x0).hypot(y1 - y0);
+    (distance.is_finite() && distance > 1.0)
+        .then_some((distance, ((x0 + x1) / 2.0, (y0 + y1) / 2.0)))
+}
+
+/// A finger lifted: a pinch with one finger left goes on as a drag from where that finger is,
+/// with no finger left the gesture is over.
+fn end_gesture(
+    pointers: Signal<Pointers>,
+    mut pinch: Signal<Option<Pinch>>,
+    mut drag: Signal<Option<Drag>>,
+    cam_center: Memo<GeoPoint>,
+    zoom: Signal<f64>,
+) {
+    if pointers.peek().len() >= 2 {
+        return;
+    }
+    if pinch.peek().is_some() {
+        pinch.set(None);
+    }
+    let remaining = pointers.peek().first().copied();
+    match remaining {
+        Some((_, x, y)) => drag.set(Some(Drag {
+            x,
+            y,
+            center: *cam_center.peek(),
+            zoom: *zoom.peek(),
+        })),
+        None => {
+            if drag.peek().is_some() {
+                drag.set(None);
+            }
+        }
+    }
 }
 
 fn apply_zoom(
@@ -376,6 +423,9 @@ pub fn MapView(
     /// scale bar/attribution so a few hundred pixels stay readable.
     #[props(default = false)]
     compact: bool,
+    /// Static review maps have no rider to follow.
+    #[props(default = true)]
+    show_follow: bool,
     /// Extras of the review page (highlighted section, ride markers, camera command).
     #[props(default)]
     overlay: ReadSignal<MapOverlay>,
@@ -418,6 +468,8 @@ pub fn MapView(
     let mut seen_route = use_signal(|| Option::<String>::None);
     let mut was_compact = use_signal(|| compact);
     let mut drag = use_signal(|| Option::<Drag>::None);
+    let mut pointers = use_signal(Pointers::new);
+    let mut pinch = use_signal(|| Option::<Pinch>::None);
     let mut failed = use_signal(HashSet::<(u8, u8, u32, u32)>::new);
     let mut was_following = use_signal(|| *follow.peek());
     let mut last_follow_center = use_signal(|| initial.center);
@@ -443,7 +495,9 @@ pub fn MapView(
 
     // Entering the small pane from a route overview: zoom in on the rider, so the mini map is
     // sharp. Going back to the big map keeps whatever camera the rider had.
-    use_effect(move || {
+    // `compact` is a plain prop: `use_reactive!` turns it into a dependency, so the effect runs
+    // again when the shell swaps the same map instance between the big and the small pane.
+    use_effect(use_reactive!(|compact| {
         let now = compact;
         let previous = *was_compact.peek();
         if now == previous {
@@ -465,7 +519,7 @@ pub fn MapView(
                 }
             }
         }
-    });
+    }));
 
     // Fit-to-route: on load, when the route changes and whenever the measured viewport
     // changes while no manual interaction has happened since. In follow mode the camera opens on
@@ -624,12 +678,12 @@ pub fn MapView(
         let camera_center = *cam_center.read();
         let view = *viewport.read();
         let tile_style = *style.read();
-        let range = mercator::tiles_for_view(
-            camera_center.lat,
-            camera_center.lon,
-            z,
-            view.width,
-            view.height,
+        let range = visible_tiles(
+            Camera {
+                center: camera_center,
+                zoom: *zoom.read(),
+            },
+            view,
         );
         let mut out = Vec::with_capacity(range.count());
         for (x, y) in range.iter() {
@@ -648,6 +702,21 @@ pub fn MapView(
             });
         }
         Arc::new(out)
+    });
+
+    // The highlighted section of the review page: built per route, tile zoom and range, not on
+    // every render (the review cursor re-renders the map at pointer rate).
+    let highlight = use_memo(move || {
+        let range = overlay.read().highlight;
+        let current = route.read().clone();
+        let z = *tile_z.read();
+        let built = paths.read();
+        match (current.as_deref(), range) {
+            (Some(route), Some((from, to))) => {
+                route_path::range_path(route, z, (built.shift_x, built.shift_y), from, to)
+            }
+            _ => String::new(),
+        }
     });
 
     let theme = camera::style_theme(style_now);
@@ -709,16 +778,7 @@ pub fn MapView(
         transform.scale
     );
     let overlay_now = overlay.read().clone();
-    let highlight_d = match (route_now.as_deref(), overlay_now.highlight) {
-        (Some(route), Some((from, to))) => route_path::range_path(
-            route,
-            *tile_z.read(),
-            (paths_value.shift_x, paths_value.shift_y),
-            from,
-            to,
-        ),
-        _ => String::new(),
-    };
+    let highlight_d = highlight.read().clone();
     let ride_markers: Vec<(String, String, String, String)> = overlay_now
         .markers
         .iter()
@@ -756,7 +816,14 @@ pub fn MapView(
             return;
         };
         spawn(async move {
-            while let Ok(values) = eval.recv::<Vec<f64>>().await {
+            loop {
+                let values = match eval.recv::<Vec<f64>>().await {
+                    Ok(values) => values,
+                    Err(e) => {
+                        eprintln!("[ride-ui-map] viewport observer stopped: {e}");
+                        break;
+                    }
+                };
                 let (Some(width), Some(height), Some(dpr)) =
                     (values.first(), values.get(1), values.get(2))
                 else {
@@ -780,29 +847,67 @@ pub fn MapView(
             "aria-label": t("ui_map.terkep"),
             tabindex: "0",
             onmounted: on_mount,
-            onmousedown: move |event: Event<MouseData>| {
-                if event.trigger_button() != Some(MouseButton::Primary) {
+            // Pointer events, so a finger works like the mouse (Android): one finger or the left
+            // button drags, two fingers pinch-zoom around their midpoint.
+            onpointerdown: move |event: PointerEvent| {
+                let mouse = event.pointer_type() == "mouse";
+                if mouse && event.trigger_button() != Some(MouseButton::Primary) {
                     return;
                 }
                 let point = event.element_coordinates();
+                let id = event.pointer_id();
+                pointers.with_mut(|list| {
+                    list.retain(|(known, _, _)| *known != id);
+                    list.push((id, point.x, point.y));
+                });
                 if following {
+                    center.set(*cam_center.peek());
                     free_pan.set(true);
                     on_follow.call(false);
                 }
-                drag.set(Some(Drag {
-                    x: point.x,
-                    y: point.y,
+                fit_pending.set(false);
+                let camera_now = Camera {
                     center: *cam_center.peek(),
                     zoom: *zoom.peek(),
-                }));
-                fit_pending.set(false);
+                };
+                if let Some((distance, _)) = finger_distance(&pointers.peek()) {
+                    drag.set(None);
+                    pinch.set(Some(Pinch {
+                        distance,
+                        camera: camera_now,
+                    }));
+                } else {
+                    drag.set(Some(Drag {
+                        x: point.x,
+                        y: point.y,
+                        center: camera_now.center,
+                        zoom: camera_now.zoom,
+                    }));
+                }
                 event.prevent_default();
             },
-            onmousemove: move |event: Event<MouseData>| {
+            onpointermove: move |event: PointerEvent| {
+                let point = event.element_coordinates();
+                let id = event.pointer_id();
+                pointers.with_mut(|list| {
+                    if let Some(entry) = list.iter_mut().find(|(known, _, _)| *known == id) {
+                        *entry = (id, point.x, point.y);
+                    }
+                });
+                if let Some(start) = *pinch.peek() {
+                    let Some((distance, (mid_x, mid_y))) = finger_distance(&pointers.peek()) else {
+                        return;
+                    };
+                    let step = (distance / start.distance).log2();
+                    let next =
+                        camera::zoom_at(start.camera, *viewport.peek(), mid_x, mid_y, step);
+                    zoom.set(next.zoom);
+                    center.set(next.center);
+                    return;
+                }
                 let Some(active) = *drag.peek() else {
                     return;
                 };
-                let point = event.element_coordinates();
                 let moved = camera::pan_to(
                     active.center,
                     active.zoom,
@@ -811,14 +916,22 @@ pub fn MapView(
                 );
                 center.set(moved.center);
             },
-            onmouseup: move |_| {
-                if drag.peek().is_some() {
-                    drag.set(None);
-                }
+            onpointerup: move |event: PointerEvent| {
+                let id = event.pointer_id();
+                pointers.with_mut(|list| list.retain(|(known, _, _)| *known != id));
+                end_gesture(pointers, pinch, drag, cam_center, zoom);
             },
-            onmouseleave: move |_| {
-                if drag.peek().is_some() {
-                    drag.set(None);
+            onpointercancel: move |event: PointerEvent| {
+                let id = event.pointer_id();
+                pointers.with_mut(|list| list.retain(|(known, _, _)| *known != id));
+                end_gesture(pointers, pinch, drag, cam_center, zoom);
+            },
+            onpointerleave: move |event: PointerEvent| {
+                // a mouse that leaves ends its drag; a finger is captured until it lifts
+                if event.pointer_type() == "mouse" {
+                    let id = event.pointer_id();
+                    pointers.with_mut(|list| list.retain(|(known, _, _)| *known != id));
+                    end_gesture(pointers, pinch, drag, cam_center, zoom);
                 }
             },
             onwheel: move |event: Event<WheelData>| {
@@ -984,7 +1097,7 @@ pub fn MapView(
             }
             div {
                 class: "map-controls",
-                onmousedown: move |event: Event<MouseData>| event.stop_propagation(),
+                onpointerdown: move |event: PointerEvent| event.stop_propagation(),
                 onwheel: move |event: Event<WheelData>| event.stop_propagation(),
                 div { class: "map-controls__style",
                     Segmented {
@@ -1022,6 +1135,7 @@ pub fn MapView(
                     }
                 }
                 div { class: "btn-group btn-group--v map-controls__follow", role: "group", "aria-label": t("ui_map.kovetes"),
+                    hidden: !show_follow,
                     button {
                         class: if following { "btn btn--icon is-active" } else { "btn btn--icon" },
                         r#type: "button",
@@ -1060,9 +1174,73 @@ pub fn MapView(
     }
 }
 
+/// The tiles a camera shows in `view`. The range is asked for in world pixels of the tile zoom:
+/// one CSS pixel covers `1 / scale` of them (2 on a retina screen, about 1.5 when the zoom was
+/// rounded up), so passing the CSS size would leave empty bands at the edges.
+fn visible_tiles(camera: Camera, view: Viewport) -> mercator::TileRange {
+    let transform = ScreenTransform::new(camera, view);
+    mercator::tiles_for_view(
+        camera.center.lat,
+        camera.center.lon,
+        transform.zoom,
+        view.width / transform.scale,
+        view.height / transform.scale,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn two_fingers_twice_as_far_apart_zoom_in_one_level() {
+        let one: Pointers = vec![(1, 100.0, 100.0)];
+        assert!(finger_distance(&one).is_none(), "one finger is a drag");
+        let start: Pointers = vec![(1, 100.0, 300.0), (2, 300.0, 300.0)];
+        let (d0, mid) = finger_distance(&start).unwrap();
+        assert_eq!(mid, (200.0, 300.0));
+        let spread: Pointers = vec![(1, 0.0, 300.0), (2, 400.0, 300.0)];
+        let (d1, _) = finger_distance(&spread).unwrap();
+        let camera = Camera::new(GeoPoint::new(47.5, 19.05), 13.0);
+        let view = Viewport::new(412.0, 860.0, 2.0);
+        let next = camera::zoom_at(camera, view, mid.0, mid.1, (d1 / d0).log2());
+        assert!((next.zoom - 14.0).abs() < 1e-9, "{}", next.zoom);
+        // the point under the fingers stays put
+        let before = ScreenTransform::new(camera, view).unproject(mid.0, mid.1);
+        let after = ScreenTransform::new(next, view).unproject(mid.0, mid.1);
+        assert!((before.lat - after.lat).abs() < 1e-6 && (before.lon - after.lon).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_visible_tiles_cover_every_corner_on_any_screen() {
+        for dpr in [1.0, 2.0, 3.0] {
+            for zoom in [12.4, 12.6, 15.5] {
+                let camera = Camera {
+                    center: GeoPoint::new(47.5, 19.05),
+                    zoom,
+                };
+                let view = Viewport {
+                    width: 412.0,
+                    height: 860.0,
+                    dpr,
+                };
+                let range = visible_tiles(camera, view);
+                let transform = ScreenTransform::new(camera, view);
+                assert_eq!(range.z, transform.zoom);
+                for (x, y) in [(0.0, 0.0), (412.0, 0.0), (0.0, 860.0), (412.0, 860.0)] {
+                    let corner = transform.unproject(x, y);
+                    let zf = f64::from(range.z);
+                    let tx = (mercator::lon_to_x(corner.lon, zf) / TILE_PX).floor() as u32;
+                    let ty = (mercator::lat_to_y(corner.lat, zf) / TILE_PX).floor() as u32;
+                    assert!(
+                        (range.min_x..=range.max_x).contains(&tx)
+                            && (range.min_y..=range.max_y).contains(&ty),
+                        "dpr {dpr} zoom {zoom}: corner ({x}, {y}) on tile {tx}/{ty} outside {range:?}"
+                    );
+                }
+            }
+        }
+    }
     use ride_model::testing::straight_route;
     use std::collections::HashSet;
 

@@ -1,4 +1,4 @@
-# Style rules per language. Columns are the language codes of `languages.tsv`; a new language adds a
+# Style rules for translations. Columns are target-language codes from `languages.tsv` (hu is the source); a new language adds a
 # column, prefilled from the English one and reviewed before the bulk translation. `note` says what
 # the rule exists for, so a reviewer can apply it without reading the whole catalog.
 rule	en	es	pt	de	zh	it	note
@@ -8,11 +8,13 @@ capitalisation	Sentence case	Frase normal	Frase normal	Satzanfang und Substantiv
 buttons	Infinitive (Save, Open)	Infinitivo (Guardar, Abrir)	Infinitivo (Guardar, Abrir)	Infinitiv (Speichern, Öffnen)	动词/祈使（保存、打开）	Infinito (Salva, Apri)	not a noun where a verb is natural
 ellipsis	… (one character)	… (un carácter)	… (um carácter)	… (one character)	…（一个字符）	… (un carattere)	never three dots
 quotes	“ ”	“ ”	“ ”	„ “	“ ”	“ ”	the same marks as the source
-percent	55% FTP	55% FTP	55% FTP	55 % FTP	55% FTP	55% FTP	no space before %
+percent	55% FTP	55% FTP	55% FTP	55 % FTP	55% FTP	55% FTP	no space before %, except German typography: 55 %
 units	km, m, W, kcal, kJ, km/h	km, m, W, kcal, kJ, km/h	km, m, W, kcal, kJ, km/h	km, m, W, kcal, kJ, km/h	km, m, W, kcal, kJ, km/h	km, m, W, kcal, kJ, km/h	units are never translated
 numbers	1,234.5 → 1234.5	1234,5	1234,5	1234,5	1234.5（小数点，无千位分隔）	1234,5	decimal comma; no thousands separator in the UI
 lists	A, B and C	A, B y C	A, B e C	A, B und C	A、B 和 C	A, B e C	the conjunction follows the language
 plurals	one / other	one / other	one / other	one / other	other-only（中文不标复数）	one / other	the catalog carries `<key>.one` and `<key>.other`
 brand names	unchanged	unchanged	unchanged	unchanged	不变	invariati	FTP, ERG, TCX, GPX, BRouter, Zwift, Barlow, bike-osm-ride
 coach messages	brief, encouraging, direct	breve, animoso, directo	breve, encorajador, direto	kurz, ermutigend, direkt	简短、鼓励、直接	breve, incoraggiante, diretto	the workout library speaks like a coach
-regional forms	—	—	European Portuguese	standard German (de-DE); ß stays ß	简体中文（zh-Hans），不用繁体	italiano standard; «bici» nelle etichette brevi, «bicicletta» nel testo	avoid Brazilian forms: ficheiro, ecrã, guardar, eliminar
+regional forms	—	—	European Portuguese	standard German (de-DE); ß stays ß	简体中文（zh-Hans），不用繁体	italiano standard; «bici» nelle etichette brevi, «bicicletta» nel testo	avoid Brazilian forms: arquivo, tela, salvar, excluir; use ficheiro, ecrã, guardar, eliminar
+
+# Unit/symbol exceptions: NP, PR, FTP, ERG, rpm, bpm, W, km/h, arrows, ± and quantity-only labels are language-independent. Translate surrounding prose as complete catalog templates.

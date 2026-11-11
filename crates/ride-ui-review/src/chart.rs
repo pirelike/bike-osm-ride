@@ -95,7 +95,7 @@ impl Metric {
             Metric::Power => 100.0,
             Metric::HeartRate => 30.0,
             Metric::Cadence => 30.0,
-            Metric::Speed => 10.0,
+            Metric::Speed => 10.0 / 3.6,
             Metric::Delta => 10.0,
         }
     }
@@ -104,7 +104,7 @@ impl Metric {
     pub fn value_text(self, value: f64) -> String {
         match self {
             Metric::Delta => fmt_delta_s(value),
-            Metric::Speed => fmt_speed_kmh(value / 3.6),
+            Metric::Speed => fmt_speed_kmh(value),
             _ => fmt_opt0(Some(value)),
         }
     }
@@ -115,12 +115,7 @@ impl Metric {
             Metric::Power => series.power_w.get(i).copied().flatten(),
             Metric::HeartRate => series.hr_bpm.get(i).copied().flatten(),
             Metric::Cadence => series.cadence_rpm.get(i).copied().flatten(),
-            Metric::Speed => series
-                .speed_ms
-                .get(i)
-                .copied()
-                .filter(|v| v.is_finite())
-                .map(|v| v * 3.6),
+            Metric::Speed => series.speed_ms.get(i).copied().filter(|v| v.is_finite()),
             Metric::Delta => None,
         }
     }
@@ -139,7 +134,7 @@ pub struct Line {
 pub fn lines(rides: &[Arc<DistSeries>], metric: Metric, d0: f64, d1: f64) -> Vec<Line> {
     let mut out = Vec::new();
     for (slot, series) in rides.iter().enumerate().take(SLOTS) {
-        if series.is_empty() {
+        if series.is_empty() || d1 < series.start_dist || d0 > series.end_dist() {
             continue;
         }
         let values: Vec<Option<f64>> = if metric == Metric::Delta {
@@ -313,42 +308,7 @@ pub fn value_at(rides: &[Arc<DistSeries>], slot: usize, metric: Metric, dist: f6
     metric.raw(series, i)
 }
 
-/// What the legend shows for ride `slot` while no cursor is down: the mean of the metric over
-/// `[d0, d1]`, or for [`Metric::Delta`] the difference at the end of the window (what the ride
-/// gained or lost over the section). `None` when the ride has no value there.
-pub fn window_value(
-    rides: &[Arc<DistSeries>],
-    slot: usize,
-    metric: Metric,
-    d0: f64,
-    d1: f64,
-) -> Option<f64> {
-    let series = rides.get(slot)?;
-    if series.is_empty() || !(d0.is_finite() && d1.is_finite()) || d1 <= d0 {
-        return None;
-    }
-    let lo = series.index_of(d0.max(series.start_dist))?;
-    let hi = series.index_of(d1.min(series.end_dist()))?;
-    if hi < lo {
-        return None;
-    }
-    if metric == Metric::Delta {
-        if slot == 0 {
-            return Some(0.0);
-        }
-        let delta = delta_time(series, rides.first()?);
-        return (lo..=hi)
-            .rev()
-            .find_map(|i| delta.get(i).copied().flatten());
-    }
-    let (sum, n) = (lo..=hi)
-        .filter_map(|i| metric.raw(series, i))
-        .filter(|v| v.is_finite())
-        .fold((0.0, 0usize), |(s, n), v| (s + v, n + 1));
-    (n > 0).then(|| sum / n as f64)
-}
-
-/// The stretch every selected ride covers, `None` when they share less than 100 m.
+/// The stretch every selected ride covers, `None` when they have no overlap.
 pub fn common_span(rides: &[Arc<DistSeries>]) -> Option<(f64, f64)> {
     let start = rides
         .iter()
@@ -360,7 +320,7 @@ pub fn common_span(rides: &[Arc<DistSeries>]) -> Option<(f64, f64)> {
         .filter(|s| !s.is_empty())
         .map(|s| s.end_dist())
         .reduce(f64::min)?;
-    (end - start >= 100.0).then_some((start, end))
+    (end > start).then_some((start, end))
 }
 
 /// One line of the section table.
@@ -373,7 +333,7 @@ pub struct StatsRow {
 }
 
 /// The table: every ride's statistics on `[d0, d1]`, the time difference against the first ride
-/// that has any.
+/// (slot A). Missing reference coverage never changes the reference ride.
 pub fn stats_rows(records: &[Arc<RideRecord>], d0: f64, d1: f64) -> Vec<StatsRow> {
     let mut rows: Vec<StatsRow> = records
         .iter()
@@ -385,7 +345,7 @@ pub fn stats_rows(records: &[Arc<RideRecord>], d0: f64, d1: f64) -> Vec<StatsRow
             time_delta_s: None,
         })
         .collect();
-    let reference = rows.iter().find_map(|r| r.stats.map(|s| s.time_s));
+    let reference = rows.first().and_then(|r| r.stats.map(|s| s.time_s));
     if let Some(reference) = reference {
         for row in &mut rows {
             row.time_delta_s = row.stats.map(|s| s.time_s - reference);
@@ -502,6 +462,7 @@ mod tests {
             source: RideSource::Recorded,
             power_estimated: false,
             estimate: None,
+            measured_power: Vec::new(),
         })
     }
 
@@ -534,10 +495,14 @@ mod tests {
         assert_eq!(power[0].slot, 0);
         let (first, last) = (power[0].points[0].0, power[0].points.last().unwrap().0);
         assert!((first - 1_000.0).abs() <= GRID_M && (last - 2_000.0).abs() <= GRID_M);
-        // speed has both, in km/h
+        // Speed has both, in m/s internally; only the display formatter converts to km/h.
         let speed = lines(&rides, Metric::Speed, 0.0, 4_000.0);
         assert_eq!(speed.len(), 2);
-        assert!((speed[1].points[10].1.unwrap() - 36.0).abs() < 0.5);
+        assert!((speed[1].points[10].1.unwrap() - 10.0).abs() < 0.1);
+        assert_eq!(
+            Metric::Speed.value_text(speed[1].points[10].1.unwrap()),
+            "36.0"
+        );
         // the delta never draws the reference
         let delta = lines(&rides, Metric::Delta, 0.0, 4_000.0);
         assert_eq!(delta.iter().map(|l| l.slot).collect::<Vec<_>>(), [1]);
@@ -650,6 +615,11 @@ mod tests {
         let rows = stats_rows(&records, 500.0, 3_800.0);
         assert!(rows[1].stats.is_none() && rows[1].time_delta_s.is_none());
         assert_eq!(rows[0].time_delta_s, Some(0.0));
+        let reversed = [records[1].clone(), records[0].clone()];
+        let rows = stats_rows(&reversed, 500.0, 3_800.0);
+        assert!(rows[0].stats.is_none());
+        assert!(rows[1].stats.is_some());
+        assert!(rows.iter().all(|r| r.time_delta_s.is_none()));
     }
 
     #[test]

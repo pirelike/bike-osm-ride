@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.WindowManager
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 /**
@@ -41,6 +42,11 @@ class MainActivity : WryActivity() {
         // Asked once, early: the sensor hub starts on its own thread right behind this, and the
         // dialog is answered while the webview is still loading.
         requestBlePermissions()
+        thread {
+            File(cacheDir, "gpx").listFiles()?.forEach { file ->
+                if (System.currentTimeMillis() - file.lastModified() > 24L * 60 * 60 * 1000) file.delete()
+            }
+        }
     }
 
     /** Opens the system file picker for a GPX; the answer arrives in `onPicked`. */
@@ -64,7 +70,7 @@ class MainActivity : WryActivity() {
             startActivityForResult(intent, REQ_PICK_GPX)
         } catch (e: Exception) {
             // No picker on this device (or it refused): tell Rust, which shows the reason.
-            onPicked("")
+            onPicked("error")
         }
     }
 
@@ -82,7 +88,7 @@ class MainActivity : WryActivity() {
             @Suppress("DEPRECATION")
             startActivityForResult(intent, REQ_PICK_BACKUP)
         } catch (e: Exception) {
-            onBackupPicked("")
+            onBackupPicked("error")
         }
     }
 
@@ -93,7 +99,10 @@ class MainActivity : WryActivity() {
      * (`application/octet-stream`) the dialog keeps `name` exactly as given.
      */
     fun saveFile(path: String, name: String, mime: String) {
-        pendingBackup = path
+        if (!pendingBackup.compareAndSet(null, path)) {
+            // A duplicate request must not overwrite the active save result.
+            return
+        }
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = mime
@@ -103,7 +112,8 @@ class MainActivity : WryActivity() {
             @Suppress("DEPRECATION")
             startActivityForResult(intent, REQ_SAVE_BACKUP)
         } catch (e: Exception) {
-            finishBackupSave(null)
+            runCatching { pendingBackup.getAndSet(null)?.let { File(it).delete() } }
+            onBackupSaved("error")
         }
     }
 
@@ -112,17 +122,29 @@ class MainActivity : WryActivity() {
      * may only change on the UI thread; the flag lives on the window, so nothing has to be undone
      * when the app goes away.
      */
-    fun setKeepScreenOn(on: Boolean) {
-        runOnUiThread {
+    fun setKeepScreenOn(on: Boolean): Boolean {
+        val applyFlag = java.util.concurrent.Callable {
             try {
                 if (on) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
+                true
             } catch (e: Exception) {
-                // No window (yet, or any more): the system's own screen timeout applies.
+                android.util.Log.e("bike-osm-ride", "Could not set FLAG_KEEP_SCREEN_ON", e)
+                false
             }
+        }
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) return applyFlag.call()
+        val task = java.util.concurrent.FutureTask(applyFlag)
+        runOnUiThread(task)
+        return try {
+            task.get(1, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            task.cancel(false)
+            android.util.Log.e("bike-osm-ride", "Screen flag acknowledgement failed", e)
+            false
         }
     }
 
@@ -144,7 +166,10 @@ class MainActivity : WryActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         val uri = if (resultCode == RESULT_OK) data?.data else null
         when (requestCode) {
-            REQ_PICK_GPX -> onPicked(if (uri == null) "" else copyIntoCache(uri))
+            REQ_PICK_GPX -> {
+                if (uri == null) onPicked("")
+                else thread { onPicked(copyIntoCache(uri)) }
+            }
             REQ_PICK_BACKUP -> {
                 if (uri == null) {
                     onBackupPicked("")
@@ -153,25 +178,23 @@ class MainActivity : WryActivity() {
                 }
             }
             REQ_SAVE_BACKUP -> {
-                if (uri == null) {
-                    finishBackupSave(null)
-                } else {
-                    thread { finishBackupSave(uri) }
-                }
+                // Claim this request on the UI thread before starting the copy. A later
+                // save cannot replace the source belonging to this result.
+                val source = pendingBackup.getAndSet(null)
+                thread { finishBackupSave(uri, source) }
             }
         }
     }
 
     /** The zip Rust wrote, waiting for the rider to say where it goes. */
-    private var pendingBackup: String? = null
+    private val pendingBackup = AtomicReference<String?>(null)
 
     /**
      * Copies the pending zip to the place the rider chose (`uri`; null: nothing chosen), removes it
      * from the cache either way and tells Rust: `ok`, `cancel` or `error`.
      */
-    private fun finishBackupSave(uri: Uri?) {
-        val source = pendingBackup?.let { File(it) }
-        pendingBackup = null
+    private fun finishBackupSave(uri: Uri?, path: String?) {
+        val source = path?.let { File(it) }
         val result = try {
             if (uri == null) {
                 "cancel"
@@ -204,17 +227,34 @@ class MainActivity : WryActivity() {
         folder: String = "gpx",
         fallbackName: String = "utvonal.gpx",
         extension: String = ".gpx",
-    ): String = try {
-        val dir = File(cacheDir, folder).apply { mkdirs() }
-        val name = displayName(uri) ?: fallbackName
-        val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").takeLast(80)
-        val file = File(dir, if (safe.lowercase().endsWith(extension)) safe else "$safe$extension")
-        contentResolver.openInputStream(uri)?.use { input ->
-            file.outputStream().use { output -> input.copyTo(output) }
+    ): String {
+        var file: File? = null
+        return try {
+            val dir = File(cacheDir, folder).apply { mkdirs() }
+            val name = displayName(uri) ?: fallbackName
+            val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").takeLast(64)
+            val destination = File.createTempFile("picked-$safe-", extension, dir)
+            file = destination
+            val limit = if (folder == "backup") 1024L * 1024 * 1024 else 64L * 1024 * 1024
+            val input = contentResolver.openInputStream(uri) ?: error("No input stream")
+            input.use { source ->
+                destination.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val count = source.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > limit) error("File too large")
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            destination.absolutePath
+        } catch (e: Exception) {
+            file?.delete()
+            "error"
         }
-        file.absolutePath
-    } catch (e: Exception) {
-        ""
     }
 
     private fun displayName(uri: Uri): String? =

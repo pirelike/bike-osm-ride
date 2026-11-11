@@ -102,16 +102,14 @@ impl Platform {
     }
 
     /// Is `asset_name` the package of this platform?
-    fn matches(self, asset_name: &str) -> bool {
-        let name = asset_name.to_ascii_lowercase();
-        match self {
-            Platform::Windows => name.ends_with(".exe") && name.contains("windows"),
-            Platform::Android => name.ends_with(".apk"),
-            // The AppImage is the only Linux package the updater can install itself; the .deb
-            // is offered on the release page instead.
-            Platform::Linux => name.ends_with(".appimage") && name.contains("linux"),
-            Platform::MacOs => name.ends_with(".dmg") && name.contains("macos"),
-        }
+    fn matches(self, asset_name: &str, version: &str) -> bool {
+        let suffix = match self {
+            Platform::Windows => "windows-x64.exe",
+            Platform::Android => "android.apk",
+            Platform::Linux => "linux-x86_64.AppImage",
+            Platform::MacOs => "macos-universal.dmg",
+        };
+        asset_name == format!("bike-osm-ride-{}-{suffix}", version.trim_start_matches('v'))
     }
 
     /// Magic bytes of a program this platform can swap itself with, `None` when it never does.
@@ -200,6 +198,7 @@ pub struct UpdateInfo {
     /// The package for this platform.
     pub asset_url: String,
     pub asset_name: String,
+    pub checksum_url: String,
 }
 
 /// Decides from a `releases/latest` response whether there is something to offer.
@@ -208,8 +207,19 @@ pub fn evaluate(json: &str, current: &str, platform: Platform) -> Option<UpdateI
     if release.draft || release.prerelease || !is_newer(&release.tag_name, current) {
         return None;
     }
-    let asset = release.assets.iter().find(|a| platform.matches(&a.name))?;
-    let trusted = |u: &str| u.starts_with("https://github.com/");
+    let asset = release
+        .assets
+        .iter()
+        .find(|a| platform.matches(&a.name, &release.tag_name))?;
+    let prefix = format!("https://github.com/{}/releases/", repo_slug()?);
+    let trusted = |u: &str| u.starts_with(&prefix);
+    let checksum = release.assets.iter().find(|a| a.name == "SHA256SUMS")?;
+    let download_prefix = format!("{prefix}download/{}/", release.tag_name);
+    if !checksum.browser_download_url.starts_with(&download_prefix)
+        || !asset.browser_download_url.starts_with(&download_prefix)
+    {
+        return None;
+    }
     if !trusted(&asset.browser_download_url) || !trusted(&release.html_url) {
         return None;
     }
@@ -218,13 +228,15 @@ pub fn evaluate(json: &str, current: &str, platform: Platform) -> Option<UpdateI
         page_url: release.html_url,
         asset_url: asset.browser_download_url.clone(),
         asset_name: asset.name.clone(),
+        checksum_url: checksum.browser_download_url.clone(),
     })
 }
 
 fn client() -> Option<reqwest::Client> {
     ride_route::http::client_builder()
         .user_agent(concat!("bike-osm-ride/", env!("CARGO_PKG_VERSION")))
-        .timeout(Duration::from_secs(20))
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(600))
         .build()
         .ok()
 }
@@ -237,6 +249,7 @@ pub async fn check() -> Option<UpdateInfo> {
     let url = format!("https://api.github.com/repos/{slug}/releases/latest");
     let response = client()?
         .get(url)
+        .timeout(Duration::from_secs(20))
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
@@ -266,18 +279,20 @@ fn staged_path(target: &Path) -> PathBuf {
 pub fn cleanup_previous() {
     if let Ok(exe) = std::env::current_exe() {
         let _ = std::fs::remove_file(old_path(&exe));
+        let _ = std::fs::remove_file(staged_path(&exe));
     }
     // Inside an AppImage the running executable is in the read-only mount; the file the update
     // replaced is the `.AppImage` itself.
     if let Some(appimage) = std::env::var_os("APPIMAGE").map(PathBuf::from) {
         let _ = std::fs::remove_file(old_path(&appimage));
+        let _ = std::fs::remove_file(staged_path(&appimage));
     }
 }
 
 /// Downloads the new program and swaps it in (Windows, or Linux inside an AppImage). On success
 /// the caller starts the returned file and exits.
 pub async fn install(update: &UpdateInfo, platform: Platform) -> Result<PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe = std::env::current_exe().map_err(file_error)?;
     let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
     let target = install_target(platform, &exe, appimage.as_deref());
 
@@ -286,11 +301,21 @@ pub async fn install(update: &UpdateInfo, platform: Platform) -> Result<PathBuf,
         .get(&update.asset_url)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(network_error)?;
     if !response.status().is_success() {
-        return Err(format!("HTTP {}", response.status().as_u16()));
+        return Err(t("app.updater.network_failed").into());
     }
-    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    let bytes = read_limited(response, 256 * 1024 * 1024).await?;
+    let checksums = client
+        .get(&update.checksum_url)
+        .timeout(Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(network_error)?;
+    let checksums = read_limited(checksums, 64 * 1024).await?;
+    if !verify_checksum(&bytes, &checksums, &update.asset_name) {
+        return Err(t("app.updater.checksum_failed").into());
+    }
     // An exe starts with "MZ", an AppImage with "\x7fELF"; anything else (an HTML error page, a
     // link to a login wall) is not installed.
     if !looks_like_program(platform, &bytes) {
@@ -300,24 +325,116 @@ pub async fn install(update: &UpdateInfo, platform: Platform) -> Result<PathBuf,
     let staged = staged_path(&target);
     tokio::fs::write(&staged, &bytes)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(file_error)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         // The download is written with the umask, and the AppImage must stay executable.
         tokio::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(file_error)?;
     }
-    let old = old_path(&target);
-    let _ = std::fs::remove_file(&old);
-    std::fs::rename(&target, &old).map_err(|e| e.to_string())?;
-    if let Err(e) = std::fs::rename(&staged, &target) {
-        // put the running version back so the app still starts next time
-        let _ = std::fs::rename(&old, &target);
-        return Err(e.to_string());
-    }
+    let swap_target = target.clone();
+    tokio::task::spawn_blocking(move || replace_program(&swap_target, &staged))
+        .await
+        .map_err(|_| t("app.updater.file_failed").to_string())?
+        .map_err(file_error)?;
     Ok(target)
+}
+
+/// Publish a fully staged file without first removing the launchable target.
+fn replace_program(target: &Path, staged: &Path) -> std::io::Result<()> {
+    let old = old_path(target);
+    let _ = std::fs::remove_file(&old);
+    // Flush image bytes before changing directory entries.
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(staged)?
+        .sync_all()?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+        let wide = |p: &Path| {
+            p.as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect::<Vec<_>>()
+        };
+        let (t, s, b) = (wide(target), wide(staged), wide(&old));
+        // SAFETY: nul-terminated path buffers outlive the call; unused pointers are null.
+        if unsafe {
+            ReplaceFileW(
+                t.as_ptr(),
+                s.as_ptr(),
+                b.as_ptr(),
+                0,
+                std::ptr::null(),
+                std::ptr::null(),
+            )
+        } == 0
+        {
+            let error = std::io::Error::last_os_error();
+            if !target.exists() && old.exists() {
+                let _ = std::fs::rename(&old, target);
+            }
+            return Err(error);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::hard_link(target, &old)?;
+        std::fs::rename(staged, target)?;
+        if let Some(parent) = target.parent() {
+            std::fs::File::open(parent)?.sync_all()?;
+        }
+    }
+    Ok(())
+}
+
+fn network_error(error: reqwest::Error) -> String {
+    eprintln!("[ride-app] update network: {error}");
+    t("app.updater.network_failed").into()
+}
+
+fn file_error(error: std::io::Error) -> String {
+    eprintln!("[ride-app] update file: {error}");
+    t("app.updater.file_failed").into()
+}
+
+async fn read_limited(mut response: reqwest::Response, limit: usize) -> Result<Vec<u8>, String> {
+    if !response.status().is_success()
+        || response.content_length().is_some_and(|n| n > limit as u64)
+    {
+        return Err(t("app.updater.network_failed").into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(network_error)? {
+        if chunk.len() > limit.saturating_sub(bytes.len()) {
+            return Err(t("app.updater.network_failed").into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+/// SHA256SUMS comes from the same repository and release as the exact platform asset.
+/// This verifies integrity against the published digest; it is not a publisher signature.
+fn verify_checksum(bytes: &[u8], manifest: &[u8], name: &str) -> bool {
+    use sha2::{Digest, Sha256};
+    let Ok(manifest) = std::str::from_utf8(manifest) else {
+        return false;
+    };
+    let mut hashes = manifest.lines().filter_map(|line| {
+        let (hash, file) = line.split_once("  ")?;
+        (file == name).then_some(hash)
+    });
+    let Some(hash) = hashes.next() else {
+        return false;
+    };
+    hashes.next().is_none()
+        && hash.len() == 64
+        && hash.eq_ignore_ascii_case(&format!("{:x}", Sha256::digest(bytes)))
 }
 
 /// Opens the release page in the system browser. Only the platforms whose package the user has
@@ -346,26 +463,71 @@ pub fn manual_install_hint(platform: Platform) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn program_replacement_keeps_a_backup_and_a_failed_stage_keeps_the_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("app.exe");
+        let staged = super::staged_path(&target);
+        std::fs::write(&target, b"old").unwrap();
+        std::fs::write(&staged, b"new").unwrap();
+        super::replace_program(&target, &staged).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        assert_eq!(std::fs::read(super::old_path(&target)).unwrap(), b"old");
+        assert!(super::replace_program(&target, &staged).is_err());
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+    }
+
     use super::*;
 
     const RELEASE: &str = r#"{
         "tag_name": "v0.2.0",
-        "html_url": "https://github.com/owner/bike-osm-ride/releases/tag/v0.2.0",
+        "html_url": "https://github.com/pirelike/bike-osm-ride/releases/tag/v0.2.0",
         "draft": false,
         "prerelease": false,
         "assets": [
+            {"name": "SHA256SUMS", "browser_download_url": "https://github.com/pirelike/bike-osm-ride/releases/download/v0.2.0/SHA256SUMS"},
             {"name": "bike-osm-ride-0.2.0-android.apk",
-             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-android.apk"},
+             "browser_download_url": "https://github.com/pirelike/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-android.apk"},
             {"name": "bike-osm-ride-0.2.0-windows-x64.exe",
-             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-windows-x64.exe"},
+             "browser_download_url": "https://github.com/pirelike/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-windows-x64.exe"},
             {"name": "bike-osm-ride-0.2.0-linux-x86_64.AppImage",
-             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-linux-x86_64.AppImage"},
+             "browser_download_url": "https://github.com/pirelike/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-linux-x86_64.AppImage"},
             {"name": "bike-osm-ride-0.2.0-linux-amd64.deb",
-             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-linux-amd64.deb"},
+             "browser_download_url": "https://github.com/pirelike/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-linux-amd64.deb"},
             {"name": "bike-osm-ride-0.2.0-macos-universal.dmg",
-             "browser_download_url": "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-macos-universal.dmg"}
+             "browser_download_url": "https://github.com/pirelike/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-macos-universal.dmg"}
         ]
     }"#;
+
+    #[test]
+    fn downloaded_bytes_must_match_the_unique_published_digest() {
+        use sha2::{Digest, Sha256};
+        let manifest = format!("{:x}  app.exe\n", Sha256::digest(b"program"));
+        assert!(verify_checksum(b"program", manifest.as_bytes(), "app.exe"));
+        assert!(!verify_checksum(b"changed", manifest.as_bytes(), "app.exe"));
+        assert!(!verify_checksum(
+            b"program",
+            manifest.as_bytes(),
+            "other.exe"
+        ));
+        assert!(!verify_checksum(
+            b"program",
+            manifest.repeat(2).as_bytes(),
+            "app.exe"
+        ));
+        assert!(evaluate(
+            &RELEASE.replace("SHA256SUMS", "missing"),
+            "0.1.0",
+            Platform::Windows
+        )
+        .is_none());
+        assert!(evaluate(
+            &RELEASE.replace("windows-x64.exe", "windows-arm64.exe"),
+            "0.1.0",
+            Platform::Windows
+        )
+        .is_none());
+    }
 
     #[test]
     fn versions_are_compared_numerically() {
@@ -431,7 +593,7 @@ mod tests {
         let pre = RELEASE.replace("\"prerelease\": false", "\"prerelease\": true");
         assert_eq!(evaluate(&pre, "0.1.0", Platform::Windows), None);
         let foreign = RELEASE.replace(
-            "https://github.com/owner/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-windows-x64.exe",
+            "https://github.com/pirelike/bike-osm-ride/releases/download/v0.2.0/bike-osm-ride-0.2.0-windows-x64.exe",
             "https://evil.example/x.exe",
         );
         assert_eq!(evaluate(&foreign, "0.1.0", Platform::Windows), None);

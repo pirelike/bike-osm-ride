@@ -9,6 +9,7 @@ use ride_model::{
     SegmentLive, SensorSample, TrainerSim, Workout,
 };
 
+use crate::analysis::{NpAccumulator, MAX_SAMPLE_GAP_S};
 use crate::ghost::{Ghost, GhostSet};
 use crate::physics::{self, PhysicsParams, MAX_SPEED_MS};
 use crate::workout::WorkoutSession;
@@ -94,12 +95,16 @@ pub struct RideEngine {
     state: RideState,
     /// Distance along the route, m.
     dist: f64,
+    /// Where the ride started (a ride may start with a seek): the ridden distance is
+    /// `dist - start_dist`.
+    start_dist: f64,
     speed: f64,
     /// Timer time (excludes pauses), s.
     elapsed: f64,
     /// Engine clock, s (advances in every state; used for staleness and the power window).
     clock: f64,
     started_unix: f64,
+    last_unix: f64,
 
     // Route profile, pre-scaled so the HUD can show done/left ascent.
     cum_up: Vec<f64>,
@@ -124,10 +129,10 @@ pub struct RideEngine {
     zone_secs: [f64; 7],
     hr_zone_secs: [f64; 5],
 
-    // Normalised power (Allen: mean of the 4th power of the 30 s rolling average).
-    np_window: VecDeque<f64>,
-    np_sum4: f64,
-    np_count: u64,
+    // Normalised power (Allen: mean of the 4th power of the 30 s rolling average), fed one
+    // 1 s slot at a time; `np_last` = the last fed slot and its watts (`None` = no value).
+    np: NpAccumulator,
+    np_last: Option<(u64, Option<f64>)>,
 
     // 1 Hz recording.
     history: Vec<RecordPoint>,
@@ -159,10 +164,12 @@ impl RideEngine {
             params,
             state: RideState::Ready,
             dist: 0.0,
+            start_dist: 0.0,
             speed: 0.0,
             elapsed: 0.0,
             clock: 0.0,
             started_unix: 0.0,
+            last_unix: 0.0,
             cum_up: up,
             cum_down: down,
             live: SensorSample::default(),
@@ -180,9 +187,8 @@ impl RideEngine {
             max_speed: 0.0,
             zone_secs: [0.0; 7],
             hr_zone_secs: [0.0; 5],
-            np_window: VecDeque::new(),
-            np_sum4: 0.0,
-            np_count: 0,
+            np: NpAccumulator::default(),
+            np_last: None,
             history: Vec::new(),
             next_record_t: 0.0,
             sim_grade: 0.0,
@@ -202,10 +208,10 @@ impl RideEngine {
         self.rider = rider;
     }
 
-    /// Selects (or clears) the workout. Ignored while riding: a running effort cannot be
-    /// swapped under the rider.
+    /// Selects (or clears) the workout. Ignored during a ride (`Riding` / `Paused`): a running
+    /// effort cannot be swapped under the rider, exactly like the ghost.
     pub fn set_workout(&mut self, workout: Option<Arc<Workout>>) {
-        if self.state == RideState::Riding {
+        if matches!(self.state, RideState::Riding | RideState::Paused) {
             return;
         }
         self.workout = workout.map(WorkoutSession::new);
@@ -267,6 +273,7 @@ impl RideEngine {
         self.state = RideState::Riding;
         self.started_unix = if unix_s.is_finite() { unix_s } else { 0.0 };
         self.elapsed = 0.0;
+        self.start_dist = self.dist;
         self.next_record_t = 0.0;
         if let Some(w) = &mut self.workout {
             w.reset();
@@ -276,14 +283,30 @@ impl RideEngine {
             .clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
         // The ghost is aligned to where the ride starts: the difference is zero on the start line.
         self.align_ghost();
-        self.segment_entry = None;
-        self.record(self.started_unix);
+        // A ride that starts on the foot of a climb (a seek there, or a climb from 0 m) rides the
+        // whole of it: it counts from the start, as the stored segment times do.
+        let at = self.dist;
+        self.segment_entry = self
+            .route
+            .climbs
+            .iter()
+            .position(|c| {
+                at >= c.start_dist - 1e-9
+                    && at <= c.start_dist + crate::segments::REACHED_EPS_M
+                    && at < c.end_dist
+            })
+            .map(|index| (index, 0.0));
+        self.last_unix = self.started_unix;
+        self.record(self.started_unix, false);
         self.power_3s = self.compute_power_3s();
     }
 
+    /// Riding → Paused. The rider stands still now: the speed drops to 0 (the snapshot would
+    /// otherwise keep the last riding speed on screen for the whole pause).
     pub fn pause(&mut self) {
         if self.state == RideState::Riding {
             self.state = RideState::Paused;
+            self.speed = 0.0;
         }
     }
 
@@ -293,10 +316,16 @@ impl RideEngine {
         }
     }
 
-    /// Riding/Paused → Finished (also called automatically at the end of the route).
+    /// Riding/Paused → Finished (also called automatically at the end of the route). The
+    /// recording gets a last point where the ride stopped, so it does not end up to a second
+    /// short of it.
     pub fn finish(&mut self) {
         if matches!(self.state, RideState::Riding | RideState::Paused) {
+            let unix_s = self.last_unix;
+            self.state = RideState::Riding;
+            self.record(unix_s, true);
             self.state = RideState::Finished;
+            self.speed = 0.0;
         }
     }
 
@@ -304,9 +333,11 @@ impl RideEngine {
     pub fn reset(&mut self) {
         self.state = RideState::Ready;
         self.dist = 0.0;
+        self.start_dist = 0.0;
         self.speed = 0.0;
         self.elapsed = 0.0;
         self.started_unix = 0.0;
+        self.last_unix = 0.0;
         self.work_j = 0.0;
         self.power_time = 0.0;
         self.power_integral = 0.0;
@@ -319,9 +350,8 @@ impl RideEngine {
         self.max_speed = 0.0;
         self.zone_secs = [0.0; 7];
         self.hr_zone_secs = [0.0; 5];
-        self.np_window.clear();
-        self.np_sum4 = 0.0;
-        self.np_count = 0;
+        self.np = NpAccumulator::default();
+        self.np_last = None;
         self.history.clear();
         self.next_record_t = 0.0;
         self.power_hist.clear();
@@ -336,9 +366,11 @@ impl RideEngine {
             .clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
     }
 
-    /// Jump to a distance (allowed in Ready/Paused/Finished; ignored while Riding).
+    /// Jump to a distance before the ride starts (`Ready` only). During a pause the timer,
+    /// the recording and the statistics belong to the distance ridden so far, and after the
+    /// finish the summary is what gets saved: a jump would corrupt both.
     pub fn seek(&mut self, dist_m: f64) {
-        if self.state == RideState::Riding || !dist_m.is_finite() {
+        if self.state != RideState::Ready || !dist_m.is_finite() {
             return;
         }
         let total = finite_or(self.route.total_dist, 0.0).max(0.0);
@@ -348,9 +380,7 @@ impl RideEngine {
             .target_grade(self.dist)
             .clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
         // A ride that has not started yet replays from wherever it will start.
-        if self.state == RideState::Ready {
-            self.align_ghost();
-        }
+        self.align_ghost();
     }
 
     /// Advance by `dt` seconds with the latest sensor values; returns the new snapshot.
@@ -358,6 +388,9 @@ impl RideEngine {
     /// sensor values still appear in the snapshot.
     pub fn step(&mut self, dt_s: f64, input: &SensorSample, unix_s: f64) -> RideSnapshot {
         self.live = sanitize_sample(input);
+        if unix_s.is_finite() {
+            self.last_unix = self.last_unix.max(unix_s);
+        }
         let dt = if dt_s.is_finite() {
             dt_s.clamp(0.0, MAX_STEP_S)
         } else {
@@ -369,16 +402,18 @@ impl RideEngine {
         if self.state == RideState::Riding && dt > 0.0 {
             let total = finite_or(self.route.total_dist, 0.0).max(0.0);
             let mut left = dt;
-            while left > 1e-9 {
-                let h = left.min(SUBSTEP_S);
+            while left > 1e-9 && self.dist < total {
+                let mut h = left.min(SUBSTEP_S);
                 let grade = self.route.locate(self.dist).grade;
                 let power = self.live.power_w.unwrap_or(0.0).max(0.0);
                 let next = if self.rider.use_trainer_speed {
-                    finite_or(self.live.speed_ms.unwrap_or(self.speed), self.speed)
-                        .clamp(0.0, MAX_SPEED_MS)
+                    finite_or(self.live.speed_ms.unwrap_or(0.0), 0.0).clamp(0.0, MAX_SPEED_MS)
                 } else {
                     physics::step_speed(self.speed, power, grade, &self.params, h)
                 };
+                if next > 0.0 {
+                    h = h.min((total - self.dist) / next);
+                }
                 self.speed = next;
                 let before_dist = self.dist;
                 let before_elapsed = self.elapsed;
@@ -391,10 +426,18 @@ impl RideEngine {
                 self.accumulate(h, power);
                 left -= h;
             }
-            self.update_sim_grade(dt);
-            self.record(unix_s);
-            if total > 0.0 && self.dist >= total - 1e-9 {
+            self.update_sim_grade(dt - left);
+            let arrived = total > 0.0 && self.dist >= total - 1e-9;
+            if arrived {
                 self.dist = total;
+            }
+            // The finish line is always the last recorded point, whatever the second.
+            if arrived && unix_s.is_finite() {
+                self.last_unix = (unix_s - left)
+                    .max(self.history.last().map_or(self.started_unix, |p| p.unix_s));
+            }
+            self.record(self.last_unix, arrived);
+            if arrived {
                 self.speed = 0.0;
                 self.state = RideState::Finished;
             }
@@ -433,11 +476,7 @@ impl RideEngine {
             ascent_done,
             descent_done: self.cum_at(&self.cum_down, self.dist),
             ascent_left: (finite_or(self.route.ascent, 0.0) - ascent_done).max(0.0),
-            avg_speed_ms: if self.elapsed > 1e-9 {
-                self.dist / self.elapsed
-            } else {
-                0.0
-            },
+            avg_speed_ms: self.avg_speed(),
             max_speed_ms: self.max_speed,
             avg_power_w: self.avg_power(),
             max_power_w: self.power_max,
@@ -510,13 +549,12 @@ impl RideEngine {
             route_id: self.route.id.clone(),
             started_unix_s: self.started_unix,
             elapsed_s: self.elapsed,
-            dist: self.dist,
-            ascent: self.cum_at(&self.cum_up, self.dist),
-            avg_speed_ms: if self.elapsed > 1e-9 {
-                self.dist / self.elapsed
-            } else {
-                0.0
-            },
+            // What was ridden, not the route position: a ride may start with a seek.
+            dist: self.ridden(),
+            ascent: (self.cum_at(&self.cum_up, self.dist)
+                - self.cum_at(&self.cum_up, self.start_dist))
+            .max(0.0),
+            avg_speed_ms: self.avg_speed(),
             max_speed_ms: self.max_speed,
             avg_power_w: avg_power,
             max_power_w: self.power_max,
@@ -578,6 +616,19 @@ impl RideEngine {
         let _ = power;
     }
 
+    /// Metres ridden since the start (the route position minus where the ride started).
+    fn ridden(&self) -> f64 {
+        (self.dist - self.start_dist).max(0.0)
+    }
+
+    fn avg_speed(&self) -> f64 {
+        if self.elapsed > 1e-9 {
+            self.ridden() / self.elapsed
+        } else {
+            0.0
+        }
+    }
+
     fn avg_power(&self) -> Option<f64> {
         if self.power_time > 1e-9 {
             Some(self.power_integral / self.power_time)
@@ -587,15 +638,7 @@ impl RideEngine {
     }
 
     fn normalized_power(&self) -> Option<f64> {
-        if self.np_count == 0 {
-            return None;
-        }
-        let mean4 = self.np_sum4 / self.np_count as f64;
-        if mean4 > 0.0 {
-            Some(mean4.powf(0.25))
-        } else {
-            Some(0.0)
-        }
+        self.np.value()
     }
 
     /// Time-weighted average of the samples inside the last 3 s of engine time.
@@ -657,12 +700,22 @@ impl RideEngine {
         }
     }
 
-    /// Writes the 1 Hz record (and feeds normalised power). Called at most once per call.
-    fn record(&mut self, unix_s: f64) {
+    /// Writes the 1 Hz record (and feeds normalised power). Called at most once per call;
+    /// `last` writes the final point of the ride whatever the second (unless the previous point
+    /// is already at this very time).
+    fn record(&mut self, unix_s: f64, last: bool) {
         if self.state != RideState::Riding {
             return;
         }
-        if self.elapsed + 1e-9 < self.next_record_t {
+        if last {
+            if self
+                .history
+                .last()
+                .is_some_and(|p| (p.t - self.elapsed).abs() < 1e-9)
+            {
+                return;
+            }
+        } else if self.elapsed + 1e-9 < self.next_record_t {
             return;
         }
         let pos = self.route.locate(self.dist);
@@ -679,21 +732,42 @@ impl RideEngine {
             hr_bpm: self.live.hr_bpm,
             grade: pos.grade,
         });
-        if let Some(p) = self.live.power_w.filter(|v| v.is_finite()) {
-            self.np_window.push_back(p.max(0.0));
-            while self.np_window.len() > 30 {
-                self.np_window.pop_front();
-            }
-            if !self.np_window.is_empty() {
-                let mean = self.np_window.iter().sum::<f64>() / self.np_window.len() as f64;
-                self.np_sum4 += mean.powi(4);
-                self.np_count += 1;
-            }
-        }
+        self.feed_np();
         self.next_record_t += 1.0;
         if self.next_record_t <= self.elapsed {
             self.next_record_t = self.elapsed + 1.0;
         }
+    }
+
+    /// Feeds normalised power one 1 s slot per second of timer time, the way
+    /// `power_curve::dense_power` turns a stored recording into slots: the seconds skipped by a
+    /// long step hold the last value (up to `MAX_SAMPLE_GAP_S`, else 0 W), and a second without
+    /// a power value counts as 0 W.
+    fn feed_np(&mut self) {
+        let slot = (self.elapsed.max(0.0) + 1e-9).floor() as u64;
+        let watts = self
+            .live
+            .power_w
+            .filter(|v| v.is_finite())
+            .map(|v| v.max(0.0));
+        if let Some((last_slot, last_watts)) = self.np_last {
+            if slot < last_slot {
+                return;
+            }
+            let gap = slot - last_slot;
+            if gap > 0 {
+                self.np.push(last_watts);
+                let hold = if gap as f64 <= MAX_SAMPLE_GAP_S {
+                    last_watts
+                } else {
+                    None
+                };
+                for _ in 1..gap.min(MAX_STEP_S as u64 + 1) {
+                    self.np.push(hold);
+                }
+            }
+        }
+        self.np_last = Some((slot, watts));
     }
 
     fn cum_at(&self, cum: &[f64], d: f64) -> f64 {
@@ -934,7 +1008,12 @@ mod tests {
         }
         let paused = e.snapshot();
         assert_eq!(paused.dist, moving);
-        assert!(paused.elapsed_s > 0.0);
+        assert_eq!(paused.speed_ms, 0.0, "a paused rider stands still");
+        assert!(
+            (paused.elapsed_s - 2.0).abs() < 1e-9,
+            "{}",
+            paused.elapsed_s
+        );
         e.resume();
         e.step(0.1, &sample(250.0), 0.0);
         assert!(e.snapshot().dist > moving);
@@ -987,7 +1066,16 @@ mod tests {
         e.seek(4000.0);
         assert_eq!(e.snapshot().dist, before);
 
+        // A pause or the finish does not allow it either: the timer, the recording and the
+        // saved summary belong to what was ridden.
         e.pause();
+        e.seek(4000.0);
+        assert_eq!(e.snapshot().dist, before);
+        e.finish();
+        e.seek(4000.0);
+        assert_eq!(e.snapshot().dist, before);
+
+        e.reset();
         e.seek(4000.0);
         assert!((e.snapshot().dist - 4000.0).abs() < 1e-6);
         assert!((e.snapshot().remaining_dist - 1000.0).abs() < 1e-6);
@@ -998,22 +1086,124 @@ mod tests {
     }
 
     #[test]
+    fn a_ride_started_after_a_seek_counts_only_what_was_ridden() {
+        let mut e = engine(&[(5000.0, 2.0)]);
+        e.seek(4000.0);
+        e.start(1_700_000_000.0);
+        let first = e.step(0.1, &sample(250.0), 1_700_000_000.1);
+        assert!(first.avg_speed_ms < 30.0, "avg {}", first.avg_speed_ms);
+        assert!(
+            first.dist >= 4000.0,
+            "the snapshot keeps the route position"
+        );
+        for _ in 0..3000 {
+            if e.state() == RideState::Finished {
+                break;
+            }
+            e.step(0.5, &sample(250.0), 1_700_000_000.0);
+        }
+        let s = e.summary();
+        assert!((s.dist - 1000.0).abs() < 1.0, "ridden {}", s.dist);
+        assert!(s.avg_speed_ms < 30.0, "avg {}", s.avg_speed_ms);
+        assert!((s.ascent - 20.0).abs() < 2.0, "ascent {}", s.ascent);
+    }
+
+    #[test]
+    fn the_recording_ends_on_the_finish_line() {
+        for speed_w in [180.0, 233.0, 310.0] {
+            let mut e = engine(&[(1234.5, 0.0)]);
+            e.start(1_700_000_000.0);
+            for _ in 0..10_000 {
+                if e.state() == RideState::Finished {
+                    break;
+                }
+                e.step(0.1, &sample(speed_w), 1_700_000_000.0);
+            }
+            let total = e.snapshot().dist;
+            assert_eq!(e.state(), RideState::Finished);
+            let last = e.history().last().unwrap();
+            assert!(
+                (last.dist - total).abs() < 1e-6,
+                "last point at {}",
+                last.dist
+            );
+            assert!((last.t - e.summary().elapsed_s).abs() < 1e-9);
+        }
+        // a manual finish also writes where the ride stopped
+        let mut e = engine(&[(5000.0, 0.0)]);
+        e.start(0.0);
+        for _ in 0..25 {
+            e.step(0.1, &sample(200.0), 0.0);
+        }
+        e.finish();
+        let last = e.history().last().unwrap();
+        assert!((last.t - 2.5).abs() < 1e-6, "last point at {} s", last.t);
+    }
+
+    #[test]
+    fn a_power_dropout_counts_as_zero_watts_in_np() {
+        let mut steady = engine(&[(50_000.0, 0.0)]);
+        let mut gappy = engine(&[(50_000.0, 0.0)]);
+        // the app steps the engine before the start too, so the first point has the live watts
+        steady.step(0.1, &sample(200.0), 0.0);
+        gappy.step(0.1, &sample(200.0), 0.0);
+        steady.start(0.0);
+        gappy.start(0.0);
+        for i in 0..1200 {
+            steady.step(0.1, &sample(200.0), 0.0);
+            let sample = if (300..600).contains(&i) {
+                SensorSample::default()
+            } else {
+                sample(200.0)
+            };
+            gappy.step(0.1, &sample, 0.0);
+        }
+        let np_steady = steady.summary().normalized_power_w.unwrap();
+        let np_gappy = gappy.summary().normalized_power_w.unwrap();
+        assert!((np_steady - 200.0).abs() < 1e-6);
+        assert!(np_gappy < 190.0, "np {np_gappy}");
+    }
+
+    #[test]
+    fn a_workout_cannot_be_swapped_during_a_pause() {
+        let mut e = engine(&[(5000.0, 0.0)]);
+        e.start(0.0);
+        e.pause();
+        let workout = ride_model::WorkoutLibrary::embedded()
+            .all()
+            .first()
+            .cloned()
+            .map(Arc::new);
+        e.set_workout(workout);
+        assert!(e.workout().is_none());
+    }
+
+    #[test]
     fn trainer_sim_is_quantised_and_slew_limited() {
+        // Flat first, then a 12 % wall: the target jumps, the trainer grade has to ramp.
         let mut e = RideEngine::new(
-            Arc::new(straight_route(&[(2000.0, 12.0)], 100.0)),
+            Arc::new(straight_route(&[(100.0, 0.0), (2000.0, 12.0)], 100.0)),
             RiderSettings::default(),
         );
         e.start(0.0);
         let mut prev = e.trainer_sim().grade_pct;
-        for _ in 0..300 {
+        assert!(prev.abs() < 1e-9, "flat at the start, got {prev}");
+        let mut limited_steps = 0;
+        for _ in 0..600 {
             e.step(0.1, &sample(300.0), 0.0);
             let sim = e.trainer_sim();
             assert!(sim.grade_pct.abs() <= 20.0 + 1e-9);
             assert!((sim.grade_pct - (sim.grade_pct * 100.0).round() / 100.0).abs() < 1e-9);
-            assert!((sim.grade_pct - prev).abs() <= 2.0 * 0.1 + 0.011, "slew");
+            let change = (sim.grade_pct - prev).abs();
+            assert!(change <= 2.0 * 0.1 + 0.011, "slew {change}");
+            if change > 0.15 {
+                limited_steps += 1;
+            }
             prev = sim.grade_pct;
         }
-        assert!(prev > 5.0, "grade should have climbed, got {prev}");
+        assert!(prev > 11.0, "grade should have climbed, got {prev}");
+        // 12 % at 0.2 %/step: the ramp takes dozens of capped steps, not one jump
+        assert!(limited_steps >= 40, "{limited_steps} capped steps");
     }
 
     #[test]

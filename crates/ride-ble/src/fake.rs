@@ -4,6 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use futures::stream::{BoxStream, StreamExt};
 use tokio::sync::mpsc;
@@ -30,6 +31,16 @@ struct FakeState {
     connect_failures: u32,
     connects: u32,
     disconnects: u32,
+    /// Calls of `disconnect`, whether or not a link was up.
+    disconnect_calls: u32,
+    /// `disconnect` takes this long (a link that is slow to be handed back).
+    disconnect_delay: Duration,
+    /// `connect` never answers (Android's direct connect can pend for tens of seconds).
+    hang_connects: bool,
+    /// `connect` takes this long before it answers (a slow Android connect).
+    connect_delay: Duration,
+    /// Link operations in the order they happened: `connect`, `disconnect:begin`, `disconnect:end`.
+    ops: Vec<&'static str>,
     /// Answer Control Point writes automatically with these result codes (default: success).
     auto_respond: bool,
     cp_results: HashMap<u8, u8>,
@@ -145,6 +156,29 @@ impl FakePeripheral {
             // inclination range -10.0 .. +20.0 %, step 0.1
             st.reads
                 .insert(sig_uuid(0x2AD5), vec![0x9C, 0xFF, 0xC8, 0x00, 0x01, 0x00]);
+        }
+        p
+    }
+
+    /// A Zwift Hub: an FTMS trainer that also advertises and exposes the Zwift service (with its
+    /// controller byte), so the Shifter role is reachable from the advertisement alone.
+    pub fn zwift_hub(id: &str, name: &str) -> Self {
+        let p = Self::trainer(id, name);
+        {
+            let mut st = p.st.lock().unwrap();
+            for (uuid, props) in [
+                (zwift::MEASUREMENT_UUID, NOTIFY),
+                (zwift::CONTROL_UUID, WRITE),
+                (zwift::RESPONSE_UUID, NOTIFY),
+            ] {
+                st.chars.push(GattChar {
+                    service: zwift::SERVICE_UUID,
+                    uuid,
+                    props,
+                });
+            }
+            st.adv.services.push(zwift::SERVICE_UUID);
+            st.adv.zwift_controller = Some(9);
         }
         p
     }
@@ -287,6 +321,31 @@ impl FakePeripheral {
         self.st.lock().unwrap().connect_failures = n;
     }
 
+    /// Calls of `disconnect` so far, whether or not a link was up.
+    pub fn disconnect_calls(&self) -> u32 {
+        self.st.lock().unwrap().disconnect_calls
+    }
+
+    /// Make `disconnect` take `delay`.
+    pub fn set_disconnect_delay(&self, delay: Duration) {
+        self.st.lock().unwrap().disconnect_delay = delay;
+    }
+
+    /// Every `connect` takes this long.
+    pub fn set_connect_delay(&self, delay: Duration) {
+        self.st.lock().unwrap().connect_delay = delay;
+    }
+
+    /// While set, `connect` never answers.
+    pub fn hang_connects(&self, hang: bool) {
+        self.st.lock().unwrap().hang_connects = hang;
+    }
+
+    /// The link operations in order: `connect`, `disconnect:begin`, `disconnect:end`.
+    pub fn ops(&self) -> Vec<&'static str> {
+        self.st.lock().unwrap().ops.clone()
+    }
+
     /// Simulate the link dropping: the notification stream ends and `is_connected` turns false.
     pub fn drop_link(&self) {
         let mut st = self.st.lock().unwrap();
@@ -321,8 +380,19 @@ impl GattPeripheral for FakePeripheral {
     }
 
     async fn connect(&self) -> Result<(), BleError> {
+        let (hang, delay) = {
+            let mut st = self.st.lock().unwrap();
+            st.connects += 1;
+            st.ops.push("connect");
+            (st.hang_connects, st.connect_delay)
+        };
+        if hang {
+            std::future::pending::<()>().await;
+        }
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
         let mut st = self.st.lock().unwrap();
-        st.connects += 1;
         if st.connect_failures > 0 {
             st.connect_failures -= 1;
             return Err(BleError::Gatt(
@@ -334,12 +404,22 @@ impl GattPeripheral for FakePeripheral {
     }
 
     async fn disconnect(&self) -> Result<(), BleError> {
+        let delay = {
+            let mut st = self.st.lock().unwrap();
+            st.disconnect_calls += 1;
+            st.ops.push("disconnect:begin");
+            st.disconnect_delay
+        };
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
         let mut st = self.st.lock().unwrap();
         if st.connected {
             st.disconnects += 1;
         }
         st.connected = false;
         st.notif_tx = None;
+        st.ops.push("disconnect:end");
         Ok(())
     }
 

@@ -91,12 +91,30 @@ fn local_data_base(platform: Platform, get: &dyn Fn(&str) -> Option<OsString>) -
 /// `<local app data>/bike-osm-ride` (`%LOCALAPPDATA%/bike-osm-ride` on Windows,
 /// `~/Library/Application Support/bike-osm-ride` on macOS, `$XDG_DATA_HOME/bike-osm-ride` or
 /// `~/.local/share/bike-osm-ride` on Linux).
+///
+/// A relative `RIDE_DATA_DIR` (a portable install) is taken relative to the folder of the
+/// program, not to the working directory: started from another folder, the app must still find
+/// its rides. Without any home variable the temporary folder is the last resort, which the
+/// system may clean, so it is reported on stderr.
 pub fn data_dir() -> PathBuf {
     if let Some(v) = std::env::var_os("RIDE_DATA_DIR").filter(|v| !v.is_empty()) {
-        return PathBuf::from(v);
+        let dir = PathBuf::from(v);
+        if dir.is_absolute() {
+            return dir;
+        }
+        let base = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf))
+            .or_else(|| std::env::current_dir().ok());
+        return base.map_or(dir.clone(), |base| base.join(&dir));
     }
     local_data_base(Platform::CURRENT, &|k| std::env::var_os(k))
-        .unwrap_or_else(std::env::temp_dir)
+        .unwrap_or_else(|| {
+            eprintln!(
+                "[ride-route] no home folder in the environment: data goes to the temporary folder"
+            );
+            std::env::temp_dir()
+        })
         .join(APP_DIR)
 }
 
@@ -129,18 +147,115 @@ pub(crate) fn read_limited(path: &Path) -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
 
+/// Writes `bytes` to `path` so that a crash or a power cut leaves either the old or the new
+/// content, never an empty or half-written file: a temporary file is written and flushed to the
+/// disk (`sync_all`) before it is renamed over the target, and on Unix the folder is synced too
+/// so the rename itself survives.
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    use std::io::Write as _;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let name = path
         .file_name()
         .map_or_else(|| "data".to_string(), |n| n.to_string_lossy().into_owned());
-    let tmp = path.with_file_name(format!("{name}.{}.tmp", std::process::id()));
-    std::fs::write(&tmp, bytes)?;
+    let tmp = path.with_file_name(format!("{name}.{}{TMP_SUFFIX}", std::process::id()));
+    let written = std::fs::File::create(&tmp).and_then(|mut file| {
+        file.write_all(bytes)?;
+        file.sync_all()
+    });
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
     std::fs::rename(&tmp, path).inspect_err(|_| {
         let _ = std::fs::remove_file(&tmp);
-    })
+    })?;
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = std::fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
+    Ok(())
+}
+
+/// Suffix of the temporary files of [`write_atomic`].
+const TMP_SUFFIX: &str = ".tmp";
+
+/// Removes the temporary files a crashed `write_atomic` left behind in `dir` and the folders
+/// below it, two levels deep like `rides/<route id>/` (`<name>.<pid>.tmp`). The files of this
+/// process are left alone, and so is any file younger than [`STALE_TEMP_AFTER`]: a second
+/// instance on the same data folder may be between the `create` and the `rename` of its own write.
+pub fn remove_stale_temp_files(dir: &Path) -> usize {
+    remove_temp_files_older_than(dir, STALE_TEMP_AFTER)
+}
+
+/// A temporary file untouched for this long belongs to a write that no longer runs (a real
+/// `write_atomic` takes milliseconds).
+const STALE_TEMP_AFTER: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+fn remove_temp_files_older_than(dir: &Path, min_age: std::time::Duration) -> usize {
+    let own = format!(".{}{TMP_SUFFIX}", std::process::id());
+    let mut removed = 0;
+    let mut folders = vec![(dir.to_path_buf(), 0)];
+    while let Some((folder, depth)) = folders.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if depth < 2 && entry.path().is_dir() {
+                folders.push((entry.path(), depth + 1));
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let stale = name.ends_with(TMP_SUFFIX)
+                && !name.ends_with(&own)
+                && name
+                    .trim_end_matches(TMP_SUFFIX)
+                    .rsplit('.')
+                    .next()
+                    .is_some_and(|pid| !pid.is_empty() && pid.chars().all(|c| c.is_ascii_digit()));
+            let old_enough = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                .is_some_and(|age| age >= min_age);
+            if stale
+                && old_enough
+                && entry.path().is_file()
+                && std::fs::remove_file(entry.path()).is_ok()
+            {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
+
+/// A stored or restored route the engine, the map and the profile can work with: at least two
+/// points on the globe, distances that never decrease (the lookups are binary searches) and a
+/// total that is the last point's distance.
+pub(crate) fn usable_route(route: &Route) -> bool {
+    let points_ok = route.points.iter().all(|p| {
+        p.lat.is_finite()
+            && p.lon.is_finite()
+            && (-90.0..=90.0).contains(&p.lat)
+            && (-180.0..=180.0).contains(&p.lon)
+            && p.dist.is_finite()
+    });
+    let monotone = route.points.windows(2).all(|w| w[1].dist >= w[0].dist);
+    let total_matches = route
+        .points
+        .last()
+        .is_some_and(|p| (p.dist - route.total_dist).abs() <= 1.0);
+    route.points.len() >= 2
+        && route.total_dist.is_finite()
+        && route.total_dist > 0.0
+        && points_ok
+        && monotone
+        && total_matches
 }
 
 /// Replace values a hand-edited or corrupt settings file could use to break the physics
@@ -202,11 +317,29 @@ impl Store {
     }
 
     /// Stored settings, or the defaults when missing/unreadable (never fails).
+    ///
+    /// A file that is there but cannot be read as settings (cut short by a power failure,
+    /// edited by hand) is moved aside to `settings.corrupt-<unix seconds>.json` first: the
+    /// next save writes the defaults, and the old values must not be lost with it.
     pub fn load_settings(&self) -> Settings {
         let _g = lock();
-        read_limited(&self.settings_path())
-            .and_then(|b| serde_json::from_slice::<Settings>(&b).ok())
-            .map_or_else(Settings::default, sanitize)
+        let path = self.settings_path();
+        match read_limited(&path).and_then(|b| serde_json::from_slice::<Settings>(&b).ok()) {
+            Some(settings) => sanitize(settings),
+            None => {
+                if path.is_file() {
+                    let aside = path
+                        .with_file_name(format!("settings.corrupt-{:.0}.json", now_unix().floor()));
+                    if std::fs::rename(&path, &aside).is_ok() {
+                        eprintln!(
+                            "[ride-route] unreadable settings moved to {}",
+                            aside.display()
+                        );
+                    }
+                }
+                Settings::default()
+            }
+        }
     }
 
     pub fn save_settings(&self, settings: &Settings) -> io::Result<()> {
@@ -264,23 +397,42 @@ impl Store {
             },
         );
         index.sort_by(|a, b| b.last_opened_unix.total_cmp(&a.last_opened_unix));
-        for old in index.split_off(index.len().min(MAX_RECENT)) {
+        let mut dropped = index.split_off(index.len().min(MAX_RECENT));
+        // The route just saved is the one being opened: an older "opened" stamp (a clock set
+        // back, a restored backup) must not push it out of its own list. The oldest other entry
+        // goes instead.
+        if let Some(pos) = dropped.iter().position(|r| r.id == route.id) {
+            let fresh = dropped.remove(pos);
+            if let Some(last) = index.pop() {
+                dropped.push(last);
+            }
+            index.push(fresh);
+        }
+        // The index first: if it cannot be written, no route file has been deleted yet.
+        self.write_index(&index)?;
+        for old in dropped {
             if let Some(p) = self.route_path(&old.id) {
+                // best effort: a file left behind is only disk space, the index no longer
+                // lists it
                 let _ = std::fs::remove_file(p);
             }
         }
-        self.write_index(&index)
+        Ok(())
     }
 
     /// The stored route, if present and readable.
     pub fn load_recent(&self, id: &str) -> Option<Route> {
-        let path = self.route_path(id)?;
         let _g = lock();
+        self.load_recent_unlocked(id)
+    }
+
+    /// [`Store::load_recent`] for a caller that already holds the store lock.
+    pub(crate) fn load_recent_unlocked(&self, id: &str) -> Option<Route> {
+        let path = self.route_path(id)?;
         let bytes = read_limited(&path)?;
         let route: Route = serde_json::from_slice(&bytes).ok()?;
         // A hand-edited / damaged file must not hand the engine an unusable route.
-        (route.points.len() >= 2 && route.total_dist.is_finite() && route.total_dist > 0.0)
-            .then_some(route)
+        usable_route(&route).then_some(route)
     }
 
     /// Remove a route and its index entry. Missing entries are not an error.
@@ -309,7 +461,8 @@ impl Store {
 
     /// Workouts imported from files, by name. A missing directory is empty, a corrupt file is
     /// skipped; an entry that is not an import (its id does not carry the import prefix) is
-    /// ignored, so a hand-dropped file cannot shadow a built-in workout.
+    /// ignored, so a hand-dropped file cannot shadow a built-in workout, and so is a file not
+    /// named after its workout's id (`<id>.json`): it could not be deleted from the app.
     pub fn list_workouts(&self) -> Vec<Workout> {
         let dir = self.dir.join(WORKOUTS_DIR);
         let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -328,7 +481,11 @@ impl Store {
             let Ok(workout) = serde_json::from_slice::<Workout>(&bytes) else {
                 continue;
             };
-            if workout.is_imported() && !workout.steps.is_empty() {
+            let named_after_id = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .is_some_and(|stem| stem == workout.id);
+            if workout.is_imported() && !workout.steps.is_empty() && named_after_id {
                 out.push(workout);
             }
         }
@@ -522,6 +679,86 @@ mod tests {
     }
 
     #[test]
+    fn a_route_saved_with_an_old_stamp_stays_in_its_own_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        for i in 0..MAX_RECENT {
+            store
+                .save_recent_at(&route(&format!("r{i:03}"), "x"), 100.0 + i as f64)
+                .unwrap();
+        }
+        store.save_recent_at(&route("fresh", "F"), 1.0).unwrap();
+        assert!(store.load_recent("fresh").is_some());
+        assert!(store.list_recent().iter().any(|r| r.id == "fresh"));
+        assert_eq!(store.list_recent().len(), MAX_RECENT);
+        assert!(
+            store.load_recent("r000").is_none(),
+            "the oldest other one went"
+        );
+    }
+
+    #[test]
+    fn unreadable_settings_are_kept_aside() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        std::fs::write(tmp.path().join("settings.json"), b"{ \"rider\": { cut").unwrap();
+        assert_eq!(store.load_settings(), Settings::default());
+        let aside: Vec<_> = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("settings.corrupt-")
+            })
+            .collect();
+        assert_eq!(aside.len(), 1);
+        assert_eq!(
+            std::fs::read(aside[0].path()).unwrap(),
+            b"{ \"rider\": { cut"
+        );
+    }
+
+    #[test]
+    fn stale_temp_files_are_removed_but_not_our_own() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("rides/r1")).unwrap();
+        std::fs::write(tmp.path().join("settings.json.123.tmp"), b"x").unwrap();
+        std::fs::write(tmp.path().join("rides/r1/index.json.456.tmp"), b"x").unwrap();
+        let own = format!("recent.json.{}.tmp", std::process::id());
+        std::fs::write(tmp.path().join(&own), b"x").unwrap();
+        std::fs::write(tmp.path().join("notes.tmp"), b"x").unwrap();
+        // fresh files may belong to a write that is running right now in another instance
+        assert_eq!(remove_stale_temp_files(tmp.path()), 0);
+        assert_eq!(
+            remove_temp_files_older_than(tmp.path(), std::time::Duration::ZERO),
+            2
+        );
+        assert!(tmp.path().join(&own).exists());
+        assert!(tmp.path().join("notes.tmp").exists());
+    }
+
+    #[test]
+    fn a_workout_file_not_named_after_its_id_is_not_listed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let workout = ride_sim::workout_import::from_bytes(
+            br#"<workout_file><name>W</name><workout><SteadyState Duration="120" Power="0.6"/></workout></workout_file>"#,
+            "w.zwo",
+        )
+        .unwrap();
+        store.save_workout(&workout).unwrap();
+        assert_eq!(store.list_workouts().len(), 1);
+        let dir = tmp.path().join(WORKOUTS_DIR);
+        std::fs::rename(
+            dir.join(format!("{}.json", workout.id)),
+            dir.join("copy.json"),
+        )
+        .unwrap();
+        assert!(store.list_workouts().is_empty());
+    }
+
+    #[test]
     fn delete_is_idempotent_and_updates_the_index() {
         let tmp = tempfile::tempdir().unwrap();
         let store = Store::at(tmp.path());
@@ -608,6 +845,22 @@ mod tests {
             Some(v) => std::env::set_var("RIDE_DATA_DIR", v),
             None => std::env::remove_var("RIDE_DATA_DIR"),
         }
+    }
+
+    #[test]
+    fn a_relative_override_is_taken_next_to_the_program() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let previous = std::env::var_os("RIDE_DATA_DIR");
+        std::env::set_var("RIDE_DATA_DIR", "relative/data");
+        let dir = data_dir();
+        match previous {
+            Some(v) => std::env::set_var("RIDE_DATA_DIR", v),
+            None => std::env::remove_var("RIDE_DATA_DIR"),
+        }
+        assert!(dir.is_absolute(), "{}", dir.display());
+        assert!(dir.ends_with("relative/data"));
+        let exe_dir = std::env::current_exe().unwrap();
+        assert!(dir.starts_with(exe_dir.parent().unwrap()));
     }
 
     #[test]

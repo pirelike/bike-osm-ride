@@ -99,14 +99,18 @@ A GPX/TCX recorded by another app is **not** a route: it becomes a ride of a sto
    matched distance (so all rides of a route share one profile); speed is the slope of the distance over ±2 s; heart rate,
    cadence and power are the nearest measurement within 3 s.
 4. **Watts.** With no power in the file `ride_sim::estimate` fills them in ([`SIMULATION.md`](SIMULATION.md) §7a) and the
-   record gets `power_estimated = true` and the `EstimateParams` used. `import::reestimate` redoes a *stored* estimated ride
-   with other parameters and refuses a ride with measured watts.
-5. **Store** (`rides::Store::save_ride`): `source = Imported`. A ride with the same start time (stem) is refused by the
+   record gets `power_estimated = true` and the `EstimateParams` used. A file with watts for less than half of the ride
+   keeps those seconds and only the gaps are estimated; `RideRecord.measured_power` remembers them as index ranges
+   `[from, to)` into `points`. `import::reestimate` redoes a *stored* estimated ride with other parameters, leaves
+   the `measured_power` seconds as they were and refuses a ride with fully measured watts. (A partly estimated ride
+   imported before `measured_power` existed has no such ranges and is redone completely.)
+5. **Store** (`rides::Store::save_ride`): `source = Imported`. `Store::replace_ride` rewrites a stored ride under its own
+   stem (the estimate redone); `save_ride` would file different bytes under the next free second. A ride with the same start time (stem) is refused by the
    caller (`Store::has_ride`) instead of overwritten; `Store::delete_ride` removes a ride and its index line;
    `Store::list_all_rides` lists every route that has rides (found by folder, so a route removed from the recents still
    shows). `ride_sim::segments::{best_times, choose_ghost}` skip imported rides like simulated ones.
 
-Record additions (all `#[serde(default)]`, version stays 1): `RideRecord.{source, power_estimated, estimate}`,
+Record additions (all `#[serde(default)]`, version stays 1): `RideRecord.{source, power_estimated, estimate, measured_power}`,
 `RideMeta.{source, power_estimated, avg_power_w, avg_hr, route_name}`, and for the power page
 `RideMeta.{tss, mmp}`: the TSS and the best average power per window of `ride_sim::power_curve::DURATIONS` (watts as `f32`,
 `null` = no value). `mmp: None` means "not computed yet" (an index from an older version; filled in from the record the next
@@ -126,7 +130,7 @@ Android. `RIDE_DATA_DIR` overrides it everywhere (tests, portable installs, scre
 | `routes/<id>.json` | the processed `Route` | cache so a reopened route is not rebuilt |
 | `rides/<route id>/<start>.json`, `index.json` | the ride log (recorded and imported rides) | never touched by the recents housekeeping; [`SIMULATION.md`](SIMULATION.md) §6, §2a above |
 | `workouts/<id>.json` | imported workouts | one file each |
-| `tiles/<dark\|light\|osm>/<z>/<x>/<y>.png` | map tile cache | 30 days; no bulk prefetching (OSM tile policy) |
+| `tiles/<dark\|light\|osm>/<z>/<x>/<y>.png` | map tile cache | fresh for 30 days; stale offline fallback up to 90 days / 512 MiB total, pruned at startup and hourly during use; no bulk prefetching (OSM tile policy) |
 | `streetview/<route id>.json` | panorama ids per 25 m bucket | 30 days; "no panorama" 7 days; ids, our own coordinates, heading and a timestamp, never imagery |
 | `streetview/img/<route id>/` | downloaded images and `manifest.json` | only after an explicit download; shown for 30 days |
 | `ble.log`, `ble.log.1` | BLE hex log | always on; rotated at start-up beyond 8 MB |
@@ -135,7 +139,11 @@ Android. `RIDE_DATA_DIR` overrides it everywhere (tests, portable installs, scre
 | `webview/` | the main WebView's profile | |
 | `firefox-profile/` | the browser panel's own Firefox profile | Windows |
 
-**Rules every writer follows** (`store.rs`): writes are atomic (temp file in the same folder, then rename); reads
+**Rules every writer follows** (`store.rs`): writes are atomic (temp file in the same folder, then rename; the start-up
+cleanup `remove_stale_temp_files` removes only `*.<pid>.tmp` files older than 10 minutes, so a second instance that is
+between the create and the rename of its own write keeps its file); a ride record is *usable* (`rides::usable_record`)
+when it has the one known `version` and a recording, and the ride log, the index repair and the backup restore all ask
+that one question; a GPX `<ele>` outside -2000…20000 m is dropped like an unparsable one; reads
 never panic: a missing, corrupt or foreign file yields defaults or `None`; files over 64 MB are refused; ids that
 become file names must be 1 to 64 characters of `[A-Za-z0-9_-]` (a path-traversal test guards this); one global
 lock serialises access. When `RIDE_DATA_DIR` and the platform variables are all unusable the folder falls back to

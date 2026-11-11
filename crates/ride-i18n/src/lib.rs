@@ -400,7 +400,7 @@ fn interpolate(template: &str, args: &[(&str, &str)]) -> String {
     out
 }
 
-/// Whether `key` exists in `lang` (or, with `fallback`, in Hungarian).
+/// Whether `key` exists in the catalog of `lang` itself (no fallback to the source language).
 pub fn has_in(lang: Lang, key: &str) -> bool {
     lookup(lang, key).is_some()
 }
@@ -418,12 +418,18 @@ pub fn catalog_codes() -> Vec<&'static str> {
 /// digits: `1234,5` in Hungarian, `1234.5` in English. The HUD's tabular numerals keep their dot
 /// through `ride_ui_kit::format`; this is for prose and labels.
 pub fn decimal(value: f64, decimals: usize) -> String {
+    if !value.is_finite() {
+        return "—".into();
+    }
     let text = format!("{value:.decimals$}");
     with_separator(text)
 }
 
 /// Like [`decimal`], but trailing zeros of the fraction are dropped: `75`, `9,5`, `0,004`.
 pub fn decimal_trimmed(value: f64, decimals: usize) -> String {
+    if !value.is_finite() {
+        return "—".into();
+    }
     let text = format!("{value:.decimals$}");
     let trimmed = if text.contains('.') {
         text.trim_end_matches('0').trim_end_matches('.').to_string()

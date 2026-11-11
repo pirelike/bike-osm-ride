@@ -176,7 +176,7 @@ impl Endpoints {
     /// the base is a loopback http(s) address: the key must never reach any other host.
     pub fn local(base: &str) -> Option<Endpoints> {
         let b = base.trim().trim_end_matches('/');
-        is_loopback_url(b).then(|| Endpoints {
+        (is_loopback_url(b) && !b.contains(['?', '#'])).then(|| Endpoints {
             api: b.to_string(),
             embed: b.to_string(),
             local: true,
@@ -225,7 +225,7 @@ impl Endpoints {
     }
 
     /// Embed iframe URL. Unusable panorama ids are replaced by a plain location lookup when
-    /// a fallback point exists (never put into the URL unvalidated).
+    /// a fallback point exists. Without either target, returns `about:blank` (no request).
     pub fn embed_url(&self, key: &ApiKey, target: &EmbedTarget, view: View) -> EmbedUrl {
         let v = view.normalized();
         let mut q = format!("key={}", pct_encode(key.expose()));
@@ -246,7 +246,7 @@ impl Endpoints {
                 q.push_str(&pct_encode(&latlng(*lat, *lng)));
                 q.push_str("&radius=50&source=outdoor");
             }
-            EmbedTarget::Pano { .. } => {}
+            EmbedTarget::Pano { .. } => return EmbedUrl("about:blank".into()),
             EmbedTarget::Location { lat, lng, radius_m } => {
                 q.push_str("&location=");
                 q.push_str(&pct_encode(&latlng(*lat, *lng)));
@@ -262,7 +262,8 @@ impl Endpoints {
 
     /// Street View Static API image URL (a square JPEG). Used only by the opt-in offline
     /// cache; the key is in the query string, so the result must never be logged or shown.
-    /// Unusable panorama ids fall back to a plain location lookup when one is known.
+    /// Unusable panorama ids fall back to a known location, else return an empty URL.
+    /// Network callers must reject that sentinel before making a request.
     pub fn static_url(
         &self,
         key: &ApiKey,
@@ -272,7 +273,7 @@ impl Endpoints {
     ) -> String {
         let v = view.normalized();
         let size = size_px.clamp(64, 640);
-        let mut q = format!("size={size}x{size}");
+        let mut q = format!("size={size}x{size}&return_error_code=true");
         match target {
             EmbedTarget::Pano { id, .. } if valid_pano_id(id) => {
                 q.push_str("&pano=");
@@ -286,7 +287,7 @@ impl Endpoints {
                 q.push_str(&pct_encode(&latlng(*lat, *lng)));
                 q.push_str("&radius=50&source=outdoor");
             }
-            EmbedTarget::Pano { .. } => {}
+            EmbedTarget::Pano { .. } => return String::new(),
             EmbedTarget::Location { lat, lng, radius_m } => {
                 q.push_str("&location=");
                 q.push_str(&pct_encode(&latlng(*lat, *lng)));
@@ -312,6 +313,47 @@ impl Default for Endpoints {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn invalid_targets_and_test_bases_fail_closed() {
+        use super::*;
+        for base in [
+            "http://127.0.0.1:9300?q=1",
+            "http://127.0.0.1:9300#fragment",
+        ] {
+            assert!(Endpoints::local(base).is_none());
+        }
+        for base in [
+            "http://127.0.0.2:9300",
+            "http://localhost.:9300",
+            "http://[::ffff:127.0.0.1]:9300",
+        ] {
+            assert!(!is_loopback_url(base));
+        }
+        for base in ["http://127.1:9300", "http://0x7f000001:9300"] {
+            assert!(is_loopback_url(base));
+        }
+        // WHATWG normalizes the default HTTPS port away; it is the same trusted origin.
+        assert!(Endpoints::google().trusts("https://maps.googleapis.com:443/maps/api/streetview"));
+        assert!(!Endpoints::google().trusts("https://maps.googleapis.com:444/maps/api/streetview"));
+        let key = ApiKey::new("TESTKEY").unwrap();
+        let target = EmbedTarget::Pano {
+            id: "!invalid".into(),
+            fallback: None,
+        };
+        let view = View {
+            heading: 0.0,
+            pitch: 0.0,
+            fov: 90.0,
+        };
+        assert_eq!(
+            Endpoints::google().embed_url(&key, &target, view).as_str(),
+            "about:blank"
+        );
+        assert!(Endpoints::google()
+            .static_url(&key, &target, view, 640)
+            .is_empty());
+    }
+
     use super::*;
 
     fn key() -> ApiKey {
@@ -524,7 +566,7 @@ mod tests {
         );
         assert_eq!(
             u,
-            "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=PANO-1\
+            "https://maps.googleapis.com/maps/api/streetview?size=640x640&return_error_code=true&pano=PANO-1\
              &heading=360&pitch=2&fov=90&key=AIzaSy-TEST_key.123"
         );
         // the size is clamped and a hostile id never reaches the URL
@@ -537,7 +579,9 @@ mod tests {
             v,
             4000,
         );
-        assert!(u.contains("size=640x640&location=47.500000%2C19.000000&radius=50"));
+        assert!(u.contains(
+            "size=640x640&return_error_code=true&location=47.500000%2C19.000000&radius=50"
+        ));
         assert!(!u.contains("pano="));
         // a location target keeps its radius
         let u = ep.static_url(
@@ -550,7 +594,9 @@ mod tests {
             v,
             128,
         );
-        assert!(u.contains("size=128x128&location=1.000000%2C2.000000&radius=60"));
+        assert!(u.contains(
+            "size=128x128&return_error_code=true&location=1.000000%2C2.000000&radius=60"
+        ));
         // loopback mode (tests) uses the same path on the mock
         let local = Endpoints::local("http://127.0.0.1:9300").expect("local");
         let u = local.static_url(

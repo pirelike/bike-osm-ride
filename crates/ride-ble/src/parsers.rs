@@ -13,7 +13,7 @@ use ftms::measurement::{
     MeasurementResistanceFormat, RawMeasurement,
 };
 use ftms::{decode_control_response, decode_features, decode_range, RangeKind, RangeOptions};
-use ride_i18n::t;
+use ride_i18n::{t, tf};
 
 use crate::merge::Field;
 use crate::vendor::cycling_ble as cble;
@@ -39,9 +39,10 @@ impl std::fmt::Display for ParseError {
         match self {
             ParseError::Truncated => f.write_str(t("ble.parsers.rovid_csomag")),
             ParseError::Trailing => f.write_str(t("ble.parsers.felesleges_bajtok_a_csomag_vegen")),
-            ParseError::Invalid(reason) => {
-                write!(f, "{}: {reason}", t("ble.parsers.ervenytelen_csomag_0"))
-            }
+            ParseError::Invalid(reason) => f.write_str(&tf(
+                "ble.parsers.ervenytelen_csomag_0",
+                &[("reason", reason)],
+            )),
         }
     }
 }
@@ -124,6 +125,19 @@ fn clean(m: &RawMeasurement) -> bool {
     !m.truncated && !m.trailing_bytes
 }
 
+/// The 16-bit resistance reading of a packet that would also fit as `uint8` resistance plus one
+/// unknown byte: only taken when what it gives is believable. A shifted layout turns 200 W into
+/// tens of thousands of (negative) watts.
+fn plausible_wide(m: &RawMeasurement) -> bool {
+    let value = |f: MeasurementField| {
+        (m.present & f.mask() != 0 && m.unavailable & f.mask() == 0)
+            .then(|| f64::from(m.values[f.index()]))
+    };
+    // The resistance itself may legitimately be anything an s16 holds; the power after it is
+    // what a shift garbles.
+    value(MeasurementField::Power).is_none_or(|w| (-500.0..=4_000.0).contains(&w))
+}
+
 /// Parse an Indoor Bike Data (0x2AD2) notification.
 ///
 /// The Resistance Level field is the one place where sources disagree: the Bluetooth SIG
@@ -156,7 +170,7 @@ pub fn parse_indoor_bike(bytes: &[u8]) -> Result<IndoorBike, ParseError> {
     let (m, width) = if clean(&m8) {
         (m8, narrow_width)
     } else {
-        let wide_pick = if has_resistance {
+        let wide_pick = if has_resistance && !m8.reserved_flags {
             let wide = MeasurementOptions {
                 resistance_format: MeasurementResistanceFormat::Signed16Tenths,
                 ..narrow
@@ -164,6 +178,7 @@ pub fn parse_indoor_bike(bytes: &[u8]) -> Result<IndoorBike, ParseError> {
             decode_measurement(MeasurementKind::IndoorBike, bytes, wide)
                 .ok()
                 .filter(clean)
+                .filter(plausible_wide)
                 .map(|m16| (m16, ResistanceWidth::S16))
         } else {
             None
@@ -420,6 +435,14 @@ pub fn parse_resistance_range(bytes: &[u8]) -> Option<(f64, f64)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reserved_flags_do_not_turn_unknown_tail_into_wide_resistance() {
+        let sample = super::parse_indoor_bike(&[0x61, 0x20, 0x19, 0xc8, 0, 5]).unwrap();
+        assert_eq!(sample.power_w, Some(200.0));
+        assert_eq!(sample.resistance, Some(25.0));
+        assert_eq!(sample.resistance_width, super::ResistanceWidth::U8);
+    }
+
     use super::*;
 
     #[test]
@@ -481,6 +504,12 @@ mod tests {
         // stays an error rather than shifting the fields after it
         assert_eq!(
             parse_indoor_bike(&[0x61, 0x00, 25, 0xC8, 0x00, 0x99, 0x99]),
+            Err(ParseError::Trailing)
+        );
+        // one tail byte fits the 16-bit layout exactly, but what it reads (-26 368 W) is not
+        // believable: the uint8 frame with an unknown byte is an error, not 0 W
+        assert_eq!(
+            parse_indoor_bike(&[0x61, 0x00, 25, 0xC8, 0x00, 0x99]),
             Err(ParseError::Trailing)
         );
         // a newer trainer sets reserved bit 13 and appends an unknown field: keep the known part

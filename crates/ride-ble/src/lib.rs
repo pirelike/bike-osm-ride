@@ -50,13 +50,15 @@ pub(crate) mod vendor {
 }
 
 #[cfg(test)]
+#[path = "android_init_tests.rs"]
+mod android_init_tests;
+#[cfg(test)]
 mod diff_tests;
 #[cfg(test)]
 mod fake;
 #[cfg(test)]
 mod hub_tests;
 
-pub use hexlog::default_hex_log_path;
 pub use hub::{sim_name, SIM_ID};
 
 /// Handle to the running backend. Drop `tx` (or send nothing more) to let it wind down.

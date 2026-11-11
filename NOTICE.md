@@ -77,8 +77,9 @@ file right before editing; do not reformat other sections).
   governed by the Google Maps Platform Terms of Service
   (<https://cloud.google.com/maps-platform/terms>) and the Street View policies
   (<https://developers.google.com/maps/documentation/streetview/policies>).
-- Street View imagery is never downloaded, stored or pre-fetched; only panorama IDs (which the
-  policies exempt from the caching restriction) are saved, per route, together with our own route
+- Street View imagery is downloaded only after an explicit offline-download request, using the
+  rider's own API key. Downloaded images are retained for at most 30 days (see `docs/STREETVIEW.md`).
+  Panorama IDs are saved per route, together with our own route
   coordinates, the heading and a timestamp (`<data dir>/streetview/<route id>.json`). The key is
   kept in the local `settings.json` only, is redacted from every `Debug` output and is only ever
   sent to `maps.googleapis.com` / `www.google.com` (or, for tests, a loopback mock).

@@ -57,8 +57,7 @@ In the file names, `<version>` is the release number (for example `0.3.0`).
 | **Android 7+** | `bike-osm-ride-<version>-android.apk` | copy it to the phone and open it (you have to allow installation from unknown sources), or `adb install -r` |
 
 The program **tells you** when there is a new release: the *Update* button appears in the top bar (on Windows and
-as an AppImage it replaces itself, on the other platforms it opens the release page). The Android package is signed
-with a debug key, so between two releases you may have to uninstall the old one first.
+as an AppImage it replaces itself, on the other platforms it opens the release page). Android releases require a stable release signing key; missing credentials fail the release build. Uninstall an older debug-signed build before installing the release APK.
 
 ## Quick start
 

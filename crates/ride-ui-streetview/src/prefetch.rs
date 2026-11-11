@@ -90,6 +90,10 @@ pub async fn resolve_live(
         if let Some(e) = cache.get_at(bucket, now_unix()) {
             return Ok(e.pano);
         }
+        if !cache.try_claim(bucket) {
+            // The original lookup still owns the claim. Never release its work.
+            return Err(SvError::Network);
+        }
     }
     let _guard = ClaimGuard {
         cache: Arc::clone(cache),
@@ -406,6 +410,26 @@ async fn run(
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn a_waiter_never_releases_another_lookups_claim() {
+        use super::*;
+        use crate::url::{ApiKey, Endpoints};
+        let route = ride_model::testing::straight_route(&[(100.0, 0.0)], 0.0);
+        let cache = Arc::new(PanoCache::memory(&route.id));
+        assert!(cache.try_claim(0));
+        let client = MetadataClient::new(
+            Endpoints::local("http://127.0.0.1:9").unwrap(),
+            ApiKey::new("TESTKEY").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_live(&client, &cache, &route, 0).await,
+            Err(SvError::Network)
+        );
+        assert!(cache.is_claimed(0));
+        assert!(!cache.try_claim(0));
+    }
+
     use super::*;
     use crate::mock::{MockServer, StreetviewMock};
     use crate::url::{ApiKey, Endpoints};

@@ -87,7 +87,7 @@ pub fn build_plan(
     let best = segments::best_times(metas);
     let mut loaded: HashMap<String, Option<Track>> = HashMap::new();
     for (index, climb) in route.climbs.iter().enumerate() {
-        let Some((time_s, stem)) = best.get(&segments::segment_key(climb)) else {
+        let Some((time_s, stem)) = segments::best_for(&best, &segments::segment_key(climb)) else {
             continue;
         };
         prs[index] = Some(*time_s);
@@ -129,7 +129,7 @@ pub fn compare(
     let times = segments::segment_times(route, &record.points);
     let mut results = Vec::with_capacity(times.len());
     for segment in times {
-        let previous_pr_s = previous.get(&segment.key).map(|(time, _)| *time);
+        let previous_pr_s = segments::best_for(previous, &segment.key).map(|(time, _)| *time);
         let is_pr = !record.simulated
             && previous_pr_s.is_some_and(|best| segment.time_s < best - PR_MARGIN_S);
         results.push(SegmentResult {
@@ -239,6 +239,7 @@ mod tests {
             source: ride_model::RideSource::Recorded,
             power_estimated: false,
             estimate: None,
+            measured_power: Vec::new(),
         }
     }
 
@@ -458,9 +459,16 @@ mod tests {
         let route = route();
         let ride = record(1_700_000_000.0, 3_000.0, 10.0, false);
         let exact = segments::segment_times(&route, &ride.points)[0].time_s;
-        let previous = HashMap::from([("20-120".to_string(), (exact, "older".to_string()))]);
-        let comparison = compare(&ride, &route, &previous, None);
-        assert!(!comparison.segments[0].is_pr, "a tie is not a new PR");
+        for (improvement, is_pr) in [(0.0, false), (0.04, false), (0.06, true)] {
+            let previous = HashMap::from([(
+                "20-120".to_string(),
+                (exact + improvement, "older".to_string()),
+            )]);
+            assert_eq!(
+                compare(&ride, &route, &previous, None).segments[0].is_pr,
+                is_pr
+            );
+        }
     }
 
     // ── end to end, without the UI ─────────────────────────────────────────────
@@ -512,6 +520,7 @@ mod tests {
             source: ride_model::RideSource::Recorded,
             power_estimated: false,
             estimate: None,
+            measured_power: Vec::new(),
         };
         (record, arc, summary)
     }

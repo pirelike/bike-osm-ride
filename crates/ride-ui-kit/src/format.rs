@@ -22,18 +22,25 @@ pub fn fmt_duration(secs: f64) -> String {
     }
 }
 
-/// Metres → kilometres with sensible precision: `0.42`, `12.34`, `123.4`.
+/// Metres → kilometres with sensible precision: `0.42`, `12.34`, `123.4`; an em dash when
+/// unavailable (NaN would otherwise read as `0.00`, "nothing left").
 pub fn fmt_km(m: f64) -> String {
+    if !m.is_finite() {
+        return "—".into();
+    }
     let km = (m / 1000.0).max(0.0);
-    if km >= 100.0 {
+    if (km * 100.0).round() / 100.0 >= 100.0 {
         format!("{km:.1}")
     } else {
         format!("{km:.2}")
     }
 }
 
-/// m/s → km/h, one decimal.
+/// m/s → km/h, one decimal; an em dash when unavailable.
 pub fn fmt_speed_kmh(ms: f64) -> String {
+    if !ms.is_finite() {
+        return "—".into();
+    }
     format!("{:.1}", (ms * 3.6).max(0.0))
 }
 
@@ -45,17 +52,22 @@ pub fn fmt_opt0(v: Option<f64>) -> String {
     }
 }
 
-/// Signed grade with one decimal: `+4.2`, `-3.1`, `0.0`.
+/// Signed grade with one decimal: `+4.2`, `-3.1`, `0.0`; an em dash when unavailable.
 pub fn fmt_grade(g: f64) -> String {
-    if g.abs() < 0.05 {
+    if !g.is_finite() {
+        "—".into()
+    } else if g.abs() < 0.05 {
         "0.0".into()
     } else {
         format!("{g:+.1}")
     }
 }
 
-/// Metres, whole: `1234`.
+/// Metres, whole: `1234`; an em dash when unavailable.
 pub fn fmt_m(m: f64) -> String {
+    if !m.is_finite() {
+        return "—".into();
+    }
     format!("{}", m.round() as i64)
 }
 
@@ -154,6 +166,14 @@ pub fn parse_in_range(text: &str, min: f64, max: f64) -> Option<f64> {
 /// Clamps to `[min, max]` and snaps to the grid `min + k·step` (float noise removed).
 /// A non-positive/NaN step only clamps. NaN input becomes `min`.
 pub fn snap_to_step(value: f64, min: f64, max: f64, step: f64) -> f64 {
+    let min = if min.is_finite() {
+        min
+    } else if max.is_finite() {
+        max
+    } else {
+        0.0
+    };
+    let max = if max.is_finite() { max } else { min };
     let (lo, hi) = if min <= max { (min, max) } else { (max, min) };
     let v = if value.is_finite() {
         value.clamp(lo, hi)
@@ -164,8 +184,22 @@ pub fn snap_to_step(value: f64, min: f64, max: f64, step: f64) -> f64 {
         return v;
     }
     let snapped = lo + ((v - lo) / step).round() * step;
-    let factor = 10f64.powi(step_decimals(step) as i32);
-    ((snapped * factor).round() / factor).clamp(lo, hi)
+    // Keep both the origin's and the step's decimal precision when removing float noise.
+    // A step-only rounding would move e.g. the 0.32 + k*0.1 grid onto 0.3 + k*0.1.
+    let decimals = |v: f64| {
+        v.to_string()
+            .split_once('.')
+            .map_or(0, |(_, tail)| tail.len())
+    };
+    let precision = decimals(lo).max(decimals(step)).min(308);
+    let factor = 10f64.powi(precision as i32);
+    let scaled = snapped * factor;
+    let clean = if scaled.is_finite() {
+        scaled.round() / factor
+    } else {
+        snapped
+    };
+    clean.clamp(lo, hi)
 }
 
 /// Position of `value` inside `[min, max]` as 0..=1 (0 for an empty/invalid range).
@@ -179,6 +213,19 @@ pub fn fraction(value: f64, min: f64, max: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formatting_and_snapping_boundary_regressions() {
+        assert_eq!(fmt_km(99_999.0), "100.0");
+        assert_eq!(snap_to_step(2.0, f64::NAN, 5.0, 1.0), 5.0);
+        assert_eq!(snap_to_step(2.0, f64::NAN, f64::NAN, 1.0), 0.0);
+        assert!((snap_to_step(0.26, 0.05, 1.05, 0.1) - 0.25).abs() < 1e-12);
+        assert!((snap_to_step(0.26, 0.00000001, 1.0, 0.1) - 0.30000001).abs() < 1e-12);
+        for v in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(decimal(v, 1), "—");
+            assert_eq!(decimal_trimmed(v, 1), "—");
+        }
+    }
 
     #[test]
     fn form_helpers() {
@@ -228,6 +275,11 @@ mod tests {
         assert_eq!(fmt_grade(4.23), "+4.2");
         assert_eq!(fmt_grade(-3.16), "-3.2");
         assert_eq!(fmt_grade(0.01), "0.0");
+        assert_eq!(fmt_grade(f64::NAN), "—");
+        assert_eq!(fmt_km(f64::NAN), "—");
+        assert_eq!(fmt_m(f64::INFINITY), "—");
+        assert_eq!(fmt_speed_kmh(f64::NAN), "—");
+        assert_eq!(fmt_grade(f64::INFINITY), "—");
         assert_eq!(fmt_hm_text(4980.0), "1:23 ó");
     }
 
