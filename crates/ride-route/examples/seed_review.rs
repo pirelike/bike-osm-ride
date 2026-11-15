@@ -43,6 +43,7 @@ fn ride(route: &Arc<ride_model::Route>, base: f64, started: f64) -> RideRecord {
     }
     let summary = engine.summary();
     RideRecord {
+        completed_calendar_id: None,
         version: RIDE_RECORD_VERSION,
         route_id: route.id.clone(),
         route_name: route.name.clone(),
@@ -53,6 +54,11 @@ fn ride(route: &Arc<ride_model::Route>, base: f64, started: f64) -> RideRecord {
         power_estimated: false,
         estimate: None,
         measured_power: Vec::new(),
+        ftp_w: None,
+        rider_kg: None,
+        workout: None,
+        rpe: None,
+        note: String::new(),
     }
 }
 

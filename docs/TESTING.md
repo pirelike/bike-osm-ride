@@ -98,6 +98,7 @@ of ten screens in two layouts: it fails when the app dies or a screen does not a
 | Street View | mock-based flows, key-safety test | **never against Google** ([`STREETVIEW.md`](STREETVIEW.md)) |
 | Browser panel (Firefox) | geometry helpers | used on Windows |
 | Review page, import, estimated watts | yes: pure maths, parsers, projection, server-side render, CSS house rules; a ride driven with known watts is imported as a watt-less GPX and recovered (within 3 % on average) | seen on Windows with synthetic rides (`seed_review`, `readme_shots.mjs --only review`). **Never with a real Strava/Garmin export; the estimate never compared with a real power meter; Android never** |
+| Power view (PMC, hrTSS, CP/FTP), journal, ride view, RPE / note, FIT export and import | yes: CP fit on exact curves, FTP rules, PMC recurrences, hrTSS at threshold = 100, zone models, laps and compliance, automatic efforts, decoupling, W′ balance, journal weeks, FIT CRC and a write → read round trip, compressed time stamps, truncated files; SSR of every view | seen on Windows at 1440 × 900 and 412 × 860 with `seed_review` (no overflow, no NaN). **Never with a real FIT file from a Garmin / Wahoo / Zwift, never uploaded to Strava or Garmin Connect, the FTP estimate never compared with a lab or field test, the journal never on a phone** |
 
 ## 4a. Known gaps, ranked by how much they could hurt
 

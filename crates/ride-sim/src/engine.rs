@@ -221,6 +221,32 @@ impl RideEngine {
         self.workout.as_ref()
     }
 
+    /// The rider settings the engine runs with.
+    pub fn rider(&self) -> &RiderSettings {
+        &self.rider
+    }
+
+    /// The workout of the ride as it is stored with it: the steps without their coaching texts,
+    /// and the FTP its targets were computed with. `None` without a workout.
+    pub fn ride_workout(&self) -> Option<ride_model::RideWorkout> {
+        let session = self.workout.as_ref()?;
+        let workout = session.workout();
+        Some(ride_model::RideWorkout {
+            id: workout.id.clone(),
+            name: workout.name.clone(),
+            ftp_w: self.rider.ftp_w,
+            steps: workout
+                .steps
+                .iter()
+                .map(|step| ride_model::WorkoutStep {
+                    note: None,
+                    messages: Vec::new(),
+                    ..step.clone()
+                })
+                .collect(),
+        })
+    }
+
     /// Sets (or clears) what is replayed next to the rider: the ghost ride and the per-climb PR
     /// rides. Ignored during a ride (`Riding` / `Paused`): the comparison must not change under
     /// the rider, exactly like the workout. After the finish the new set is stored for the next
@@ -496,7 +522,7 @@ impl RideEngine {
             hr_zone: self
                 .live
                 .hr_bpm
-                .map(|h| zones::hr_zone(h, self.rider.max_hr))
+                .map(|h| zones::hr_zone_of(h, &self.rider))
                 .filter(|z| *z > 0),
             next_climb: climb,
             next_climb_in,
@@ -588,8 +614,9 @@ impl RideEngine {
             self.power_integral += p * h;
             self.work_j += p * h;
             self.power_max = Some(self.power_max.map_or(p, |m| m.max(p)));
-            let reference = self.power_3s.unwrap_or(p);
-            let zone = zones::power_zone(reference, self.rider.ftp_w);
+            // zone time second by second, as the analysis tools count it (the live zone
+            // display is the 3 s average)
+            let zone = zones::power_zone(p, self.rider.ftp_w);
             if (1..=7).contains(&zone) {
                 self.zone_secs[(zone - 1) as usize] += h;
             }
@@ -599,7 +626,7 @@ impl RideEngine {
             self.hr_time += h;
             self.hr_integral += hr * h;
             self.hr_max = Some(self.hr_max.map_or(hr, |m| m.max(hr)));
-            let zone = zones::hr_zone(hr, self.rider.max_hr);
+            let zone = zones::hr_zone_of(hr, &self.rider);
             if (1..=5).contains(&zone) {
                 self.hr_zone_secs[(zone - 1) as usize] += h;
             }

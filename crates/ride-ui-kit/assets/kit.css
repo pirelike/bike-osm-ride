@@ -575,6 +575,36 @@ button.chip:hover, a.chip:hover { background: var(--fill-2); color: var(--text);
   .dialog__foot .btn--primary { grid-column: 1 / -1; }
 }
 
+/* phones: a finger needs a 44 px target and nothing is set below 12 px. The mouse sizes (24-32 px
+   controls, 11 px labels) stay for the desktop; here every control of the kit grows, so the
+   dialogs, the review page and the head unit get thumb-sized buttons without a rule of their own.
+   A row of controls may still be tighter than 44 px (the segmented switch is 40 px): the gaps
+   between neighbours make up the rest. A phone on its side (under 520 px high, wider than 699 px)
+   is a phone as well. */
+@media (max-width: 699px), (max-height: 520px) and (orientation: landscape) {
+  :root { --t-11: calc(12px * var(--ui-scale)); }
+  .btn, .btn--sm { --btn-h: 44px; }
+  .btn--sm { padding: 0 12px; font-size: var(--t-13); }
+  .btn--lg { --btn-h: 48px; }
+  .seg__item, .seg--sm .seg__item { height: 40px; padding: 0 12px; font-size: var(--t-13); }
+  button.chip, a.chip { height: 40px; }
+  .tab { min-height: 44px; }
+  .field__control, .field > input, .field > select, .field > textarea, .input { height: 44px; }
+  /* The control's two border pixels sit outside the stepper buttons. */
+  .field__control { height: 48px; }
+  .field__step { width: 44px; }
+  .switch { min-height: 44px; }
+  .slider input[type="range"] { height: 44px; }
+  .slider input[type="range"]::-webkit-slider-thumb { width: 12px; height: 28px; margin-top: -13px; }
+  .dialog__head { padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4); }
+}
+
+/* a phone on its side: the dialog uses the whole height, its width stays (560 / 960 px) */
+@media (max-height: 520px) and (orientation: landscape) {
+  :root .dialog-backdrop { padding: 0; }
+  :root .dialog, :root .dialog--wide { height: 100%; border-radius: 0; }
+}
+
 /* ───────────────────────────── toasts ───────────────────────────── */
 .toasts {
   position: fixed; left: var(--space-4); bottom: var(--space-4); z-index: var(--layer-toast);

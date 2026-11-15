@@ -154,6 +154,13 @@ Feld `sources` von `workouts.json`).
 
 ![Workout im ERG-Modus](../../screenshots/workout.png)
 
+### Trainingskalender und KI-Agent
+
+Im Kalender planst du ein Training mit Datum und optionaler Uhrzeit und bereitest es für eine Fahrt vor. Öffne unter Einstellungen den KI-Agenten, aktiviere die lokale Verbindung und kopiere die MCP-Konfiguration. Eingehende Trainingspläne prüfst und bestätigst du in der App. Über KI-Analyse bei einer gespeicherten Fahrt kopierst du eine Anfrage an den Agenten und speicherst seine Rückmeldung.
+
+
+Der Kalender zeigt auch frühere gespeicherte Fahrten, einschließlich ungeplanter Fahrten, und öffnet deren Detailanalyse.
+
 ## Virtuelle Schaltung
 
 *Einstellungen → Trainer → Virtuelle Schaltung.* 2 × 12 Antrieb (50/34 und 11–34), **23 Gänge**. Du schaltest mit den Tasten `←`/`→`,
@@ -223,27 +230,60 @@ verengen sich auf denselben Abschnitt. Ein Zug kürzer als 100 m gilt nicht als 
 Durchschnitts- und Maximalpuls, Trittfrequenz, Anstieg, VAM und die Differenz zur Bezugsfahrt. Daten gibt es nur für einen
 Abschnitt, den die Fahrt **vollständig** abgedeckt hat; eine teilweise Fahrt ist bei den anderen Abschnitten leer.
 
-### Leistung: Spitzen, FTP, Belastung
+### Leistung: Form, FTP, Spitzen, Zonen, Belastung
 
 ![Die Leistungsseite](../../screenshots/review-power.png)
 
-Oben in der Übersicht bringt dich der Schalter **Vergleich | Leistung** auf die andere Seite. Hier stehen die Zahlen **aller**
-deiner Fahrten, unabhängig von der Route:
+Der Umschalter **Vergleich | Tagebuch | Leistung** oben wechselt die Ansicht. Die Leistungsseite zeigt die Zahlen **aller**
+deiner Fahrten, egal auf welcher Route. **Zeitraum** (*28 Tage*, *42 Tage*, *90 Tage*, *1 Jahr*, *Alle*) wählt, was Kurve, Zonen
+und Formdiagramm abdecken; standardmäßig 90 Tage.
 
-- **Spitzenleistung.** Die besten Durchschnittswatt über 5 Sekunden, 1, 5, 20 und 60 Minuten, mit Datum und Route der Fahrt. Hast du
-  in der Übersicht Fahrten ausgewählt, stehen ihre Werte daneben in Spalten (A–D). Eine Fahrt hat für eine
-  längere Dauer als ihre eigene keinen Wert.
-- **FTP.** Er schlägt 95 % deiner besten 20-Minuten-Leistung als FTP vor und zeigt die aktuell eingestellte daneben. Die Schaltfläche **FTP
-  auf N W setzen** schreibt sie in die Einstellungen; die App ändert sie nie von selbst. Die TSS gespeicherter Fahrten bleibt
-  mit der FTP ihrer eigenen Zeit berechnet. Für einen exakten Vorschlag brauchst du eine echte 20-Minuten-Bestleistung: Das Workout *FTP-
-  Test 20 Minuten* (*Workouts*, `W`) liefert genau das.
-- **Belastung.** Die letzten 12 Wochen oder Monate (*Wöchentlich* | *Monatlich*): Ihre Balken zeigen die TSS, der Wert darüber und der
-  Tooltip (auf dem Balken stehen) zeigt Anzahl und Zeit der Fahrten.
+- **Form und Belastung.** *Fitness (CTL)*: der 42-Tage-gewichtete Durchschnitt deiner täglichen Belastung. *Ermüdung (ATL)*:
+  dasselbe über 7 Tage. *Form (TSB)*: ihre Differenz vom Vortag. Negative Form: du belastest gerade; zwischen +5 und +25 bist du
+  frisch für ein Rennen. Die *wöchentliche Änderung* zeigt, wie stark die Fitness in sieben Tagen gestiegen ist; mehr als 5–8
+  Punkte pro Woche kann zu Überlastung führen. Die Belastung einer Fahrt ist der TSS aus gemessenen Watt; ohne sie der **hrTSS**
+  aus dem Puls (eine Stunde am Schwellenpuls ergibt 100); ohne Puls der TSS geschätzter Watt.
+- **FTP.** Der Vorschlag nutzt immer die **letzten 90 Tage** gemessener Fahrten, sinkt also auch nach einer Pause. Abschnitte,
+  die im ERG-Modus mit vorgegebener Leistung gefahren wurden, **zählen nicht**. An deine besten Belastungen von 2–20 Minuten wird
+  ein **Critical-Power-Modell** (CP und W′) angepasst; vorgeschlagen werden 95 % des höheren Werts aus deinen gemessenen besten 20
+  Minuten und den 20 Minuten des Modells. Daneben: W/kg, die aktuelle FTP und ein Hinweis, wenn der Vorschlag niedriger ist. **FTP
+  auf N W setzen** schreibt sie in die Einstellungen; die App ändert sie nie von allein. Darunter: *Geschätzte FTP pro Woche* und
+  *FTP-Änderungen*.
+- **Puls.** Eingestellter Maximal-, Schwellen- (LTHR) und Ruhepuls, die Zonengrundlage und der höchste Puls des Zeitraums; liegt
+  er über dem eingestellten Maximum, schreibt ihn **Maximalpuls setzen** ein.
+- **Spitzenleistung.** Die beste Durchschnittsleistung von 1 Sekunde bis 90 Minuten auf einer logarithmischen Zeitachse: der
+  Zeitraum (durchgezogen) und der Bestwert aller Zeiten (gestrichelt). Die Tabelle zeigt Watt, W/kg (mit dem Körpergewicht des
+  Tages), wann und wo (ein Klick öffnet die Fahrt), den Bestwert und die im Vergleich markierten Fahrten (A–D).
+- **Zonen.** Die Zeit in Leistungs- und Pulszonen im Zeitraum, Sekunde für Sekunde, und die Aufteilung locker (Z1–Z2) / mittel
+  (Z3) / hart (Z4+).
+- **Belastung.** Die letzten 12 Wochen oder Monate: eine Säule ist die gesamte Belastung; der Tooltip teilt sie in TSS, hrTSS und
+  geschätzt.
 
-**Nur gemessene Watt zählen.** Der simulierte Fahrer und Fahrten mit geschätzten (`~`) Watt kommen nicht unter die Spitzen und den
-FTP-Vorschlag (in der Zeit des Trends schon, in seiner TSS nicht). Eine importierte Fahrt, in der echte Leistung steckte,
-zählt. Die Watt des Trainers stammen nicht von einem Leistungsmesser, deshalb ist der FTP-Vorschlag nur so genau wie diese. Die Zahlen
-älterer Fahrten werden beim ersten Öffnen berechnet und gespeichert, was bei vielen Fahrten ein paar Sekunden dauern kann.
+**Nur gemessene Watt zählen** für Spitzen und FTP. Ältere Fahrten werden beim ersten Öffnen der Seite einmal neu berechnet.
+
+### Tagebuch
+
+Das **Tagebuch** zeigt alle Fahrten aller Routen der Reihe nach, wochenweise (Montag bis Sonntag): Fahrten, Zeit, Distanz,
+Belastung und eine Säule pro Tag. Jede Zeile: Datum, Route, Workout, Zeit, Distanz, NP, Belastung (`(Puls)`: hrTSS, `~`: geschätzte
+Watt), der Anfang deiner Notiz und dein Gefühl (RPE). Eine Zeile öffnet die Fahrt. *Ältere Wochen* lädt mehr.
+
+### Eine Fahrt im Detail
+
+Öffnet sich aus dem Tagebuch, über die **ⓘ**-Schaltfläche der Vergleichsliste oder über ein Datum der Spitzentabelle.
+
+- **Zahlen**: Zeit, Distanz, Durchschnittstempo, Durchschnittsleistung, NP, IF, TSS (mit der FTP des Tages), hrTSS, **VI** (NP /
+  Durchschnittsleistung), **EF** (NP / Durchschnittspuls), **Pw:HR-Entkopplung** (unter 5 %: gute aerobe Basis; braucht 20 Minuten),
+  W/kg, Arbeit, Arbeit über FTP, **W′-Tiefstwert** (nach dem CP-Modell), Puls, Trittfrequenz, FTP und Körpergewicht des Tages.
+- Ein **Diagramm über die Zeit**: Leistung (mit dem **Ziel** des Workouts), Puls, Trittfrequenz, Tempo oder **W′-Bilanz**.
+- **Schritte des Workouts**: Ziel, Durchschnittsleistung, **Erfüllung in %** (außerhalb von 90–110 % hervorgehoben), NP, W/kg,
+  Puls und Trittfrequenz. Ohne Workout die automatisch gefundenen **harten Belastungen** (mindestens eine Minute über 88 % der
+  FTP im 30-Sekunden-Schnitt).
+- **Zonen** Sekunde für Sekunde und die Trittfrequenz-Verteilung.
+- **Tagebucheintrag**: dein **Gefühl (RPE)** von 1 bis 10 und eine **Notiz**.
+- **TCX** und **FIT**: die Fahrt jederzeit als Datei speichern; in der FIT-Datei sind die Workout-Schritte Runden.
+
+Die Zusammenfassung am Ende einer Fahrt hat außerdem **Als FIT speichern**. Unter Einstellungen → Fahrer stehen **Ruhepuls**,
+**Schwellenpuls (LTHR)** (ohne Angabe 90 % des Maximums) und die **Grundlage der Pulszonen** (Max. Puls, Reserve oder LTHR).
 
 ### Eine Fahrt aus einer anderen App importieren
 
@@ -258,7 +298,8 @@ aus Strava, Garmin oder Wahoo exportierte. Puls, Trittfrequenz und (falls vorhan
 - Dieselbe Fahrt (dieselbe Startzeit) lässt sich nicht zweimal importieren.
 - Die importierte Fahrt **wird kein PR und kein Geist**: Eine Fahrt draußen mit Stopps und Freilauf lässt sich nicht
   mit deinen Trainerzeiten vergleichen. In der Liste markiert das Tag `Importiert` sie.
-- Am Telefon ist der Import noch nicht verfügbar. Das FIT-Format lesen wir nicht; Strava exportiert sowohl GPX als auch TCX.
+- Am Telefon ist der Import noch nicht verfügbar. GPX-, TCX- und **FIT**-Dateien werden gelesen; Punkte einer FIT-Datei ohne
+  Position (eine Indoor-Fahrt ohne GPS) entfallen, weil die Fahrt über die Position auf die Route gelegt wird.
 
 ### Geschätzte Watt
 

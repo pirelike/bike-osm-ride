@@ -1,5 +1,7 @@
 # Datenschutz und Netzwerkverkehr
 
+Der optionale lokale KI-Agent kann nach Aktivierung der Verbindung FTP, Trainingspläne und zusammengefasste Fahrtdaten lesen. Der MCP-Client und sein KI-Anbieter können empfangene Daten übertragen. GPS-Spuren und private Notizen sind nicht in den Agentenantworten enthalten. Kalender und bestätigte Rückmeldungen werden gesichert.
+
 > **Übersetzung.** Maßgeblich ist die ungarische Fassung dieses Dokuments: [Datenschutzseite](../../PRIVACY.md);
 > sie ist auch auf [Englisch](../en/PRIVACY.md) und [Spanisch](../es/PRIVACY.md) verfügbar.
 

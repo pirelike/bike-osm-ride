@@ -28,6 +28,9 @@ pub fn SummaryDialog(
     /// What the ride did against the history (ghost, segment PRs).
     comparison: ReadSignal<Option<RideComparison>>,
     on_save_tcx: EventHandler<()>,
+    on_save_fit: EventHandler<()>,
+    #[props(default)] on_agent: EventHandler<()>,
+    #[props(default)] agent_ready: bool,
     on_close: EventHandler<()>,
     on_new_ride: EventHandler<()>,
 ) -> Element {
@@ -55,6 +58,19 @@ pub fn SummaryDialog(
                     {t("ui_dialogs.summary.uj_utvonal")}
                 }
                 div { class: "dlg-foot__end",
+                    button {
+                        class: "btn", r#type: "button", disabled: !agent_ready,
+                        onclick: move |_| on_agent.call(()),
+                        {t("app.agent.review")}
+                    }
+                    button {
+                        class: "btn",
+                        r#type: "button",
+                        disabled: !has_summary,
+                        onclick: move |_| on_save_fit.call(()),
+                        Icon { name: IconName::Download, size: 14 }
+                        {t("ui_dialogs.summary.mentes_fit_kent")}
+                    }
                     button {
                         class: "btn btn--primary",
                         r#type: "button",
@@ -115,7 +131,7 @@ fn SummaryBody(
             }
 
             // one ruled sheet: the first cell is the distance, 2 columns wide, everything else 1
-            div { class: "cells cells--4",
+            div { class: "cells cells--4 dlg-summary__cells",
                 Stat { wide: true, label: t("ui_dialogs.summary.tavolsag").to_string(), value: fmt_km(summary.dist), unit: "km".to_string() }
                 Stat { label: t("ui_dialogs.summary.ido").to_string(), value: fmt_duration(summary.elapsed_s), unit: "".to_string() }
                 Stat { label: t("ui_dialogs.summary.szintemelkedes").to_string(), value: fmt_m(summary.ascent), unit: "m".to_string() }
@@ -245,7 +261,7 @@ fn Stat(
     };
     rsx! {
         div { class,
-            span { class: "cell__label", "{label}" }
+            span { class: "cell__label dlg-summary__label", "{label}" }
             span { class: "cell__value",
                 "{value}"
                 if !unit.is_empty() {
@@ -301,6 +317,7 @@ mod tests {
                 route,
                 comparison,
                 on_save_tcx: move |_| {},
+                on_save_fit: move |_| {},
                 on_close: move |_| {},
                 on_new_ride: move |_| {},
             }

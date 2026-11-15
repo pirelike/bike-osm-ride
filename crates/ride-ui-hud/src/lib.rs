@@ -969,9 +969,15 @@ fn TransportButton(
     #[props(default = false)] primary: bool,
     #[props(default = false)] disabled: bool,
     #[props(default = String::new())] shortcut: String,
+    /// The second press of a two-step action: drawn in the critical colour.
+    #[props(default = false)]
+    confirm: bool,
+    #[props(default)] on_blur: EventHandler<()>,
     on_click: EventHandler<()>,
 ) -> Element {
-    let class = if primary {
+    let class = if confirm {
+        "btn hud-controls__btn hud-controls__btn--confirm"
+    } else if primary {
         "btn btn--primary hud-controls__btn"
     } else {
         "btn hud-controls__btn"
@@ -989,8 +995,38 @@ fn TransportButton(
             title: "{title}",
             disabled,
             onclick: move |_| on_click.call(()),
+            onblur: move |_| on_blur.call(()),
             Icon { name: icon, size: 16 }
             span { "{label}" }
+        }
+    }
+}
+
+/// "Befejezés". On a touch screen it sits next to the pause button and a ride cannot be taken up
+/// again once it is over, so with `confirm` the first press only arms it ("Biztos?", in red) and
+/// the second one ends the ride; it disarms when the focus leaves it or the ride changes state.
+#[component]
+fn FinishButton(
+    state: RideState,
+    confirm: bool,
+    mut armed: Signal<Option<RideState>>,
+    on_finish: EventHandler<()>,
+) -> Element {
+    let is_armed = confirm && *armed.read() == Some(state);
+    rsx! {
+        TransportButton {
+            label: if is_armed { t("ui_hud.biztos").to_string() } else { t("ui_hud.befejezes").to_string() },
+            icon: IconName::Stop,
+            confirm: is_armed,
+            on_blur: move |_| armed.set(None),
+            on_click: move |_| {
+                if confirm && *armed.peek() != Some(state) {
+                    armed.set(Some(state));
+                } else {
+                    armed.set(None);
+                    on_finish.call(());
+                }
+            },
         }
     }
 }
@@ -1006,8 +1042,12 @@ pub fn RideControls(
     on_resume: EventHandler<()>,
     on_finish: EventHandler<()>,
     on_reset: EventHandler<()>,
+    /// Ask once more before the ride is finished (the phone's transport bar).
+    #[props(default = false)]
+    confirm_finish: bool,
 ) -> Element {
     let state = snapshot.read().state;
+    let armed = use_signal(|| None::<RideState>);
     let toolbar_label = tf("ui_hud.menet_vezerlese", &[("state", state_label(state))]);
 
     rsx! {
@@ -1040,11 +1080,7 @@ pub fn RideControls(
                             shortcut: t("ui_hud.szokoz").to_string(),
                             on_click: move |_| on_pause.call(()),
                         }
-                        TransportButton {
-                            label: t("ui_hud.befejezes").to_string(),
-                            icon: IconName::Stop,
-                            on_click: move |_| on_finish.call(()),
-                        }
+                        FinishButton { state, confirm: confirm_finish, armed, on_finish }
                     },
                     RideState::Paused => rsx! {
                         TransportButton {
@@ -1054,11 +1090,7 @@ pub fn RideControls(
                             shortcut: t("ui_hud.szokoz").to_string(),
                             on_click: move |_| on_resume.call(()),
                         }
-                        TransportButton {
-                            label: t("ui_hud.befejezes").to_string(),
-                            icon: IconName::Stop,
-                            on_click: move |_| on_finish.call(()),
-                        }
+                        FinishButton { state, confirm: confirm_finish, armed, on_finish }
                     },
                     RideState::Finished => rsx! {
                         TransportButton {

@@ -1,5 +1,7 @@
 # Privacidad y tráfico de red
 
+El agente local de IA opcional puede leer el FTP, los planes de entrenamiento y las métricas agregadas al activar la conexión. El cliente MCP y su proveedor de IA pueden transmitir los datos recibidos. Las respuestas al agente excluyen las trazas GPS y las notas privadas. El calendario y las respuestas aceptadas se incluyen en la copia de seguridad.
+
 bike-osm-ride **no tiene cuenta, ni telemetría, ni analítica, ni publicidad**. Tus datos (salidas, ajustes,
 datos de los sensores) se quedan en tu propio equipo; el programa solo llama por la red a lo que tú pides.
 Esta página enumera con exactitud qué puede salir y qué hay en tu equipo. Las afirmaciones están hechas a

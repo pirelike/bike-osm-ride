@@ -31,7 +31,7 @@ Runs on Windows, Linux, macOS and Android from one code base. Public repo
 
 ```powershell
 cargo run -p ride-app                    # debug build + start (Windows: the exe needs WebView2Loader.dll beside it, build.rs copies it)
-cargo test --workspace                   # 1205 tests, 3 ignored (network / Bluetooth); Windows GNU, 2026-11-10
+cargo test --workspace                   # 1280 tests, 3 ignored (network / Bluetooth); Windows GNU, 2026-11-15
 cargo clippy --workspace --all-targets   # clean on 2026-11-06; keep it that way
 cargo fmt --all -- --check
 node scripts/readme_shots.mjs            # regenerate docs/screenshots (needs a built debug exe, Node 22+)
@@ -173,7 +173,9 @@ builds them and smoke-tests Linux for 20 s), any trainer other than the VE200, *
 app's own TCX were read), and the estimated watts against a real power meter (checked only as a round trip through the
 app's own physics), the **Android keep-screen-on flag and the Android backup (system save / open dialogs)** (written and
 type-checked against the `jni` crate on the host, never built into an APK or run on a phone), and the FTP suggestion against a
-real power meter (only synthetic watts). Do not claim otherwise.
+real power meter (only synthetic watts), and the **FIT export / import** against a real Garmin / Wahoo / Zwift file or a
+Strava upload (only the app's own files and hand-built messages; the journal, the ride view and the power view were seen
+only with synthetic rides). Do not claim otherwise.
 The **Portuguese (pt)** UI, workout library and rider documents were translated and checked with the
 catalog tests, the glossary/style files and a pass over the rendered screens; **no native speaker has
 reviewed them yet**, and the Android `values-pt` resources, the macOS `pt.lproj` strings and the

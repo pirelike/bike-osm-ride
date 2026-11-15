@@ -8,8 +8,7 @@
 
 A bike-osm-ride-nak **nincs fiókja, nincs telemetriája, nincs elemzője és nincs hirdetése**. Az adataid (tekerések,
 beállítások, szenzoradatok) a saját gépeden maradnak; a program csak azt hívja meg a hálózaton, amihez te
-kérést adsz. Ez a lap pontosan felsorolja, mi mehet ki, és mi van a gépeden. Az állítások a forráskód alapján
-készültek (2026-11-10, 0.5.0-s forráshivatkozások).
+kérést adsz. Ez a lap a jelenlegi forráskód alapján sorolja fel, mi mehet ki, és mi van a gépeden.
 
 ## Mi megy ki a gépedről, és mikor
 
@@ -23,7 +22,13 @@ készültek (2026-11-10, 0.5.0-s forráshivatkozások).
 | `maps.googleapis.com`, `www.google.com` | csak ha bekapcsoltad a Street View-t, és megadtál API-kulcsot | a bringás pozíciója (koordináta) és a **saját** Google-kulcsod | a Google feltételei vonatkoznak rá; lásd [`STREETVIEW.md`](STREETVIEW.md) |
 | a Firefoxban megnyitott oldalak | csak ha a Böngésző panelt használod (Windows) | amit te nézel benne | külön Firefox-profil, a rendes böngésződhöz nem nyúl |
 
-Nincs más. Nincs bejelentkezés a programba, nincs hibajelentés-küldés, nincs használati statisztika. A
+Az opcionális helyi AI-agent kapcsolatot a *Beállítások* alatt kapcsolhatod be. Az MCP-kliens a saját gépeden
+indítja el a programot, és a megengedett edzésadatokat azon keresztül olvashatja. Az agent kliensének vagy AI-szolgáltatójának
+saját adatkezelése határozza meg, hogy a lekért adatokat továbbítja-e a hálózaton. A csatlakozás FTP-t, edzésterveket, a naptárat (a
+teljesítés állapotával) és összesített menetadatokat érhet el, köztük az általad megadott RPE-értéket (1–10). A teljes
+GPS-nyomvonal és a személyes jegyzetek nem részei az agentválaszoknak.
+
+Nincs bejelentkezés a programba, nincs hibajelentés-küldés, nincs használati statisztika. A
 Bluetooth-forgalom csak a trainer, a szenzorok és a gép között zajlik.
 
 ## Mi van a gépeden
@@ -35,6 +40,7 @@ Minden egyetlen mappában van (`%LOCALAPPDATA%\bike-osm-ride`, `~/Library/Applic
 - **beállítások** (`settings.json`): testsúly, FTP, max. pulzus, megjelenés, elrendezés, a Google API-kulcsod;
 - **útvonalak és tekerés-napló**: a megnyitott útvonalak feldolgozott változata, minden befejezett menet teljes
   másodpercenkénti felvétele (pozíció, watt, pulzus, kadencia);
+- **edzésnaptár és AI-javaslatok**: a tervezett edzések, a helyi agenttől érkezett tervezetek és az elfogadott visszajelzések;
 - **csempék**, a letöltött **Street View képek** (legfeljebb 30 napig) és panoráma-azonosítók;
 - **naplók**: `ble.log` (a trainer és a szenzorok nyers adatcsomagjai: watt, pulzus, vezérlőparancsok; eszköznév vagy cím
   nincs bennük) és `crash.log` (elkapott hibák); mindkettő forgatott, a gépen marad;
@@ -43,7 +49,7 @@ Minden egyetlen mappában van (`%LOCALAPPDATA%\bike-osm-ride`, `~/Library/Applic
   Strava-bejelentkezésed sütijei vannak). A program már nem használja és nem is törli: nyugodtan töröld őket.
 
 **Biztonsági mentés.** A *Beállítások → Biztonsági mentés* egyetlen zip-fájlt készít az útvonalaidról, a túráidról, az
-importált edzéseidről és a beállításaidról. A fájl oda kerül, ahova te mented (Androidon a rendszer „Mentés másként”
+importált edzéseidről, a naptáradról, az elfogadott AI-visszajelzésekről és a beállításaidról. A fájl oda kerül, ahova te mented (Androidon a rendszer „Mentés másként”
 ablakával), a program semmit nem küld sehová, és nem is tölt fel. A Google API-kulcs **nincs benne**, és visszaállításkor
 a fájlból érkező kulcsot sem fogadja el; a csempék, a Street View képek és a naplók sincsenek benne. A fájl a túráid
 pontos útvonalait és az egészségi adataidat (pulzus, watt) tartalmazza, ezért úgy kezeld, mint a többi személyes fájlodat.

@@ -97,11 +97,15 @@ La descrizione completa: **[Guida utente](USER_GUIDE.md)**.
 - **Fantasma** (l'ultima uscita, la migliore, oppure i timestamp del GPX) e **segmenti locali con PR**.
 - **Analisi e confronto delle uscite**: le uscite fatte sullo stesso percorso (al massimo quattro) affiancate per potenza,
   frequenza cardiaca, cadenza, velocità e differenza di tempo; zoom su un tratto (trascinando o dalle salite), tabella dei
-  tratti. **Importazione di un'uscita GPX o TCX** da un export Strava o Garmin, con frequenza cardiaca e cadenza; se mancano i
+  tratti. **Importazione di un'uscita GPX, TCX o FIT** da un export Strava o Garmin, con frequenza cardiaca e cadenza; se mancano i
   watt, la fisica della simulazione li stima a ritroso (con il tuo peso corporeo o quello indicato, la bici e la resistenza
   al rotolamento).
-- **Pagina della potenza**: potenza di picco da 5 s a 60 minuti, una proposta di FTP dai tuoi migliori 20 minuti (impostabile con
-  un pulsante), carico settimanale e mensile. Contano solo i watt misurati.
+- **Pagina della potenza**: forma fisica, fatica e freschezza (CTL, ATL, TSB; hrTSS per le uscite senza watt), proposta di
+  FTP dagli ultimi 90 giorni con un modello di potenza critica, senza i tratti ERG (impostabile con un clic), potenza di picco da
+  1 s a 90 minuti con W/kg e filtro del periodo, tempo nelle zone, carico settimanale e mensile. Contano solo i watt misurati.
+- **Diario e dettaglio dell'uscita**: tutte le uscite per settimana; un'uscita nel tempo con l'obiettivo dell'allenamento, i
+  passi con il rispetto (o gli sforzi intensi trovati), VI, EF, disaccoppiamento Pw:HR, bilancio W′, zone, cadenza; il tuo RPE e
+  una nota.
 - **Backup**: i percorsi, le uscite, gli allenamenti importati e le impostazioni in un unico file zip (senza la chiave Google),
   con un ripristino che unisce i dati. Niente esce verso la rete.
 - **Esportazione TCX** (schema Garmin): Strava, Intervals.icu e TrainingPeaks la accettano se la carichi a mano. Un caricamento

@@ -1158,3 +1158,51 @@
 
 /* the route dialog's link to the review page (on the phone it is the only way there) */
 .dlg-review-link { display: flex; padding-top: 16px; }
+
+/* ───────────────────────────── phones ─────────────────────────────
+   The kit already makes every control 44 px tall here. These are the rules that are about a
+   dialog's own layout: what a thumb needs first comes first, and nothing is cut off. */
+@media (max-width: 699px) {
+  /* Eszközök: find a device and connect it is what a rider does here, so the scan button spans
+     the width and the found list sits above the five role slots (they were a screenful of
+     "Nincs csatlakoztatott eszköz" between the button and the devices to press). A slot is two
+     lines: the role and its state, then the device's name. */
+  .dlg-devices { gap: var(--space-4); }
+  .dlg-scan { flex: 1 1 100%; }
+  .dlg-found-sec { order: 1; }
+  .dlg-slots { order: 2; }
+  .dlg-slot {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-areas: "icon titles state" ". body body";
+    row-gap: var(--space-1);
+    padding: var(--space-2) 0;
+  }
+  .dlg-slot__icon { grid-area: icon; }
+  .dlg-slot__titles { grid-area: titles; }
+  .dlg-slot__state { grid-area: state; justify-content: flex-end; }
+  .dlg-slot__body { grid-area: body; }
+  .dlg-found__id { display: none; }
+  .dlg-found__actions { gap: var(--space-2); }
+
+  /* Útvonal: drag and drop and Ctrl+O do not exist on a phone */
+  .dlg-foot__note--desktop { display: none; }
+
+  /* Edzések: the category strip */
+  .dlg-cats .dlg-cat { height: 44px; }
+  /* a found device's role buttons are ghosts everywhere else; next to the filled one they read as plain
+     text, so on a phone they keep their outline */
+  .dlg-found__role { border-color: var(--rule-strong); }
+
+  /* Összegzés: three columns of numbers (four left "Átlagteljesítmény" no room), a zone name
+     that is longer than its column wraps instead of ending in an ellipsis */
+  .dlg-summary__cells { --cols: 3; }
+  .dlg-summary__label { white-space: normal; overflow-wrap: anywhere; hyphens: auto; line-height: 1.15; }
+  .dlg-zone { grid-template-columns: minmax(0, 150px) minmax(0, 1fr) 48px 40px; }
+  .dlg-zone__name { white-space: normal; }
+}
+
+/* the controls that have a height of their own (the kit's 44 px does not reach them): a phone, also on its side */
+@media (max-width: 699px), (max-height: 520px) and (orientation: landscape) {
+  .dlg-key__control { height: 44px; }
+  .dlg-quick { height: 44px; }
+}

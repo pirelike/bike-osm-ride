@@ -349,7 +349,11 @@ impl Controller {
             self.review_refresh(None, Vec::new(), None);
         }
 
-        let added = report.routes + report.rides + report.workouts;
+        let added = report.routes
+            + report.rides
+            + report.workouts
+            + report.calendar_entries
+            + report.feedback;
         let mut text = if added == 0 {
             t("app.controller.backup.minden_megvolt_mar_nem_kerult_be_uj_utvonal_tura_vag")
                 .to_string()
@@ -363,6 +367,18 @@ impl Controller {
                 ],
             )
         };
+        if report.calendar_entries > 0 {
+            text.push_str(&tf(
+                "app.controller.backup.calendar_entries",
+                &[("n", &report.calendar_entries.to_string())],
+            ));
+        }
+        if report.feedback > 0 {
+            text.push_str(&tf(
+                "app.controller.backup.feedback",
+                &[("n", &report.feedback.to_string())],
+            ));
+        }
         if settings_restored {
             text.push_str(t(
                 "app.controller.backup.a_beallitasok_is_a_mentesbol_valok_a_street_view_kul",

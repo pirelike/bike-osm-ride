@@ -186,6 +186,11 @@ try {
     if (!button.label) continue;
     await cdp.evaluate(`document.querySelectorAll('.shell-tb')[${button.i}]?.click()`);
     await scan(cdp, `dialog: ${button.label}`);
+    // the About dialog has no top bar button: it opens from the bottom of the Settings dialog
+    if (await cdp.evaluate(`!!document.querySelector('.dialog [data-open="about"]')`)) {
+      await cdp.evaluate(`document.querySelector('.dialog [data-open="about"]')?.click()`);
+      await scan(cdp, 'dialog: about');
+    }
     await pressEscape(cdp);
   }
 

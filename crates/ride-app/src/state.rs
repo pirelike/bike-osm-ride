@@ -13,7 +13,6 @@ use ride_model::{
     RideComparison, RideRecord, RideSnapshot, RideSummary, Route, RouteRides, Settings, Theme,
     Workout,
 };
-use ride_sim::power_curve::Analysis;
 use ride_ui_dialogs::DeviceSlot;
 use ride_ui_kit::{Toast, ToastKind};
 
@@ -31,6 +30,8 @@ pub enum DialogKind {
     Devices,
     Settings,
     Workouts,
+    Calendar,
+    Agent,
     About,
     Summary,
 }
@@ -199,9 +200,12 @@ pub struct ReviewSignals {
     pub busy: Signal<bool>,
     /// Messages of the last import (partial coverage, estimated watts, ...).
     pub notes: Signal<Vec<String>>,
-    /// The power curve, the FTP suggestion and the trend of every stored ride (the page's
-    /// "Teljesítmény" view); refreshed together with the list.
-    pub analysis: Signal<Arc<Analysis>>,
+    /// "Now" of the power view, set when the list is read (the page computes its numbers from
+    /// `routes` with it).
+    pub now_s: Signal<f64>,
+    /// The ride open in the ride view, and its `(route id, stem)`.
+    pub detail: Signal<Option<Arc<RideRecord>>>,
+    pub detail_key: Signal<Option<(String, String)>>,
 }
 
 impl ReviewSignals {
@@ -215,7 +219,9 @@ impl ReviewSignals {
             loaded: Signal::new(Arc::new(Vec::new())),
             busy: Signal::new(false),
             notes: Signal::new(Vec::new()),
-            analysis: Signal::new(Arc::new(Analysis::default())),
+            now_s: Signal::new(0.0),
+            detail: Signal::new(None),
+            detail_key: Signal::new(None),
         }
     }
 }
@@ -237,6 +243,17 @@ pub struct AppState {
     pub busy: Signal<bool>,
     pub welcome_error: Signal<Option<String>>,
     pub summary: Signal<Option<RideSummary>>,
+    /// Most recently saved ride, used by the summary's analysis action.
+    pub last_saved_ride: Signal<Option<(String, String)>>,
+    /// Ride explicitly selected for an AI analysis request.
+    pub agent_ride: Signal<Option<(String, String)>>,
+    /// Dialog to return to after reviewing an agent proposal.
+    pub agent_return: Signal<Option<DialogKind>>,
+    /// The top bar's hamburger menu (very small screens only) is open.
+    pub top_menu: Signal<bool>,
+    /// Calendar navigation is retained when opening an analysis dialog.
+    pub calendar_month: Signal<Option<String>>,
+    pub calendar_day: Signal<Option<String>>,
     /// What the finished ride did against the history (ghost difference, segment PRs).
     pub comparison: Signal<Option<RideComparison>>,
     /// PR time of every climb of the loaded route, indexed like `Route::climbs`.
@@ -332,6 +349,12 @@ impl AppState {
             busy: Signal::new(false),
             welcome_error: Signal::new(None),
             summary: Signal::new(None),
+            last_saved_ride: Signal::new(None),
+            agent_ride: Signal::new(None),
+            agent_return: Signal::new(None),
+            top_menu: Signal::new(false),
+            calendar_month: Signal::new(None),
+            calendar_day: Signal::new(None),
             comparison: Signal::new(None),
             segment_prs: Signal::new(Vec::new()),
             ghost_status: Signal::new(GhostStatus::default()),

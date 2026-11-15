@@ -247,8 +247,11 @@ mechanics (the 96 × 64 grid, drag, split, swap, park as chips, separate layouts
 [`UI.md`](UI.md); what matters visually:
 
 - **Top bar** 40 px (52 px on a phone): mark and name, the route chip with its length, the parked panels as chips,
-  then *Edzés · Útvonal · Áttekintés · Eszközök (with status dots) · Beállítások*, theme, full screen, about. A *Frissítés* button
-  appears when a newer release exists.
+  then *Edzés · Naptár · AI-agent · Útvonal · Áttekintés · Eszközök (with status dots) · Beállítások*, theme, full screen.
+  The About dialog has no button: it opens from the bottom of Settings (that is what makes room for the AI-agent button on
+  a phone). From 400 to 419 px the bar drops the route length (the profile header shows it) and the buttons share the
+  width; under 400 px a hamburger (`Menu`, `.shell-menu`) takes *Útvonal*, *Áttekintés* and *AI-agent*, and *Edzés*,
+  *Naptár*, *Eszközök* and *Beállítások* stay on the bar. A *Frissítés* button appears when a newer release exists.
 - **Panels** share one frame: a 24 px title bar (a six-dot grip to carry it by, the title, optional action buttons such as
   *Street View*, a close ×) and a body; 1 px `--rule-strong` borders that coincide with the neighbours', no shadows,
   no radius. Map, profile and browser fill their body; the others scroll.
@@ -268,7 +271,7 @@ Reference screenshots of the real app: [`screenshots/`](screenshots/).
 
 ## Icons
 
-42 icons (`IconName`, unchanged), 24 px grid, 2 px stroke, **square caps and mitred joins**, straight segments
+45 icons (`IconName`; the latest are `Robot`, the AI agent, `Calendar` and `Menu`, the hamburger), 24 px grid, 2 px stroke, **square caps and mitred joins**, straight segments
 where the object has a straight edge (circles and arcs stay round), transport glyphs solid without outline,
 coordinates on whole pixels. Constants `ICON_STROKE_WIDTH`, `ICON_LINECAP`, `ICON_LINEJOIN`. Tests check
 well-formed markup, no rounded rects, no per-icon styling, and that every coordinate stays inside the grid.

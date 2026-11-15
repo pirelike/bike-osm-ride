@@ -44,7 +44,7 @@ pub fn RouteDialog(
             on_close,
             wide: true,
             foot: rsx! {
-                span { class: "dlg-foot__note",
+                span { class: "dlg-foot__note dlg-foot__note--desktop",
                     {t("ui_dialogs.welcome.a_gpx_fajlt_az_ablakra_huzva_is_megnyithatod_ctrl_o_")}
                 }
             },

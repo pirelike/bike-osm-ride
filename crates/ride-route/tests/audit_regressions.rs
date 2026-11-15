@@ -32,6 +32,7 @@ fn recorded(route: &Route, seconds: u32) -> RideRecord {
     }
     engine.finish();
     RideRecord {
+        completed_calendar_id: None,
         version: ride_model::RIDE_RECORD_VERSION,
         route_id: route.id.clone(),
         route_name: route.name.clone(),
@@ -42,6 +43,11 @@ fn recorded(route: &Route, seconds: u32) -> RideRecord {
         power_estimated: false,
         estimate: None,
         measured_power: Vec::new(),
+        ftp_w: None,
+        rider_kg: None,
+        workout: None,
+        rpe: None,
+        note: String::new(),
     }
 }
 
@@ -72,7 +78,13 @@ fn a_wrong_length_curve_is_recomputed() {
         m[0]["mmp"] = serde_json::json!([999.0])
     });
     let pending = |s: &Store| {
-        ride_sim::power_curve::analyze(&s.list_all_rides(), 1_700_000_100.0).rides_pending
+        ride_sim::power_curve::analyze(
+            &s.list_all_rides(),
+            1_700_000_100.0,
+            ride_sim::power_curve::Window::All,
+            &ride_model::RiderSettings::default(),
+        )
+        .rides_pending
     };
     assert_eq!(pending(&store), 1);
     assert_eq!(store.backfill_analysis(), 1);
@@ -103,9 +115,13 @@ fn a_huge_index_time_does_not_panic_the_analysis() {
         m[0]["started_unix_s"] = serde_json::json!(1e300)
     });
     let all = store.list_all_rides();
-    assert!(
-        std::panic::catch_unwind(|| ride_sim::power_curve::analyze(&all, 1_700_000_100.0)).is_ok()
-    );
+    assert!(std::panic::catch_unwind(|| ride_sim::power_curve::analyze(
+        &all,
+        1_700_000_100.0,
+        ride_sim::power_curve::Window::Days(90),
+        &ride_model::RiderSettings::default(),
+    ))
+    .is_ok());
 }
 
 #[test]

@@ -1,5 +1,7 @@
 # 隐私与网络流量
 
+启用连接后，可选的本地 AI 智能体可以读取 FTP、训练计划和汇总骑行指标。MCP 客户端及其 AI 服务商可能会传输收到的数据。提供给智能体的数据不含 GPS 轨迹和私人骑行备注。日历和已接受的反馈包含在备份中。
+
 > **其他语言：** [Magyar](../../PRIVACY.md) · [English](../en/PRIVACY.md) · [Español](../es/PRIVACY.md) ·
 > [Português](../pt/PRIVACY.md) · [Deutsch](../de/PRIVACY.md) · [Italiano](../it/PRIVACY.md) —
 > 本文档是匈牙利语原文的中文译本。

@@ -432,6 +432,7 @@ mod tests {
 
     fn record(speed: f64, len: f64, watts: Option<f64>) -> Arc<RideRecord> {
         Arc::new(RideRecord {
+            completed_calendar_id: None,
             version: 1,
             route_id: "r".into(),
             route_name: "Kör".into(),
@@ -463,6 +464,11 @@ mod tests {
             power_estimated: false,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: None,
+            rider_kg: None,
+            workout: None,
+            rpe: None,
+            note: String::new(),
         })
     }
 

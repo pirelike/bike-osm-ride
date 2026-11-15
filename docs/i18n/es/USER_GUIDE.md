@@ -161,6 +161,13 @@ en el campo `sources` de `workouts.json`).
 
 ![Entrenamiento en modo ERG](../../screenshots/workout.png)
 
+### Calendario de entrenamiento y agente de IA
+
+Usa Calendario para programar un entrenamiento con fecha y hora opcional y prepararlo para una ruta. En Ajustes abre el agente de IA, activa la conexión local y copia la configuración MCP. Revisa y aprueba los planes recibidos en la aplicación. Desde Análisis de IA en una actividad guardada puedes copiar la solicitud al agente y guardar su respuesta.
+
+
+El calendario también muestra actividades guardadas anteriores, incluidas las no programadas, y permite abrir su análisis detallado.
+
 ## Cambio virtual
 
 *Ajustes → Rodillo → Cambio virtual.* Transmisión 2 × 12 (50/34 y 11–34), **23 marchas**. Cambias con las
@@ -238,30 +245,58 @@ de al menos 30 segundos de datos), pulso medio y máximo, cadencia, desnivel, VA
 entrenamiento de referencia. Solo hay datos de un tramo que el entrenamiento haya recorrido **entero**; una
 salida parcial queda vacía en los demás tramos.
 
-### Potencia: máximos, FTP, carga
+### Potencia: forma, FTP, máximos, zonas, carga
 
 ![La página de potencia](../../screenshots/review-power.png)
 
-Arriba de la revisión, el conmutador **Comparación | Potencia** lleva a la otra página. Aquí están los
-números de **todos** tus entrenamientos, independientemente de la ruta:
+El selector **Comparación | Diario | Potencia** de arriba cambia de vista. La página de Potencia reúne las cifras de **todas**
+tus salidas, sea cual sea la ruta. **Periodo** (*28 días*, *42 días*, *90 días*, *1 año*, *Todo*) elige qué abarcan la curva,
+las zonas y el gráfico de forma; por defecto 90 días.
 
-- **Potencia máxima.** La mejor media de vatios para 5 segundos y para 1, 5, 20 y 60 minutos, con la fecha y
-  la ruta del entrenamiento. Si en la Comparación has marcado entrenamientos, sus valores aparecen columna a
-  columna al lado (A–D). Un entrenamiento no tiene valor para un tiempo mayor que su propia duración.
-- **FTP.** Propone como FTP el 95 % de tu mejor potencia de 20 minutos y muestra al lado la que está
-  configurada ahora. El botón **Poner el FTP en N W** lo escribe en los Ajustes; la aplicación nunca lo
-  cambia por su cuenta. El TSS de los entrenamientos guardados se queda calculado con el FTP de su momento.
-  Para una propuesta exacta hace falta un esfuerzo real de 20 minutos a tope: el entrenamiento *Test de FTP
-  20 minutos* (*Entrenamientos*, `W`) da justo eso.
-- **Carga.** Las últimas 12 semanas o meses (*Semanal* | *Mensual*): las columnas muestran el TSS, encima el
-  valor y, al pasar el ratón por la columna, el número y el tiempo de los entrenamientos.
+- **Forma y carga.** *Forma física (CTL)*: la media ponderada de 42 días de tu carga diaria. *Fatiga (ATL)*: lo mismo en 7
+  días. *Frescura (TSB)*: su diferencia del día anterior. Frescura negativa: estás cargando; entre +5 y +25 llegas fresco a una
+  carrera. El *cambio semanal* muestra cuánto subió la forma física en siete días; más de 5–8 puntos por semana puede llevar a
+  sobrecarga. La carga de una salida es el TSS con vatios medidos; sin ellos, el **hrTSS** del pulso (una hora en el pulso umbral
+  vale 100); sin pulso, el TSS de los vatios estimados.
+- **FTP.** La sugerencia usa siempre los **últimos 90 días** de salidas medidas, así que también baja tras un parón. Los tramos
+  pedaleados en ERG a un vatiaje prescrito **no cuentan**. Se ajusta un **modelo de potencia crítica** (CP y W′) a tus mejores
+  esfuerzos de 2–20 minutos y se sugiere el 95% del mayor entre tus mejores 20 minutos medidos y los 20 minutos del modelo. Al lado:
+  W/kg, el FTP actual y un aviso si la sugerencia es más baja. **Ajustar el FTP a N W** lo escribe en los ajustes; la aplicación nunca
+  lo cambia sola. Debajo: *FTP estimado por semana* y *Cambios de FTP*.
+- **Pulso.** El máximo, el umbral (LTHR) y el reposo ajustados, la base de las zonas y el pulso más alto del periodo; si supera el
+  máximo ajustado, **Ajustar el pulso máx.** lo escribe.
+- **Potencia máxima.** Los mejores vatios medios de 1 segundo a 90 minutos en un eje de tiempo logarítmico: el periodo (continua) y
+  el mejor de siempre (discontinua). La tabla da vatios, W/kg (con el peso de ese día), cuándo y dónde (un clic abre esa salida),
+  el mejor de siempre y las salidas marcadas en la comparación (A–D).
+- **Zonas.** El tiempo en zonas de potencia y de pulso del periodo, segundo a segundo, y el reparto suave (Z1–Z2) / moderado (Z3) /
+  intenso (Z4+).
+- **Carga.** Las últimas 12 semanas o meses: cada columna es la carga total; la ayuda la separa en TSS, hrTSS y estimado.
 
-**Solo cuentan los vatios medidos.** El ciclista simulado y los entrenamientos con vatios estimados (`~`) no
-entran en los máximos ni en la propuesta de FTP (sí en el tiempo de la tendencia, no en su TSS). Un
-entrenamiento importado en el que hubo potencia real sí cuenta. Los vatios propios del rodillo no son un
-potenciómetro, así que la propuesta de FTP es tan exacta como ellos. Los números de los entrenamientos más
-antiguos se calculan y se guardan la primera vez que se abre la página, lo que puede tardar unos segundos si
-hay muchos entrenamientos.
+**Solo cuentan los vatios medidos** para los máximos y el FTP. Las salidas antiguas se recalculan una vez al abrir la página.
+
+### Diario
+
+El **Diario** muestra todas las salidas de todas las rutas en orden, por semanas (de lunes a domingo): salidas, tiempo,
+distancia, carga y una barra por día. Cada fila: fecha, ruta, entrenamiento, tiempo, distancia, NP, carga (`(pulso)`: hrTSS, `~`:
+vatios estimados), el inicio de tu nota y tu sensación (RPE). Una fila abre la salida. *Semanas anteriores* carga más.
+
+### Una salida en detalle
+
+Se abre desde el diario, desde el botón **ⓘ** de la lista de comparación o desde una fecha de la tabla de máximos.
+
+- **Cifras**: tiempo, distancia, velocidad media, potencia media, NP, IF, TSS (con el FTP de ese día), hrTSS, **VI** (NP / potencia
+  media), **EF** (NP / pulso medio), **desacoplamiento Pw:HR** (por debajo del 5%, buena base aeróbica; necesita 20 minutos), W/kg,
+  trabajo, trabajo sobre el FTP, **mínimo de W′** (según el modelo CP), pulso, cadencia, el FTP y el peso de ese día.
+- Un **gráfico en el tiempo**: potencia (con el **objetivo** del entrenamiento), pulso, cadencia, velocidad o **balance de W′**.
+- **Pasos del entrenamiento**: objetivo, potencia media, **cumplimiento en %** (fuera del 90–110% aparece resaltado), NP, W/kg,
+  pulso y cadencia. Sin entrenamiento, los **esfuerzos intensos** encontrados automáticamente (al menos un minuto por encima del
+  88% del FTP en la media de 30 segundos).
+- **Zonas** segundo a segundo y la distribución de la cadencia.
+- **Entrada del diario**: tu **sensación (RPE)** de 1 a 10 y una **nota**.
+- **TCX** y **FIT**: guardar la salida como archivo en cualquier momento; en el FIT, los pasos del entrenamiento son vueltas.
+
+El resumen al final de una salida también tiene **Guardar como FIT**. En Ajustes → Ciclista están el **pulso en reposo**, el
+**pulso umbral (LTHR)** (el 90% del máximo si no lo indicas) y la **base de las zonas de pulso** (pulso máx., reserva o LTHR).
 
 ### Importar un entrenamiento de otra aplicación
 
@@ -278,8 +313,8 @@ Cosas que conviene saber:
 - El mismo entrenamiento (la misma hora de inicio) no se puede importar dos veces.
 - El entrenamiento importado **no será PR ni fantasma**: una salida de fuera, con paradas y rodando, no se
   puede comparar con tus tiempos en el rodillo. En la lista lo indica la etiqueta `Importado`.
-- En el teléfono la importación aún no está disponible. El formato FIT no lo leemos; Strava exporta también
-  GPX y TCX.
+- En el teléfono la importación aún no está disponible. Se leen archivos GPX, TCX y **FIT**; los puntos de un FIT sin
+  posición (una salida en interior sin GPS) se omiten, porque la salida se coloca en la ruta por la posición.
 
 ### Vatios estimados
 

@@ -133,6 +133,11 @@ pub fn live_snapshot(sample: &SensorSample) -> RideSnapshot {
 pub struct FinishedRide {
     pub summary: RideSummary,
     pub points: Vec<RecordPoint>,
+    /// The FTP and body mass the ride was analysed with.
+    pub ftp_w: f64,
+    pub rider_kg: f64,
+    /// The workout that ran, as it is stored with the ride.
+    pub workout: Option<ride_model::RideWorkout>,
 }
 
 /// Result of one core operation.
@@ -399,6 +404,9 @@ impl RideCore {
                     finished = self.call(|e| FinishedRide {
                         summary: e.summary(),
                         points: e.history().to_vec(),
+                        ftp_w: e.rider().ftp_w,
+                        rider_kg: e.rider().rider_kg,
+                        workout: e.ride_workout(),
                     });
                 }
                 RideState::Ready | RideState::Empty => {

@@ -311,6 +311,7 @@ fn SummaryStage() -> Element {
                 open: true,
                 summary,
                 on_save_tcx: move |_| {},
+                on_save_fit: move |_| {},
                 on_close: move |_| {},
                 on_new_ride: move |_| {},
             }

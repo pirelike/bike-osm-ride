@@ -153,6 +153,13 @@ campo `sources` de `workouts.json`).
 
 ![Treino no modo ERG](../../screenshots/workout.png)
 
+### Calendário de treinos e agente de IA
+
+Usa o Calendário para agendar um treino com data e hora opcional e prepará-lo para uma volta. Nas Definições abre o agente de IA, ativa a ligação local e copia a configuração MCP. Revê e aprova os planos recebidos na aplicação. Na análise de IA de uma volta guardada, copia o pedido para o agente e guarda a resposta.
+
+
+O calendário também mostra voltas anteriores guardadas, incluindo as não agendadas, e permite abrir a análise detalhada.
+
 ## Mudanças virtuais
 
 *Definições → Rolo → Mudanças virtuais.* Transmissão 2 × 12 (50/34 e 11–34), **23 mudanças**. Mudas de mudança com as teclas `←`/`→`,
@@ -222,27 +229,58 @@ reduzem-se ao mesmo troço. Um arrasto com menos de 100 m não conta como troço
 pulso médio e máximo, cadência, subida, VAM e a diferença em relação à volta de referência. Só há dados para um
 troço que a volta **percorreu por completo**; se a volta só o percorreu em parte, a linha dela fica vazia.
 
-### Potência: picos, FTP, carga
+### Potência: forma, FTP, picos, zonas, carga
 
 ![A página de potência](../../screenshots/review-power.png)
 
-No topo da revisão, o seletor **Comparação | Potência** leva-te à outra página. Aqui estão os números de **todas**
-as tuas voltas, independentemente do percurso:
+O seletor **Comparação | Diário | Potência** no topo muda de vista. A página de Potência reúne os números de **todas** as tuas
+voltas, seja qual for o percurso. **Período** (*28 dias*, *42 dias*, *90 dias*, *1 ano*, *Tudo*) escolhe o que a curva, as zonas e
+o gráfico de forma abrangem; por omissão 90 dias.
 
-- **Potência de pico.** A melhor média de watts para 5 segundos, 1, 5, 20 e 60 minutos, com a data e o percurso da volta. Se
-  tiveres voltas selecionadas na Comparação, os valores delas aparecem ao lado, em colunas (A–D). Uma volta não tem valor para uma
-  duração maior do que a dela.
-- **FTP.** Sugere 95% da tua melhor potência de 20 minutos como FTP e mostra o que está definido agora ao lado. O botão **Definir o
-  FTP em N W** escreve-o nas Definições; a aplicação nunca o altera sozinha. O TSS das voltas guardadas continua
-  calculado com o FTP que estava definido nessa altura. Para uma sugestão exata precisas de um verdadeiro esforço máximo de 20
-  minutos: o treino *Teste de FTP 20 minutos* (*Treinos*, `W`) dá exatamente isso.
-- **Carga.** As últimas 12 semanas ou meses (*Semanal* | *Mensal*): as colunas mostram o TSS, o valor por cima e a
-  dica (com o cursor sobre a coluna) mostra o número e o tempo das voltas.
+- **Forma e carga.** *Condição (CTL)*: a média ponderada de 42 dias da tua carga diária. *Fadiga (ATL)*: o mesmo em 7 dias.
+  *Frescura (TSB)*: a diferença entre ambas no dia anterior. Frescura negativa: estás a carregar; entre +5 e +25 chegas fresco a
+  uma prova. A *variação semanal* mostra quanto subiu a condição em sete dias; mais de 5–8 pontos por semana pode levar a
+  sobrecarga. A carga de uma volta é o TSS com watts medidos; sem eles, o **hrTSS** do pulso (uma hora no pulso de limiar vale 100);
+  sem pulso, o TSS dos watts estimados.
+- **FTP.** A sugestão usa sempre os **últimos 90 dias** de voltas medidas, por isso também desce depois de uma pausa. Os troços
+  pedalados em ERG a uma potência prescrita **não contam**. É ajustado um **modelo de potência crítica** (CP e W′) aos teus
+  melhores esforços de 2–20 minutos e é sugerido 95 % do maior entre os teus melhores 20 minutos medidos e os 20 minutos do modelo.
+  Ao lado: W/kg, o FTP atual e um aviso se a sugestão for mais baixa. **Definir o FTP para N W** escreve-o nas definições; a
+  aplicação nunca o muda sozinha. Por baixo: *FTP estimado por semana* e *Alterações do FTP*.
+- **Pulso.** O máximo, o limiar (LTHR) e o repouso definidos, a base das zonas e o pulso mais alto do período; se for acima do
+  máximo definido, **Definir o pulso máx.** escreve-o.
+- **Pico de potência.** Os melhores watts médios de 1 segundo a 90 minutos num eixo de tempo logarítmico: o período (contínua) e o
+  melhor de sempre (tracejado). A tabela dá watts, W/kg (com o peso desse dia), quando e onde (um clique abre essa volta), o
+  melhor de sempre e as voltas marcadas na comparação (A–D).
+- **Zonas.** O tempo nas zonas de potência e de pulso do período, segundo a segundo, e a divisão leve (Z1–Z2) / moderado (Z3) /
+  intenso (Z4+).
+- **Carga.** As últimas 12 semanas ou meses: cada coluna é a carga total; a ajuda separa-a em TSS, hrTSS e estimado.
 
-**Só contam os watts medidos.** O ciclista simulado e as voltas com watts estimados (`~`) não entram nos picos nem na
-sugestão de FTP (no tempo da tendência entram, no TSS dela não). Uma volta importada em que houve potência real
-conta. Os watts do próprio rolo não são um potenciómetro, por isso a sugestão de FTP só é tão precisa quanto isso. Os números das
-voltas mais antigas são calculados e guardados na primeira abertura, o que pode levar alguns segundos com muitas voltas.
+**Só contam os watts medidos** para os picos e o FTP. As voltas antigas são recalculadas uma vez ao abrir a página.
+
+### Diário
+
+O **Diário** mostra todas as voltas de todos os percursos por ordem, por semanas (de segunda a domingo): voltas, tempo,
+distância, carga e uma barra por dia. Cada linha: data, percurso, treino, tempo, distância, NP, carga (`(pulso)`: hrTSS, `~`: watts
+estimados), o início da tua nota e a tua sensação (RPE). Uma linha abre a volta. *Semanas anteriores* carrega mais.
+
+### Uma volta em detalhe
+
+Abre-se a partir do diário, do botão **ⓘ** da lista de comparação ou de uma data da tabela de picos.
+
+- **Números**: tempo, distância, velocidade média, potência média, NP, IF, TSS (com o FTP desse dia), hrTSS, **VI** (NP / potência
+  média), **EF** (NP / pulso médio), **desacoplamento Pw:HR** (abaixo de 5 %, boa base aeróbia; precisa de 20 minutos), W/kg,
+  trabalho, trabalho acima do FTP, **mínimo de W′** (segundo o modelo CP), pulso, cadência, o FTP e o peso desse dia.
+- Um **gráfico no tempo**: potência (com o **alvo** do treino), pulso, cadência, velocidade ou **saldo de W′**.
+- **Passos do treino**: alvo, potência média, **cumprimento em %** (fora de 90–110 % fica destacado), NP, W/kg, pulso e cadência.
+  Sem treino, os **esforços intensos** encontrados automaticamente (pelo menos um minuto acima de 88 % do FTP na média de 30
+  segundos).
+- **Zonas** segundo a segundo e a distribuição da cadência.
+- **Entrada do diário**: a tua **sensação (RPE)** de 1 a 10 e uma **nota**.
+- **TCX** e **FIT**: guardar a volta num ficheiro a qualquer momento; no FIT, os passos do treino são voltas (laps).
+
+O resumo no fim de uma volta também tem **Guardar como FIT**. Em Definições → Ciclista estão o **pulso em repouso**, o **pulso de
+limiar (LTHR)** (90 % do máximo se não o indicares) e a **base das zonas de pulso** (pulso máx., reserva ou LTHR).
 
 ### Importar uma volta de outra aplicação
 
@@ -257,7 +295,8 @@ exportado do Strava, da Garmin ou do Wahoo. O pulso, a cadência e (se existirem
 - A mesma volta (a mesma hora de início) não pode ser importada duas vezes.
 - A volta importada **não será um PR nem um fantasma**: uma volta ao ar livre com paragens e roda livre não pode ser
   comparada com os teus tempos no rolo. Na lista, a etiqueta `Importada` marca-a.
-- No telemóvel, a importação ainda não está disponível. Não lemos o formato FIT; o Strava exporta tanto GPX como TCX.
+- No telemóvel, a importação ainda não está disponível. São lidos ficheiros GPX, TCX e **FIT**; os pontos de um FIT sem
+  posição (uma volta em interior sem GPS) ficam de fora, porque a volta é colocada no percurso pela posição.
 
 ### Watts estimados
 

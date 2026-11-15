@@ -111,8 +111,15 @@ fn huge_timestamps_do_not_overflow_the_trend() {
             started_unix_s: 1e300,
             ..RideMeta::default()
         };
-        let result =
-            std::panic::catch_unwind(|| power_curve::bucket(&[&meta], period, 12, 1_700_000_000.0));
+        let result = std::panic::catch_unwind(|| {
+            power_curve::bucket(
+                &[&meta],
+                period,
+                12,
+                1_700_000_000.0,
+                &RiderSettings::default(),
+            )
+        });
         assert!(result.is_ok(), "{period:?} panicked");
     }
 }

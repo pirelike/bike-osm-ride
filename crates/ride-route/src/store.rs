@@ -271,6 +271,10 @@ pub(crate) fn sanitize(mut s: Settings) -> Settings {
     fix(&mut s.rider.bike_kg, d.rider.bike_kg);
     fix(&mut s.rider.ftp_w, d.rider.ftp_w);
     fix(&mut s.rider.max_hr, d.rider.max_hr);
+    fix(&mut s.rider.rest_hr, d.rider.rest_hr);
+    if !s.rider.lthr.is_finite() || s.rider.lthr < 0.0 {
+        s.rider.lthr = d.rider.lthr;
+    }
     fix(&mut s.rider.cda, d.rider.cda);
     fix(&mut s.rider.crr, d.rider.crr);
     fix(&mut s.rider.drivetrain_eff, d.rider.drivetrain_eff);

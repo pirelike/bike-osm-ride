@@ -16,6 +16,9 @@ pub use extras::*;
 mod history;
 pub use history::*;
 
+mod calendar;
+pub use calendar::*;
+
 mod workout;
 pub use workout::*;
 
@@ -185,6 +188,56 @@ pub struct RiderSettings {
     pub trainer_grade_scale: f64,
     /// Use the trainer-reported speed instead of the physics model.
     pub use_trainer_speed: bool,
+    /// Resting heart rate, bpm (heart-rate reserve zones, TRIMP / hrTSS).
+    pub rest_hr: f64,
+    /// Lactate threshold heart rate, bpm. `0` (or a value outside 80..=230): not set, taken as
+    /// 90 % of the maximum (see [`RiderSettings::effective_lthr`]).
+    pub lthr: f64,
+    /// Which model the heart-rate zones follow.
+    pub hr_zone_model: HrZoneModel,
+}
+
+/// How the five heart-rate zones are derived.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HrZoneModel {
+    /// Percent of the maximum heart rate (60 / 70 / 80 / 90 %).
+    #[default]
+    MaxHr,
+    /// Percent of the heart-rate reserve, Karvonen (50 / 60 / 70 / 80 / 90 % of max - rest).
+    Reserve,
+    /// Percent of the lactate threshold heart rate, Coggan (69 / 84 / 95 / 106 %).
+    Lthr,
+}
+
+impl RiderSettings {
+    /// The threshold heart rate used for zones and hrTSS: the set value, or 90 % of the maximum
+    /// when none is set.
+    pub fn effective_lthr(&self) -> f64 {
+        if self.lthr.is_finite() && (80.0..=230.0).contains(&self.lthr) {
+            self.lthr
+        } else {
+            let max = if self.max_hr.is_finite() && self.max_hr > 0.0 {
+                self.max_hr
+            } else {
+                190.0
+            };
+            (max * 0.9).round()
+        }
+    }
+
+    /// The resting heart rate used for the reserve, clamped below the maximum.
+    pub fn effective_rest_hr(&self) -> f64 {
+        let max = if self.max_hr.is_finite() && self.max_hr > 0.0 {
+            self.max_hr
+        } else {
+            190.0
+        };
+        if self.rest_hr.is_finite() && self.rest_hr >= 25.0 && self.rest_hr < max - 20.0 {
+            self.rest_hr
+        } else {
+            60.0_f64.min(max - 20.0).max(0.0)
+        }
+    }
 }
 
 impl Default for RiderSettings {
@@ -200,6 +253,9 @@ impl Default for RiderSettings {
             air_density: 1.225,
             trainer_grade_scale: 1.0,
             use_trainer_speed: false,
+            rest_hr: 60.0,
+            lthr: 0.0,
+            hr_zone_model: HrZoneModel::MaxHr,
         }
     }
 }
@@ -640,7 +696,7 @@ pub struct RecordPoint {
 }
 
 /// Ride summary shown when the ride ends.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RideSummary {
     pub route_name: String,
     /// Id of the route the ride was made on (the key of the ride log). Older files have none.

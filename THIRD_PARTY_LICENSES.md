@@ -6,7 +6,7 @@ declared in the crate metadata are marked; the map and route data sources are
 attributed in the README Licenc section and in the app about dialog, and vendored
 or ported source files are described in [`NOTICE.md`](NOTICE.md).
 
-Packages: **640**. Without a declared licence field: **0**.
+Packages: **658**. Without a declared licence field: **0**.
 
 | Crate | Version | Licence | Repository |
 |---|---|---|---|
@@ -16,20 +16,21 @@ Packages: **640**. Without a declared licence field: **0**.
 | aho-corasick | 1.1.5 | Unlicense OR MIT | <https://github.com/BurntSushi/aho-corasick> |
 | aligned | 0.4.3 | MIT OR Apache-2.0 | <https://github.com/rust-embedded-community/aligned> |
 | aligned-vec | 0.6.4 | MIT | <https://github.com/sarah-ek/aligned-vec/> |
+| android_system_properties | 0.1.6 | MIT OR Apache-2.0 | <https://github.com/nical/android_system_properties> |
 | anyhow | 1.0.104 | MIT OR Apache-2.0 | <https://github.com/dtolnay/anyhow> |
 | arbitrary | 1.5.0 | MIT OR Apache-2.0 | <https://github.com/rust-fuzz/arbitrary/> |
 | arg_enum_proc_macro | 0.3.4 | MIT | <https://github.com/lu-zero/arg_enum_proc_macro> |
 | arrayvec | 0.7.8 | MIT OR Apache-2.0 | <https://github.com/bluss/arrayvec> |
-| askama_escape | 0.13.0 | MIT OR Apache-2.0 | <https://github.com/askama-rs/askama> |
 | as-slice | 0.2.1 | MIT OR Apache-2.0 | <https://github.com/japaric/as-slice> |
+| askama_escape | 0.13.0 | MIT OR Apache-2.0 | <https://github.com/askama-rs/askama> |
 | async-trait | 0.1.92 | MIT OR Apache-2.0 | <https://github.com/dtolnay/async-trait> |
 | atk | 0.18.2 | MIT | <https://github.com/gtk-rs/gtk3-rs> |
 | atk-sys | 0.18.2 | MIT | <https://github.com/gtk-rs/gtk3-rs> |
 | atomic-waker | 1.1.2 | Apache-2.0 OR MIT | <https://github.com/smol-rs/atomic-waker> |
 | autocfg | 1.5.1 | Apache-2.0 OR MIT | <https://github.com/cuviper/autocfg> |
+| av-scenechange | 0.14.1 | MIT | <https://github.com/rust-av/av-scenechange> |
 | av1-grain | 0.2.5 | BSD-2-Clause | <https://github.com/rust-av/av1-grain> |
 | avif-serialize | 0.8.9 | BSD-3-Clause | <https://github.com/kornelski/avif-serialize> |
-| av-scenechange | 0.14.1 | MIT | <https://github.com/rust-av/av-scenechange> |
 | aws-lc-rs | 1.19.0 | ISC AND (Apache-2.0 OR ISC) | <https://github.com/aws/aws-lc-rs> |
 | aws-lc-sys | 0.47.0 | ISC AND (Apache-2.0 OR ISC) AND Apache-2.0 AND MIT AND BSD-3-Clause AND (Apache-2.0 OR ISC OR MIT) AND (Apache-2.0 OR ISC OR MIT-0) | <https://github.com/aws/aws-lc-rs> |
 | base16ct | 0.2.0 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/formats/tree/master/base16ct> |
@@ -41,8 +42,9 @@ Packages: **640**. Without a declared licence field: **0**.
 | bitflags | 2.13.2 | MIT OR Apache-2.0 | <https://github.com/bitflags/bitflags> |
 | bitstream-io | 4.10.0 | MIT/Apache-2.0 | <https://github.com/tuffy/bitstream-io> |
 | block | 0.1.6 | MIT | <http://github.com/SSheldon/rust-block> |
-| block2 | 0.6.2 | MIT | <https://github.com/madsmtm/objc2> |
 | block-buffer | 0.10.4 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/utils> |
+| block-buffer | 0.12.1 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/utils> |
+| block2 | 0.6.2 | MIT | <https://github.com/madsmtm/objc2> |
 | bluez-async | 0.9.0 | MIT OR Apache-2.0 | <https://github.com/bluez-rs/bluez-async/> |
 | bluez-generated | 0.4.0 | MIT OR Apache-2.0 | <https://github.com/bluez-rs/bluez-async/> |
 | btleplug | 0.13.5 | MIT/Apache-2.0/BSD-3-Clause | <https://github.com/deviceplug/btleplug> |
@@ -62,6 +64,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | cfg-expr | 0.15.8 | MIT OR Apache-2.0 | <https://github.com/EmbarkStudios/cfg-expr> |
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | <https://github.com/rust-lang/cfg-if> |
 | chacha20 | 0.10.2 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/stream-ciphers> |
+| chrono | 0.4.44 | MIT OR Apache-2.0 | <https://github.com/chronotope/chrono> |
 | cipher | 0.4.4 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/traits> |
 | cmake | 0.1.58 | MIT OR Apache-2.0 | <https://github.com/rust-lang/cmake-rs> |
 | cocoa | 0.26.1 | MIT OR Apache-2.0 | <https://github.com/servo/core-foundation-rs> |
@@ -70,6 +73,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | combine | 4.6.9 | MIT | <https://github.com/Marwes/combine> |
 | const_format | 0.2.37 | Zlib | <https://github.com/rodrimati1992/const_format_crates/> |
 | const_format_proc_macros | 0.2.37 | Zlib | <https://github.com/rodrimati1992/const_format_crates/> |
+| const-oid | 0.10.3 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/formats> |
 | const-oid | 0.9.6 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/formats/tree/master/const-oid> |
 | const-serialize | 0.7.2 | MIT OR Apache-2.0 | <https://github.com/dioxuslabs/dioxus> |
 | const-serialize | 0.8.0-alpha.0 | MIT OR Apache-2.0 | <https://github.com/dioxuslabs/dioxus> |
@@ -93,6 +97,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | crunchy | 0.2.4 | MIT | <https://github.com/eira-fransham/crunchy> |
 | crypto-bigint | 0.5.5 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/crypto-bigint> |
 | crypto-common | 0.1.7 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/traits> |
+| crypto-common | 0.2.2 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/traits> |
 | ctr | 0.9.2 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/block-modes> |
 | cssparser | 0.29.6 | MPL-2.0 | <https://github.com/servo/rust-cssparser> |
 | cssparser-macros | 0.6.1 | MPL-2.0 | <https://github.com/servo/rust-cssparser> |
@@ -108,6 +113,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | derive_arbitrary | 1.5.0 | MIT OR Apache-2.0 | <https://github.com/rust-fuzz/arbitrary> |
 | derive_more | 0.99.20 | MIT | <https://github.com/JelteF/derive_more> |
 | digest | 0.10.7 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/traits> |
+| digest | 0.11.3 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/traits> |
 | dioxus | 0.7.10 | MIT OR Apache-2.0 | <https://github.com/DioxusLabs/dioxus/> |
 | dioxus-asset-resolver | 0.7.10 | MIT OR Apache-2.0 | <https://github.com/DioxusLabs/dioxus/> |
 | dioxus-cli-config | 0.7.10 | MIT OR Apache-2.0 | <https://github.com/DioxusLabs/dioxus/> |
@@ -142,6 +148,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | dtoa | 1.0.11 | MIT OR Apache-2.0 | <https://github.com/dtolnay/dtoa> |
 | dtoa-short | 0.3.5 | MPL-2.0 | <https://github.com/upsuper/dtoa-short> |
 | dunce | 1.0.5 | CC0-1.0 OR MIT-0 OR Apache-2.0 | <https://gitlab.com/kornelski/dunce> |
+| dyn-clone | 1.0.20 | MIT OR Apache-2.0 | <https://github.com/dtolnay/dyn-clone> |
 | ecdsa | 0.16.9 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/signatures/tree/master/ecdsa> |
 | either | 1.19.0 | MIT OR Apache-2.0 | <https://github.com/rayon-rs/either> |
 | elliptic-curve | 0.13.8 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/traits/tree/master/elliptic-curve> |
@@ -204,8 +211,8 @@ Packages: **640**. Without a declared licence field: **0**.
 | gobject-sys | 0.18.0 | MIT | <https://github.com/gtk-rs/gtk-rs-core> |
 | group | 0.13.0 | MIT/Apache-2.0 | <https://github.com/zkcrypto/group> |
 | gtk | 0.18.2 | MIT | <https://github.com/gtk-rs/gtk3-rs> |
-| gtk3-macros | 0.18.2 | MIT | <https://github.com/gtk-rs/gtk3-rs> |
 | gtk-sys | 0.18.2 | MIT | <https://github.com/gtk-rs/gtk3-rs> |
+| gtk3-macros | 0.18.2 | MIT | <https://github.com/gtk-rs/gtk3-rs> |
 | half | 2.7.1 | MIT OR Apache-2.0 | <https://github.com/VoidStarKat/half-rs> |
 | hashbrown | 0.14.5 | MIT OR Apache-2.0 | <https://github.com/rust-lang/hashbrown> |
 | hashbrown | 0.17.1 | MIT OR Apache-2.0 | <https://github.com/rust-lang/hashbrown> |
@@ -215,12 +222,15 @@ Packages: **640**. Without a declared licence field: **0**.
 | hmac | 0.12.1 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/MACs> |
 | html5ever | 0.29.1 | MIT OR Apache-2.0 | <https://github.com/servo/html5ever> |
 | http | 1.5.0 | MIT OR Apache-2.0 | <https://github.com/hyperium/http> |
-| httparse | 1.10.1 | MIT OR Apache-2.0 | <https://github.com/seanmonstar/httparse> |
 | http-body | 1.1.0 | MIT | <https://github.com/hyperium/http-body> |
 | http-body-util | 0.1.5 | MIT | <https://github.com/hyperium/http-body> |
+| httparse | 1.10.1 | MIT OR Apache-2.0 | <https://github.com/seanmonstar/httparse> |
+| hybrid-array | 0.4.15 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/hybrid-array> |
 | hyper | 1.12.0 | MIT | <https://github.com/hyperium/hyper> |
 | hyper-rustls | 0.27.10 | Apache-2.0 OR ISC OR MIT | <https://github.com/rustls/hyper-rustls> |
 | hyper-util | 0.1.21 | MIT | <https://github.com/hyperium/hyper-util> |
+| iana-time-zone | 0.1.65 | MIT OR Apache-2.0 | <https://github.com/strawlab/iana-time-zone> |
+| iana-time-zone-haiku | 0.1.2 | MIT OR Apache-2.0 | <https://github.com/strawlab/iana-time-zone> |
 | icu_collections | 2.4.0 | Unicode-3.0 | <https://github.com/unicode-org/icu4x> |
 | icu_locale_core | 2.4.0 | Unicode-3.0 | <https://github.com/unicode-org/icu4x> |
 | icu_normalizer | 2.4.0 | Unicode-3.0 | <https://github.com/unicode-org/icu4x> |
@@ -341,6 +351,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | <https://github.com/Amanieu/parking_lot> |
 | paste | 1.0.15 | MIT OR Apache-2.0 | <https://github.com/dtolnay/paste> |
 | pastey | 0.1.1 | MIT OR Apache-2.0 | <https://github.com/as1100k/pastey> |
+| pastey | 0.2.3 | MIT OR Apache-2.0 | <https://github.com/as1100k/pastey> |
 | pem-rfc7468 | 0.7.0 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/formats/tree/master/pem-rfc7468> |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 | <https://github.com/servo/rust-url/> |
 | phf | 0.10.1 | MIT | <https://github.com/sfackler/rust-phf> |
@@ -368,14 +379,14 @@ Packages: **640**. Without a declared licence field: **0**.
 | ppv-lite86 | 0.2.21 | MIT OR Apache-2.0 | <https://github.com/cryptocorrosion/cryptocorrosion> |
 | precomputed-hash | 0.1.1 | MIT | <https://github.com/emilio/precomputed-hash> |
 | primeorder | 0.13.6 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/elliptic-curves/tree/master/primeorder> |
-| proc-macro2 | 1.0.107 | MIT OR Apache-2.0 | <https://github.com/dtolnay/proc-macro2> |
-| proc-macro2-diagnostics | 0.10.1 | MIT/Apache-2.0 | <https://github.com/SergioBenitez/proc-macro2-diagnostics> |
 | proc-macro-crate | 1.3.1 | MIT OR Apache-2.0 | <https://github.com/bkchr/proc-macro-crate> |
 | proc-macro-crate | 2.0.2 | MIT OR Apache-2.0 | <https://github.com/bkchr/proc-macro-crate> |
 | proc-macro-crate | 3.5.0 | MIT OR Apache-2.0 | <https://github.com/bkchr/proc-macro-crate> |
 | proc-macro-error | 1.0.4 | MIT OR Apache-2.0 | <https://gitlab.com/CreepySkeleton/proc-macro-error> |
 | proc-macro-error-attr | 1.0.4 | MIT OR Apache-2.0 | <https://gitlab.com/CreepySkeleton/proc-macro-error> |
 | proc-macro-hack | 0.5.20+deprecated | MIT OR Apache-2.0 | <https://github.com/dtolnay/proc-macro-hack> |
+| proc-macro2 | 1.0.107 | MIT OR Apache-2.0 | <https://github.com/dtolnay/proc-macro2> |
+| proc-macro2-diagnostics | 0.10.1 | MIT/Apache-2.0 | <https://github.com/SergioBenitez/proc-macro2-diagnostics> |
 | profiling | 1.0.18 | MIT OR Apache-2.0 | <https://github.com/aclysma/profiling> |
 | profiling-procmacros | 1.0.18 | MIT OR Apache-2.0 | <https://github.com/aclysma/profiling> |
 | pulp | 0.22.3 | MIT | <https://github.com/sarah-quinones/pulp/> |
@@ -388,6 +399,8 @@ Packages: **640**. Without a declared licence field: **0**.
 | quinn-proto | 0.11.19 | MIT OR Apache-2.0 | <https://github.com/quinn-rs/quinn> |
 | quinn-udp | 0.5.16 | MIT OR Apache-2.0 | <https://github.com/quinn-rs/quinn> |
 | quote | 1.0.47 | MIT OR Apache-2.0 | <https://github.com/dtolnay/quote> |
+| r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | <https://github.com/r-efi/r-efi> |
+| r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | <https://github.com/r-efi/r-efi> |
 | rand | 0.10.3 | MIT OR Apache-2.0 | <https://github.com/rust-random/rand> |
 | rand | 0.7.3 | MIT OR Apache-2.0 | <https://github.com/rust-random/rand> |
 | rand | 0.8.8 | MIT OR Apache-2.0 | <https://github.com/rust-random/rand> |
@@ -412,8 +425,8 @@ Packages: **640**. Without a declared licence field: **0**.
 | reborrow | 0.5.5 | MIT | <https://github.com/sarah-ek/reborrow/> |
 | redox_syscall | 0.5.18 | MIT | <https://gitlab.redox-os.org/redox-os/syscall> |
 | redox_users | 0.5.3 | MIT | <https://gitlab.redox-os.org/redox-os/users> |
-| r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | <https://github.com/r-efi/r-efi> |
-| r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | <https://github.com/r-efi/r-efi> |
+| ref-cast | 1.0.25 | MIT OR Apache-2.0 | <https://github.com/dtolnay/ref-cast> |
+| ref-cast-impl | 1.0.25 | MIT OR Apache-2.0 | <https://github.com/dtolnay/ref-cast> |
 | regex-automata | 0.4.18 | MIT OR Apache-2.0 | <https://github.com/rust-lang/regex> |
 | regex-syntax | 0.8.11 | MIT OR Apache-2.0 | <https://github.com/rust-lang/regex> |
 | reqwest | 0.13.5 | MIT OR Apache-2.0 | <https://github.com/seanmonstar/reqwest> |
@@ -421,6 +434,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | rfd | 0.17.2 | MIT | <https://github.com/PolyMeilex/rfd> |
 | rgb | 0.8.53 | MIT | <https://github.com/kornelski/rust-rgb> |
 | ring | 0.17.14 | Apache-2.0 AND ISC | <https://github.com/briansmith/ring> |
+| rmcp | 3.9.0 | Apache-2.0 | <https://github.com/modelcontextprotocol/rust-sdk/> |
 | rustc_version | 0.4.1 | MIT OR Apache-2.0 | <https://github.com/djc/rustc-version-rs> |
 | rustc-hash | 1.1.0 | Apache-2.0/MIT | <https://github.com/rust-lang-nursery/rustc-hash> |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | <https://github.com/rust-lang/rustc-hash> |
@@ -434,6 +448,8 @@ Packages: **640**. Without a declared licence field: **0**.
 | rustversion | 1.0.23 | MIT OR Apache-2.0 | <https://github.com/dtolnay/rustversion> |
 | same-file | 1.0.6 | Unlicense/MIT | <https://github.com/BurntSushi/same-file> |
 | schannel | 0.1.30 | MIT | <https://github.com/steffengy/schannel-rs> |
+| schemars | 1.2.1 | MIT | <https://github.com/GREsau/schemars> |
+| schemars_derive | 1.2.1 | MIT | <https://github.com/GREsau/schemars> |
 | scopeguard | 1.2.0 | MIT OR Apache-2.0 | <https://github.com/bluss/scopeguard> |
 | sec1 | 0.7.3 | Apache-2.0 OR MIT | <https://github.com/RustCrypto/formats/tree/master/sec1> |
 | security-framework | 3.7.0 | MIT OR Apache-2.0 | <https://github.com/kornelski/rust-security-framework> |
@@ -444,6 +460,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | serde | 1.0.229 | MIT OR Apache-2.0 | <https://github.com/serde-rs/serde> |
 | serde_core | 1.0.229 | MIT OR Apache-2.0 | <https://github.com/serde-rs/serde> |
 | serde_derive | 1.0.229 | MIT OR Apache-2.0 | <https://github.com/serde-rs/serde> |
+| serde_derive_internals | 0.29.1 | MIT OR Apache-2.0 | <https://github.com/serde-rs/serde> |
 | serde_json | 1.0.154 | MIT OR Apache-2.0 | <https://github.com/serde-rs/json> |
 | serde_repr | 0.1.21 | MIT OR Apache-2.0 | <https://github.com/dtolnay/serde-repr> |
 | serde_spanned | 0.6.9 | MIT OR Apache-2.0 | <https://github.com/toml-rs/toml> |
@@ -452,6 +469,7 @@ Packages: **640**. Without a declared licence field: **0**.
 | servo_arc | 0.2.0 | MIT OR Apache-2.0 | <https://github.com/servo/servo> |
 | sha1 | 0.10.7 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/hashes> |
 | sha2 | 0.10.9 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/hashes> |
+| sha2 | 0.11.1 | MIT OR Apache-2.0 | <https://github.com/RustCrypto/hashes> |
 | sharded-slab | 0.1.7 | MIT | <https://github.com/hawkw/sharded-slab> |
 | shlex | 2.0.1 | MIT OR Apache-2.0 | <https://github.com/comex/rust-shlex> |
 | signal-hook | 0.3.18 | Apache-2.0/MIT | <https://github.com/vorner/signal-hook> |
@@ -554,13 +572,13 @@ Packages: **640**. Without a declared licence field: **0**.
 | wasm-bindgen-macro-support | 0.2.130 | MIT OR Apache-2.0 | <https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support> |
 | wasm-bindgen-shared | 0.2.130 | MIT OR Apache-2.0 | <https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared> |
 | wasm-streams | 0.4.2 | MIT OR Apache-2.0 | <https://github.com/MattiasBuelens/wasm-streams/> |
+| web-sys | 0.3.107 | MIT OR Apache-2.0 | <https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys> |
+| web-time | 1.1.0 | MIT OR Apache-2.0 | <https://github.com/daxpedda/web-time> |
 | webbrowser | 1.2.6 | MIT OR Apache-2.0 | <https://github.com/amodm/webbrowser-rs> |
 | webkit2gtk | 2.0.1 | MIT | <https://github.com/tauri-apps/webkit2gtk-rs> |
 | webkit2gtk-sys | 2.0.1 | MIT | <https://github.com/tauri-apps/webkit2gtk-rs> |
 | webpki-root-certs | 1.0.11 | CDLA-Permissive-2.0 | <https://github.com/rustls/webpki-roots> |
 | webpki-roots | 1.0.11 | CDLA-Permissive-2.0 | <https://github.com/rustls/webpki-roots> |
-| web-sys | 0.3.107 | MIT OR Apache-2.0 | <https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys> |
-| web-time | 1.1.0 | MIT OR Apache-2.0 | <https://github.com/daxpedda/web-time> |
 | webview2-com | 0.38.2 | MIT | <https://github.com/wravery/webview2-rs> |
 | webview2-com-macros | 0.8.1 | MIT | <https://github.com/wravery/webview2-rs> |
 | webview2-com-sys | 0.38.2 | MIT | <https://github.com/wravery/webview2-rs> |

@@ -155,6 +155,30 @@ Billat 30/30, Gibala sprintintervallum és mások; a források edzésenként a `
 
 ![Edzés ERG-módban](screenshots/workout.png)
 
+### Edzésnaptár és AI-agent
+
+A felső sáv *Naptár* gombjával ütemezhetsz egy könyvtári edzést. Adj meg egy napot és szükség esetén kezdési
+időpontot. A bejegyzést átteheted, törölheted, illetve előkészítheted a tekeréshez. Az előkészített edzés a
+szokásos *Kezdés* gombbal indul. Ha még nincs betöltve útvonal, előbb az útvonalválasztó nyílik meg.
+A naptár a korábbi napok mentett meneteit is mutatja, köztük azokat, amelyeket előzetes ütemezés nélkül végeztél.
+A menethez tartozó elemzés közvetlenül a naptárból megnyitható.
+
+Az *AI-agent* ablak a felső sáv robot ikonos *AI-agent* gombjával nyílik (1120 px-nél keskenyebb ablakban csak az ikon látszik), és elérhető a
+*Naptárból*, a *Beállításokból*, a menet összegzéséből és az áttekintésből is. Itt kapcsolhatod be a helyi
+agentkapcsolatot, kiválaszthatod a klienst (*Claude Code* vagy *JSON*, pl. Claude Desktop), és egy gombbal kimásolhatod
+a hozzá tartozó beállítást; a nyers szöveg a *Nyers beállítás megjelenítése* alatt olvasható.
+
+Az agent **edzőként** dolgozik: látja a naptárat (melyik edzés teljesült már, és melyik menettel), az utóbbi
+menetek mutatóit, az általad megadott **RPE-t** (1–10) és azt, hogy a tervezett célokat mennyire tartottad
+(teljesítési százalék). Ha egy korábbi edzés rosszul sikerült, a következőket személyre szabhatja: **új edzést vehet
+fel, a még nem teljesített, ütemezett edzést áttehet, kicserélheti másikra, vagy törölheti**, minden módosításhoz
+indoklást fűzve. A teljesített edzések múltnak számítanak, azokat az agent nem módosíthatja.
+
+Semmi nem történik a jóváhagyásod nélkül: a beérkezett javaslat az *AI-agent* ablakban jelenik meg (a módosítás
+előtte → utána formában, indoklással), és csak a *Jóváhagyás* gomb után kerül a naptárba. A befejezett, mentett menet
+összegzéséből vagy az áttekintés menetnézetéből az *AI-elemzés* gombbal kimásolható az agentnek szóló kérés. Az agent
+válasza javaslatként érkezik, amelyet jóváhagyás után a menetnél lehet visszaolvasni.
+
 ## Virtuális váltó
 
 *Beállítások → Trainer → Virtuális váltó.* 2 × 12-es hajtás (50/34 és 11–34), **23 fokozat**. A `←`/`→` billentyűvel, a
@@ -190,7 +214,9 @@ teljesítmény, IF, TSS, energia, átlagsebesség, pulzus, a szegmenstábla és 
 
 ![Az összegzés](screenshots/summary.png)
 
-Alul a `Mentés TCX-ként` gomb (Garmin-séma; a javasolt fájlnév dátumból és útvonalnévből áll) és az `Új útvonal`.
+Alul a `Mentés FIT-ként` és a `Mentés TCX-ként` gomb (Garmin-formátumok; a javasolt fájlnév dátumból és útvonalnévből áll) és az
+`Új útvonal`. A FIT-et a Strava, a Garmin Connect, a TrainingPeaks és az Intervals.icu is a legjobban olvassa; ha edzést tekertél,
+annak lépései külön körként jelennek meg. Egy korábbi edzést az áttekintő oldal részletes nézetéből mentheted el utólag.
 
 **Feltöltés Stravára, Intervals.icu-ra, TrainingPeaks-re:** beépített feltöltés nincs. A Strava saját oldalán a *Fájl feltöltése*
 (Upload) menüben a mentett TCX-et kézzel is felviheted; az Intervals.icu és a TrainingPeaks is elfogadja. A 0.3.1-ig volt egy
@@ -227,31 +253,71 @@ számít szakasznak.
 forgatva: soronként egy szám, oszloponként egy edzés (A–D). Csak olyan szakaszra van adat, amelyet az edzés **teljesen
 végigtekert**; egy részleges menet a többi szakaszon üres.
 
-### Teljesítmény: csúcsok, FTP, terhelés
+### Teljesítmény: forma, FTP, csúcsok, zónák, terhelés
 
 ![A teljesítmény oldal](screenshots/review-power.png)
 
-Az áttekintés tetején az **Összehasonlítás | Teljesítmény** váltó a másik oldalra visz. Itt az **összes** edzésed számai
-vannak, útvonaltól függetlenül:
+Az áttekintés tetején az **Összehasonlítás | Napló | Teljesítmény** váltó vált a nézetek között. A Teljesítmény oldalon az
+**összes** edzésed számai vannak, útvonaltól függetlenül. Fent az **Időszak** (*28 nap*, *42 nap*, *90 nap*, *1 év*, *Mind*)
+választja ki, mit mutasson a görbe, a zónák és a forma-grafikon; alapból 90 nap.
 
-- **Csúcsteljesítmény.** A legjobb átlagos watt 5 másodpercre, 1, 5, 20 és 60 percre, az edzés dátumával és útvonalával. Ha az
-  Összehasonlításban kijelöltél edzéseket, az ő értékeik oszloponként mellette állnak (A–D). Egy edzésnek nincs értéke olyan
-  időre, amelynél rövidebb volt.
-- **FTP.** A legjobb 20 percnyi teljesítményed 95 %-át javasolja FTP-nek, és mellette a jelenleg beállítottat. Az
-  **FTP beállítása N W-ra** gomb átírja a Beállításokban; magától az app soha nem módosítja. A mentett edzések TSS-e a saját
-  idejük FTP-jével számolt marad. Pontos javaslathoz egy igazi 20 perces, legjobb tudású erőfeszítés kell: az *FTP-teszt 20 perc*
-  edzés (*Edzések*, `W`) pont ezt adja.
-- **Terhelés.** Az utolsó 12 hét vagy hónap (*Heti* | *Havi*): oszlopai a TSS-t mutatják, fölötte az érték, a súgó
-  (az oszlopra állva) az edzések számát és idejét.
+- **Forma és terhelés.** *Fitnesz (CTL)*: a napi terhelés 42 napos súlyozott átlaga. *Fáradtság (ATL)*: ugyanez 7 napra.
+  *Forma (TSB)*: a kettő különbsége előző nap. Negatív forma: épp terhelsz; versenyre +5 és +25 között vagy friss. A *heti
+  változás* azt mutatja, mennyit nőtt a fitnesz az elmúlt hét napban: ha hetente 5–8 pontnál gyorsabban nő, az
+  túlterheléshez vezethet. A terhelés edzésenként: TSS mért wattból; ha nincs, **hrTSS** a pulzusból (egy óra a
+  küszöbpulzuson 100); ha az sincs, a becsült watt TSS-e. A grafikon alatt az áll, hány edzés melyik forrásból számított.
+- **FTP.** A javaslat mindig az **utolsó 90 nap** mért edzéseiből készül, így szünet vagy betegség után lefelé is követ. Az
+  ERG-ben, előírt watton tekert szakaszok **nem számítanak**: amit egy edzés előírt, az nem mutatja meg, mit bírnál. A program a
+  2–20 perces legjobbjaidra **CP-modellt** illeszt (kritikus teljesítmény és W′), és a mért legjobb 20 perc meg a modell 20 perce
+  közül a nagyobbik 95 %-át javasolja. Így teszt nélkül is reális szám jön ki, ha volt néhány maximális rövidebb erőfeszítésed.
+  Mellette W/kg, a jelenleg beállított FTP, és figyelmeztetés, ha a javaslat alacsonyabb a beállítottnál. Az **FTP beállítása N
+  W-ra** gomb átírja a Beállításokban; magától az app soha nem módosítja. Alatta a *Becsült FTP hetente* (az utolsó 12 hét
+  végén, mindegyik 90 napra visszanézve) és *Az FTP változásai* (milyen FTP-vel elemezték a meneteidet).
+- **Pulzus.** A beállított maximum, küszöb (LTHR) és nyugalmi pulzus, a zónák alapja, és az időszak legmagasabb mért pulzusa.
+  Ha az magasabb a beállított maximumnál, a **Maxpulzus beállítása** gomb átírja.
+- **Csúcsteljesítmény.** A legjobb átlagos watt 1 másodperctől 90 percig, logaritmikus időtengelyen: a választott időszak (folytonos)
+  és a mindenkori legjobb (szaggatott). A táblában a fontosabb időtartamok: watt, W/kg (a menet napi testsúlyával), mikor és hol
+  (kattintásra megnyílik az a menet), a mindenkori legjobb, és ha az Összehasonlításban kijelöltél edzéseket, az ő értékeik (A–D).
+- **Zónák.** Az időszak teljesítmény- és pulzuszónáinak ideje másodpercenként számolva, az arányokkal, és a könnyű (Z1–Z2) /
+  közepes (Z3) / kemény (Z4+) megoszlás.
+- **Terhelés.** Az utolsó 12 hét vagy hónap (*Heti* | *Havi*): az oszlop a teljes terhelés, a súgóban a TSS, a hrTSS és a becsült
+  rész, az edzések száma, ideje és távja.
 
-**Csak mért watt számít.** A szimulált tekerő és a becsült (`~`) wattú edzések nem kerülnek a csúcsok és az FTP-javaslat
-közé (a trend idejében igen, a TSS-ében nem). Egy importált edzés, amelyben valódi teljesítmény volt, számít. A trainer saját
-wattja nem teljesítménymérő, ezért az FTP-javaslat is csak annyira pontos, mint az. A régebbi edzések számait az első
-megnyitáskor számoljuk ki és mentjük el, ez néhány másodpercig tarthat sok edzésnél.
+**Csak mért watt számít** a csúcsokba és az FTP-be. A szimulált tekerő és a becsült (`~`) wattú edzések kimaradnak (a becsült
+watt csak a terhelésbe kerül, ha nincs pulzus). A trainer saját wattja nem teljesítménymérő, ezért az FTP-javaslat is csak
+annyira pontos, mint az. A régebbi edzések számait az első megnyitáskor számoljuk ki újra és mentjük el; ez néhány másodpercig
+tarthat sok edzésnél.
+
+### Napló
+
+A **Napló** az összes útvonal összes edzését mutatja időrendben, hetekre bontva (hétfőtől vasárnapig). Hetente: edzések
+száma, idő, táv, terhelés és napi oszlopok (H–V). Soronként a dátum, az útvonal, az edzés neve (ha edzést tekertél), idő, táv,
+NP (vagy átlagwatt), terhelés (`(pulzus)`: hrTSS, `~`: becsült watt), a megjegyzésed eleje és az érzet (RPE). Egy sorra
+kattintva megnyílik az edzés részletes nézete. Alul a *Régebbi hetek* gomb tölt be továbbiakat.
+
+### Egy edzés részletei
+
+Megnyílik a Naplóból, az Összehasonlítás listájának **ⓘ** gombjából, vagy a csúcstábla dátumára kattintva. A *Vissza a
+listához* zárja.
+
+- **Számok**: idő, táv, átlagsebesség, átlagwatt, NP, IF, TSS (a menet napján beállított FTP-vel), hrTSS, **VI** (NP / átlagwatt:
+  1,05 alatt egyenletes volt a tempó), **EF** (NP / átlagpulzus: ha ugyanolyan edzésen nő, fejlődsz), **Pw:HR szétcsúszás**
+  (mennyivel nőtt a pulzus ugyanarra a wattra a második félben; 5 % alatt jó az aerob alap, legalább 20 perc kell hozzá), W/kg
+  (átlag és NP), munka, munka FTP fölött, **W′ legalja** (a CP-modell szerint mennyi maradt a CP fölötti tartalékodból a
+  legnehezebb pontján), pulzus, kadencia, az aznapi FTP és testsúly.
+- **Grafikon** az **idő** függvényében: teljesítmény (edzésnél a **célwatt** vonalával), pulzus, kadencia, sebesség vagy
+  **W′-egyenleg**.
+- **Az edzés lépései**: ha edzést tekertél, lépésenként a cél, az átlagwatt, a **teljesítés %-ban** (a 90–110 %-on kívüli ki van
+  emelve), NP, W/kg, pulzus, kadencia. Edzés nélkül a **kemény szakaszok**: a program magától megkeresi a legalább 1 perces
+  szakaszokat, amelyeken a 30 másodperces átlag az FTP 88 %-a fölött maradt.
+- **Zónák**: teljesítmény- és pulzuszónák másodpercenként, és a kadencia eloszlása.
+- **Naplóbejegyzés**: az **érzet (RPE)** 1-től 10-ig és egy **megjegyzés** (alvás, étkezés, fájdalom, bármi). A *Bejegyzés
+  mentése* elmenti; a Naplóban is látszik.
+- **TCX** és **FIT** gomb: az edzés mentése fájlba, utólag is. A FIT-ben az edzés lépései külön körök (lap).
 
 ### Edzés importálása más alkalmazásból
 
-Az **`Edzés importálása`** gombbal (vagy a fájlt az oldalra húzva) egy GPX- vagy TCX-fájlt töltesz be, például egy Stravából,
+Az **`Edzés importálása`** gombbal (vagy a fájlt az oldalra húzva) egy GPX-, TCX- vagy **FIT**-fájlt töltesz be, például egy Stravából,
 Garminról vagy Wahoóról exportáltat. A pulzus, a kadencia és (ha van) a watt átjön. Tudnivalók:
 
 - **Az útvonalat te adod meg**: az edzést arra az útvonalra illesztjük, amelyik az oldalon ki van választva (előbb töltsd be
@@ -262,7 +328,8 @@ Garminról vagy Wahoóról exportáltat. A pulzus, a kadencia és (ha van) a wat
 - Ugyanaz az edzés (ugyanaz a kezdési időpont) kétszer nem importálható.
 - Az importált edzés **nem lesz PR és nem lesz szellem**: egy kinti menet megállásokkal és gurulással nem hasonlítható a
   görgős idejeidhez. A listában `Importált` címke jelzi.
-- Telefonon az import még nem elérhető. A FIT-formátumot nem olvassuk; a Strava a GPX-et és a TCX-et is exportálja.
+- Telefonon az import még nem elérhető. A FIT-fájlból a pozíció nélküli pontok (beltéri edzés GPS nélkül) kimaradnak,
+  mert az edzést az útvonalra a pozíció alapján illesztjük.
 
 ### Becsült watt
 
@@ -305,6 +372,14 @@ edzés blokkja (hátralévő idő, következő blokk, az edző üzenete), a telj
 zónasáv, kadencia, pulzus, sebesség, meredekség, alatta a profil (oldalra húzva váltasz a nézetei között). A
 párbeszédablakok telefonon teljes képernyősek.
 
+Nagyon kis kijelzőn (400 px-nél keskenyebben) a felső sáv **hamburger menüt** (≡) kap: az *Edzés*, a *Naptár*, az
+*Eszközök* és a *Beállítások* a sávon marad, az *Útvonal*, az *Áttekintés* és az *AI-agent* a menüből nyílik. A menüt a
+menün kívüli érintés vagy az `Esc` zárja be.
+
+Telefonon minden gomb legalább 44 px magas. A `Befejezés` két lépésben működik: az első érintés pirosra váltja a gombot
+(*Biztos?*), a második fejezi be a tekerést. Ha a telefont fektetve támasztod le, a `Szünet`/`Befejezés` gombok és a fülek a jobb
+oldali sávba kerülnek, a fejegység és a profil egymás mellett van. Útvonal nélkül a Tekerés fülön az *Útvonal választása* gomb nyitja meg a választót.
+
 <p align="center">
   <img src="screenshots/phone-ride.png" width="280" alt="Telefonos elrendezés, Tekerés fül edzéssel">
   &nbsp;&nbsp;
@@ -325,17 +400,19 @@ Minden módosítás azonnal érvénybe lép és mentődik.
 
 | Csoport | Mit állítasz |
 |---|---|
-| **Kerékpáros** | testsúly (75 kg), a bicikli súlya (9 kg), FTP (200 W), max. pulzus (190), CdA (0,32 m²), Crr (0,004) |
+| **Kerékpáros** | testsúly (75 kg), a bicikli súlya (9 kg), FTP (200 W), max. pulzus (190), nyugalmi pulzus (60), küszöbpulzus (LTHR; ha nem adod meg, a maximum 90 %-a), CdA (0,32 m²), Crr (0,004), a pulzuszónák alapja (*Max. pulzus*: a maximum 60/70/80/90 %-a; *Tartalék*: Karvonen; *LTHR*: Coggan) |
 | **Trainer** | meredekség erőssége (0–150 %), a trainer sebességének használata, virtuális váltó |
 | **Megjelenés** | nyelv (automatikus/magyar/angol/spanyol/portugál/német/olasz/kínai), szövegméret (80–160 %), téma (sötét/világos), térképstílus (sötét/világos/OSM) |
 | **Térkép és profil** | a térkép kövesse a kerékpárost, profilnézet (előretekintés/teljes), előretekintés hossza, szellem |
 | **Elrendezés** | az alaphelyzet visszaállítása |
 | **Biztonsági mentés** | *Mentés fájlba* és *Visszaállítás fájlból* (lásd lent) |
 | **Street View** | megjelenítés, a Google-kulcs, panoráma-azonosítók mentése, képek letöltése, a tárolt adatok törlése |
+| **AI-agent** | az *AI-agent* ablak megnyitása (a helyi kapcsolat be- és kikapcsolása, a beérkezett javaslatok) |
+| **Névjegy és licencek** | a program verziója, a felhasznált nyílt forráskódú részek licencei és az adatok forrásai (a felső sávon nincs külön gombja) |
 
 ### Biztonsági mentés
 
-A *Mentés fájlba* egyetlen **zip-fájlt** készít az útvonalaidról, a mentett túráidról, az importált edzéseidről és a
+A *Mentés fájlba* egyetlen **zip-fájlt** készít az útvonalaidról, a mentett túráidról, az importált edzéseidről, a naptárról, az elfogadott AI-visszajelzésekről és a
 beállításaidról. A fájlt te választod ki (Androidon a rendszer „Mentés másként” ablakával), és semmi nem megy ki a
 hálózatra. **Nincs benne** a Street View-kulcs, a térképcsempék, a letöltött Street View-képek és a naplók: ezek
 vagy titkok, vagy bármikor újra letölthetők.

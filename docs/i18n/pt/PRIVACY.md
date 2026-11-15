@@ -1,5 +1,7 @@
 # Privacidade e tráfego de rede
 
+O agente local de IA opcional pode ler o FTP, os planos de treino e métricas agregadas após ativares a ligação. O cliente MCP e o seu fornecedor de IA podem transmitir os dados recebidos. As respostas ao agente excluem trajetos GPS e notas privadas. O calendário e as respostas aceites estão incluídos na cópia de segurança.
+
 > **Tradução.** A versão autoritativa deste documento é a [página de privacidade](../../PRIVACY.md) húngara;
 > também está disponível em [inglês](../en/PRIVACY.md) e em [espanhol](../es/PRIVACY.md).
 

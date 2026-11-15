@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use dioxus::core::spawn_forever;
 use dioxus::prelude::*;
 use ride_model::{EstimateParams, RideRecord, RiderSettings, Route, RouteRides};
 use ride_route::store::Store;
@@ -35,6 +36,8 @@ fn now_unix_s() -> f64 {
 
 /// Counts the refreshes; a result that is not the latest one is dropped.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+/// Prevent a slow detail load from reopening a closed or superseded ride.
+static DETAIL_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Everything one refresh puts on the page.
 struct Page {
@@ -174,6 +177,150 @@ impl Controller {
     pub fn review_close(self) {
         let mut open = self.st.review.open;
         open.set(false);
+        self.review_close_ride();
+    }
+
+    /// Opens a saved ride and shows its route when the detail view is closed.
+    pub fn review_open_ride_from_calendar(self, route_id: String, stem: String) {
+        let mut open = self.st.review.open;
+        let mut notes = self.st.review.notes;
+        notes.set(Vec::new());
+        open.set(true);
+        self.review_refresh(Some(route_id.clone()), Vec::new(), None);
+        self.review_open_ride(route_id, stem);
+    }
+
+    /// Opens one stored ride in the ride view.
+    pub fn review_open_ride(self, route_id: String, stem: String) {
+        let generation = DETAIL_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+        let mut detail = self.st.review.detail;
+        let mut key = self.st.review.detail_key;
+        detail.set(None);
+        key.set(None);
+        let mut busy = self.st.review.busy;
+        busy.set(true);
+        // This request can originate in a calendar row that is unmounted as the dialog closes.
+        // Keep the load alive until the app, rather than that row, is dropped.
+        spawn_forever(async move {
+            let (id, s) = (route_id.clone(), stem.clone());
+            let joined = tokio::task::spawn_blocking(move || {
+                guarded("review open ride", || rides::load_ride(&id, &s))
+            })
+            .await;
+            if DETAIL_GENERATION.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            let mut busy = self.st.review.busy;
+            busy.set(false);
+            match joined {
+                Ok(Ok(Some(record))) => {
+                    let mut detail = self.st.review.detail;
+                    let mut key = self.st.review.detail_key;
+                    detail.set(Some(Arc::new(record)));
+                    key.set(Some((route_id, stem)));
+                }
+                _ => self.st.toast(
+                    ToastKind::Error,
+                    t("app.controller.review.az_edzest_nem_sikerult_megnyitni"),
+                ),
+            }
+        });
+    }
+
+    pub fn review_close_ride(self) {
+        DETAIL_GENERATION.fetch_add(1, Ordering::SeqCst);
+        let mut detail = self.st.review.detail;
+        let mut key = self.st.review.detail_key;
+        detail.set(None);
+        key.set(None);
+    }
+
+    /// Stores the rating and the note of the open ride.
+    pub fn review_save_journal(self, rpe: Option<u8>, note: String) {
+        let Some((route_id, stem)) = self.st.review.detail_key.peek().clone() else {
+            return;
+        };
+        spawn(async move {
+            let (id, s, n) = (route_id.clone(), stem.clone(), note.clone());
+            let joined = tokio::task::spawn_blocking(move || {
+                guarded("review journal", || {
+                    rides::update_ride_journal(&id, &s, rpe, &n)
+                })
+            })
+            .await;
+            match joined {
+                Ok(Ok(Ok(true))) => {
+                    // the open ride shows what was stored
+                    let still_open = self.st.review.detail_key.peek().as_ref()
+                        == Some(&(route_id.clone(), stem));
+                    if still_open {
+                        let mut detail = self.st.review.detail;
+                        let current = detail.peek().clone();
+                        if let Some(record) = current {
+                            let mut record = (*record).clone();
+                            record.rpe = ride_model::valid_rpe(rpe);
+                            record.note = ride_model::clean_note(&note);
+                            detail.set(Some(Arc::new(record)));
+                        }
+                    }
+                    self.st.toast(
+                        ToastKind::Success,
+                        t("app.controller.review.a_bejegyzest_elmentettuk"),
+                    );
+                    let keep = self.st.review.selected.peek().clone();
+                    let shown = self.st.review.route_id.peek().clone();
+                    self.review_refresh(shown, keep, None);
+                }
+                _ => self.st.toast(
+                    ToastKind::Error,
+                    t("app.controller.review.a_bejegyzest_nem_sikerult_menteni"),
+                ),
+            }
+        });
+    }
+
+    /// Saves the open ride as a TCX or FIT file.
+    pub fn review_export(self, format: String) {
+        let Some(record) = self.st.review.detail.peek().clone() else {
+            return;
+        };
+        let format = if format == "fit" {
+            super::ExportFormat::Fit
+        } else {
+            super::ExportFormat::Tcx
+        };
+        let laps = record
+            .workout
+            .as_ref()
+            .map(|w| super::workout_lap_ranges(w, &record.points))
+            .unwrap_or_default();
+        let sub_sport = match record.source {
+            ride_model::RideSource::Recorded => ride_sim::fit::SUB_SPORT_VIRTUAL,
+            ride_model::RideSource::Imported => ride_sim::fit::SUB_SPORT_GENERIC,
+        };
+        self.export_ride(
+            format,
+            record.summary.clone(),
+            record.points.clone(),
+            laps,
+            sub_sport,
+        );
+    }
+
+    /// "Maxpulzus beállítása N bpm-re" on the power view.
+    pub fn review_apply_max_hr(self, bpm: f64) {
+        if !(bpm.is_finite() && (100.0..=240.0).contains(&bpm)) {
+            return;
+        }
+        let bpm = bpm.round();
+        self.update_settings(|s| s.rider.max_hr = bpm);
+        self.st.toast(
+            ToastKind::Success,
+            tf(
+                "app.controller.review.a_maxpulzus_beallitva",
+                &[("hr", &format!("{bpm:.0}"))],
+            ),
+        );
     }
 
     pub fn review_dismiss_notes(self) {
@@ -434,16 +581,15 @@ impl Controller {
         let mut busy = self.st.review.busy;
         busy.set(true);
         let current = self.st.route.peek().clone();
-        spawn(async move {
+        // The calendar dialog closes immediately after starting this refresh.
+        spawn_forever(async move {
             let joined = tokio::task::spawn_blocking(move || {
                 guarded("review collect", || {
                     let store = Store::default_location();
                     // rides saved before the power page existed get their numbers once, from
                     // their records; the result stays in the index
                     store.backfill_analysis();
-                    let page = collect(&store, current, wanted_route, keep, prefer);
-                    let analysis = power_curve::analyze(&page.routes, now_unix_s());
-                    (page, analysis)
+                    collect(&store, current, wanted_route, keep, prefer)
                 })
             })
             .await;
@@ -453,10 +599,10 @@ impl Controller {
             let r = self.st.review;
             let (mut routes, mut route_id, mut route) = (r.routes, r.route_id, r.route);
             let (mut selected, mut loaded, mut busy) = (r.selected, r.loaded, r.busy);
-            let mut analysis_signal = r.analysis;
+            let mut now_signal = r.now_s;
             match joined {
-                Ok(Ok((page, analysis))) => {
-                    analysis_signal.set(Arc::new(analysis));
+                Ok(Ok(page)) => {
+                    now_signal.set(now_unix_s());
                     routes.set(page.routes);
                     route_id.set(page.route_id);
                     route.set(page.route);
@@ -503,6 +649,7 @@ mod tests {
             })
             .collect();
         RideRecord {
+            completed_calendar_id: None,
             version: ride_model::RIDE_RECORD_VERSION,
             route_id: route.id.clone(),
             route_name: route.name.clone(),
@@ -534,6 +681,11 @@ mod tests {
             power_estimated: false,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: None,
+            rider_kg: None,
+            workout: None,
+            rpe: None,
+            note: String::new(),
         }
     }
 

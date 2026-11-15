@@ -95,10 +95,14 @@ Die vollständige Beschreibung: **[Benutzerhandbuch](USER_GUIDE.md)**.
 - **Geist** (letzte Fahrt, beste, oder die eigenen Zeitstempel der GPX) und **lokale Abschnitte mit PR**.
 - **Übersicht und Vergleich von Fahrten**: die Fahrten auf derselben Route (höchstens vier) nebeneinander nach Leistung, Puls,
   Trittfrequenz, Tempo und Zeitdifferenz; Zoomen in einen Abschnitt (durch Ziehen oder aus den Anstiegen), Abschnittstabelle.
-  **Import einer GPX- oder TCX-Fahrt** aus einem Strava- oder Garmin-Export, mit Puls und Trittfrequenz; fehlen die Watt, schätzt
+  **Import einer GPX-, TCX- oder FIT-Fahrt** aus einem Strava- oder Garmin-Export, mit Puls und Trittfrequenz; fehlen die Watt, schätzt
   die Physik der Simulation sie rückwärts (mit deinem oder dem angegebenen Körpergewicht, Rad und Rollwiderstand).
-- **Leistungsseite**: Spitzenleistung von 5 s bis 60 Minuten, ein FTP-Vorschlag aus deinen besten 20 Minuten (mit einer
-  Schaltfläche übernehmbar), wöchentliche und monatliche Belastung. Nur gemessene Watt zählen.
+- **Leistungsseite**: Fitness, Ermüdung und Form (CTL, ATL, TSB; hrTSS für Fahrten ohne Watt), ein FTP-Vorschlag aus den
+  letzten 90 Tagen mit Critical-Power-Modell, ohne ERG-Abschnitte (mit einem Klick übernehmbar), Spitzenleistung von 1 s bis
+  90 Minuten mit W/kg und Zeitraumfilter, Zeit in Zonen, wöchentliche und monatliche Belastung. Nur gemessene Watt zählen.
+- **Tagebuch und Fahrtdetails**: alle Fahrten nach Wochen; eine Fahrt über die Zeit mit dem Workout-Ziel, den Schritten mit
+  Erfüllung (oder automatisch gefundenen harten Belastungen), VI, EF, Pw:HR-Entkopplung, W′-Bilanz, Zonen, Trittfrequenz; dein
+  RPE und eine Notiz.
 - **Sicherung**: die Routen, die Fahrten, die importierten Workouts und die Einstellungen in einer einzigen Zip-Datei (ohne den Google-Schlüssel),
   mit zusammenführender Wiederherstellung. Nichts geht ins Netz.
 - **TCX-Export** (Garmin-Schema): Strava, Intervals.icu und TrainingPeaks akzeptieren die Datei, wenn du sie von Hand hochlädst. Einen

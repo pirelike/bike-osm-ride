@@ -95,10 +95,13 @@ The full description: **[User guide](USER_GUIDE.md)**.
 - **Ghost** (last ride, best, or the GPX's own timestamps) and **local segments with PR**.
 - **Review and comparison of rides**: the rides made on the same route (at most four) side by side by power, heart
   rate, cadence, speed and time difference; zoom into a section (by dragging or from the climbs), section table.
-  **Import of a GPX or TCX ride** from a Strava or Garmin export, with heart rate and cadence; if it has no watts, the
+  **Import of a GPX, TCX or FIT ride** from a Strava or Garmin export, with heart rate and cadence; if it has no watts, the
   simulation's physics estimates them backwards (with your own or the given body weight, bike and rolling resistance).
-- **Power page**: peak power from 5 s to 60 minutes, an FTP suggestion from your best 20 minutes (settable with one
-  button), weekly and monthly load. Only measured watts count.
+- **Power page**: fitness, fatigue and form (CTL, ATL, TSB; hrTSS for rides without watts), an FTP suggestion from the last
+  90 days with a critical-power model, ERG stretches left out (settable with one click), peak power from 1 s to 90 minutes with
+  W/kg and a period filter, time in zones, weekly and monthly load. Only measured watts count.
+- **Journal and ride view**: every ride in weeks; one ride over time with the workout target, the steps with compliance (or the
+  hard efforts found automatically), VI, EF, Pw:HR decoupling, W′ balance, zones, cadence; your RPE and a note.
 - **Backup**: the routes, the rides, the imported workouts and the settings in a single zip file (without the Google key),
   with a merging restore. Nothing goes out to the network.
 - **TCX export** (Garmin schema): Strava, Intervals.icu and TrainingPeaks accept it when uploaded by hand. There is no

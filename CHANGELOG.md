@@ -8,6 +8,84 @@ a dátumok a commitok dátumai.
 A **v0.2.0** és a **v0.2.2** címke megvan a tárolóban, de nincs hozzá kiadás: a kiadási futásuk elbukott, a tartalmuk a
 következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címkét nem mozgatunk; a javítás új patch-verzió.
 
+## [0.6.0] – 2026-11-15
+
+### Új
+- **Edzésnaptár.** A felső sáv *Naptár* gombjával egy könyvtári edzés egy napra (ha kell, időpontra is) ütemezhető; a
+  bejegyzés áttehető, törölhető, és előkészíthető a tekeréshez (a szokásos *Kezdés* gombbal indul). A naptár a korábbi
+  napok mentett meneteit is mutatja, az ütemezés nélkülieket is, és a menet elemzése onnan is megnyílik. A naptár a
+  biztonsági mentésbe is bekerül.
+- **AI-agent helyi MCP-kapcsolattal, edzőként.** Egy MCP-kliens (pl. Claude Code vagy Claude Desktop) a saját gépeden
+  indítja a programot, és látja a naptárt (melyik edzés teljesült, melyik menettel), az utóbbi menetek mutatóit, az
+  RPE-t és a célok teljesítési százalékát. **Új edzést vehet fel, a még nem teljesített, ütemezett edzést áttehet,
+  másikra cserélheti vagy törölheti**, mindegyikhez indoklással; a teljesített edzések védettek. A menet utáni
+  elemzéshez az összegzés és az áttekintés *AI-elemzés* gombja másolja ki a kérést. Semmi nem kerül a naptárba
+  jóváhagyás nélkül: a javaslat előtte → utána formában jelenik meg, és egy lépésben íródik be (megszakadás esetén
+  helyreállítva). Hogy a kliens továbbítja-e az adatokat a hálózaton, azt a kliens és az AI-szolgáltató adatkezelése
+  dönti el (`docs/PRIVACY.md`).
+- **Az AI-agent ablak** a felső sáv robot ikonos gombjával nyílik (1120 px-es ablakszélességtől a nevét is kiírja), és
+  a Naptárból, a Beállításokból, az összegzésből és az áttekintésből is elérhető: be/ki kapcsoló, kiválasztható kliens
+  (*Claude Code* parancs vagy JSON), a program, az argumentum és az adatmappa külön sorban, egygombos másolás; a
+  javaslatok lépései táblázatban látszanak. Három új ikon: `Robot`, `Calendar`, `Menu`.
+- **A Névjegy és licencek a Beállítások aljára költözött**, a felső sávból az ⓘ gomb megszűnt. Ezzel telefonon is
+  elfér a robot gomb. 400–419 px-es kijelzőn az útvonal hossza kikerül a felső sávból (a profil fejlécében
+  továbbra is látszik), és a hét gomb kitölti a sávot. A Beállítások gomb ott sem csúszik ki (az ⓘ gomb miatt
+  eddig a fogaskerék fele kilógott).
+- **Hamburger menü nagyon kis kijelzőn** (400 px-nél keskenyebben, pl. 360 px): az *Edzés*, a *Naptár*, az *Eszközök*
+  (a pontokkal) és a *Beállítások* a felső sávon marad, az *Útvonal*, az *Áttekintés* és az *AI-agent* a ≡ gomb menüjéből
+  nyílik. Az útvonal hossza így itt a sávon marad. A menüt a menün kívüli érintés vagy az `Esc` zárja be; az
+  áttekintő oldal fölött is használható.
+- **Forma és terhelés** az áttekintő oldal Teljesítmény nézetében: fitnesz (CTL), fáradtság (ATL), forma (TSB), heti változás
+  és grafikon. Watt nélküli edzésnek is van terhelése: **hrTSS** a pulzusból (egy óra a küszöbpulzuson 100).
+- **Új FTP-javaslat.** Eddig a mindenkori legjobb 20 perc 95 %-a volt, egyetlen menetből, és soha nem csökkent. Mostantól:
+  az **utolsó 90 nap** mért edzéseiből, az **ERG-ben előírt watton tekert szakaszok nélkül**, a 2–20 perces legjobbakra
+  illesztett **CP-modellel** (kritikus teljesítmény, W′). Látszik a heti becsült FTP és az FTP változásai is.
+- **Csúcsteljesítmény 1 mp-től 90 percig** logaritmikus grafikonon, **W/kg**-mal, **időszak-szűrővel** (28/42/90 nap, 1 év,
+  mind) és a mindenkori legjobbal; a dátumra kattintva megnyílik az a menet.
+- **Zónaidők** az időszakra (teljesítmény és pulzus) és a könnyű / közepes / kemény megoszlás.
+- **Napló**: az összes útvonal összes edzése időrendben, hetekre bontva, napi terheléssel.
+- **Egy edzés részletes nézete**: idő szerinti grafikon a célwattal, az edzés lépései **teljesítési százalékkal**, edzés nélkül
+  a kemény szakaszok automatikusan; VI, EF, Pw:HR szétcsúszás, W/kg, munka FTP fölött, **W′-egyenleg**, zónák, kadencia.
+- **Érzet (RPE 1–10) és megjegyzés** minden edzéshez.
+- **FIT-export** (az összegzésből és bármely mentett edzésből) és **FIT-import**. A mentett edzések TCX-ként is
+  elmenthetők utólag.
+- **Pulzus-beállítások**: nyugalmi pulzus, küszöbpulzus (LTHR), és a pulzuszónák alapja (max. pulzus, pulzustartalék vagy
+  LTHR). A Teljesítmény oldal szól, ha mértél a beállítottnál magasabb maxpulzust.
+- Az edzés mostantól a saját FTP-jével, a testsúllyal és (ha volt) az edzés lépéseivel együtt mentődik.
+
+### Javítva
+- **Nyelvváltáskor a Beállítások Biztonsági mentés része a régi nyelven maradt**, a többi szöveg átváltott. A felület
+  nyelvváltáskori újraépítése nem működött, csak azok a részek frissültek, amelyeknek az adatai is változtak; most az egész
+  felület újraépül.
+
+### Telefon (mobil nézet felülvizsgálata)
+- **Minden vezérlő legalább 44 px magas** telefonon (gombok, szegmentált kapcsolók, szám- és kulcsmezők, léptetők, csúszka, kapcsoló,
+  címkék, a térkép nagyító- és követőgombja, a profil oldalpontjai). Eddig a dialógusok ×-gombja 24 px, a Keresés indítása 24 px,
+  a térkép gombjai 28–32 px voltak. A legkisebb betű 12 px (volt 11 px).
+- **Fekvő telefon** (pl. 915 × 412): a kezelőgombok és a fülek jobb oldali sávba kerülnek, a Tekerés fülön a fejegység és a profil
+  egymás mellett van, a Térkép fülön a térkép a teljes magasságot kapja. Eddig a fejegység ki volt vágva, a térkép pedig nem látszott.
+- **Alacsony képernyő** (pl. 360 × 640): a profil már nem takarja le a négy kis számot (kadencia, pulzus, sebesség, meredekség).
+- **Térkép fül**: a fejegység elhagyja a négy kis számot, így a térkép a képernyő felét kapja (negyede volt).
+- **Befejezés két lépésben**: az első érintés pirosra váltja a gombot (*Biztos?*), a második fejezi be a tekerést; a gomb
+  a Szünet mellett ült, és a lezárt tekerést nem lehet folytatni.
+- **Üres Tekerés fül** (nincs útvonal): az üres doboz helyett *Útvonal választása* gomb.
+- **Értesítések** telefonon az alsó sáv fölé kerülnek, és átengedik az érintést (a felső sávot, a dialógus címét és az Áttekintés
+  fejlécét takarták el néhány másodpercre).
+- **Eszközök**: a keresés gombja teljes szélességű, a talált eszközök a szerepkörök fölött vannak; **Összegzés**: a számok három
+  oszlopban, a zónanevek tördelve (nem három ponttal vágva); **Útvonal**: a Ctrl+O/húzás tipp elrejtve.
+- **Áttekintés**: a legjobb teljesítmények táblázata elfér telefonon (a W/kg oszlop itt nem látszik), az RPE-skála két sorban,
+  44 px-es gombokkal. A *becsült útvonalnév* elválasztója nem pontot, hanem hibás karaktert rajzolt (elírás a CSS-ben).
+
+### Változott
+- A zónákban töltött időt másodpercenként számoljuk (eddig a 3 másodperces átlag szerint), ahogy az elemzőprogramok. Az élő
+  zónakijelzés továbbra is 3 másodperces átlag.
+- A régebbi edzések számait az áttekintő oldal első megnyitásakor egyszer újraszámoljuk.
+
+### Ellenőrzés
+- A számítások (CP-modell, FTP, PMC, hrTSS, teljesítés, szétcsúszás, W′-egyenleg, FIT) automatikus tesztekkel védettek, a
+  felület asztali és telefonos méretben, szintetikus edzésekkel ellenőrizve. **Valódi teljesítménymérővel, valódi Garmin- vagy
+  Wahoo-FIT-fájllal és a Strava FIT-feltöltésével még nem próbáltuk.**
+
 ## [0.5.1] – 2026-11-11
 
 ### Javítva

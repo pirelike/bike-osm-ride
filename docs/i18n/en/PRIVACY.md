@@ -1,5 +1,7 @@
 # Privacy and network traffic
 
+The optional local AI agent can read FTP, workout plans, the calendar (with completion status), aggregated ride metrics and the effort rating (RPE 1–10) you entered after you enable the connection. The MCP client and its AI provider may transmit the data they receive. GPS tracks and private ride notes are excluded from the agent responses. Accepted feedback and the calendar are included in backups.
+
 > **Translation.** The authoritative version of this document is the Hungarian [privacy page](../../PRIVACY.md);
 > it is also available in [Spanish](../es/PRIVACY.md).
 

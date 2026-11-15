@@ -181,7 +181,7 @@ record. `estimate::profile_params` takes the rider's settings; `custom_params` t
 keeps CdA, efficiency and air density from the settings. Values are clamped by `PhysicsParams::from_rider`.
 
 **`analysis::summarize`** builds a `RideSummary` for a recording the engine did not count (NP is the fourth-power mean of the
-30 s rolling mean, IF = NP/FTP, TSS = elapsed·IF²/3600·100, zones follow the 3 s average); a test keeps its NP equal to the
+30 s rolling mean, IF = NP/FTP, TSS = elapsed·IF²/3600·100, zone time second by second); a test keeps its NP equal to the
 engine's.
 
 **`compare`** puts a ride on a 10 m distance grid (`DistSeries`, time by `Track::time_at`), `delta_time(ride, reference)` is the
@@ -189,34 +189,67 @@ time difference along the route (positive = behind; both rides are zeroed where 
 reference does not reach), and `section_stats(points, d0, d1)` sums up a stretch (time, speed, average and normalised power,
 heart rate, cadence, ascent, VAM from 10 m of ascent) and is `None` unless the ride covered the whole stretch.
 
-## 7b. The power curve, the FTP suggestion and the trend (`power_curve.rs`)
+## 7b. The power curve, the FTP estimate, load and form (`power_curve.rs`, `fitness.rs`)
 
-**Mean-maximal power.** For a window length (`DURATIONS`: 5 s, 1, 5, 20 and 60 minutes) the highest average power held over
-any stretch of that length, by a prefix-sum sliding window (O(n) per window). The recording is first put on a **one-second
-grid by timer time** (`dense_power`), not read by index: the live engine can skip a second under load, and an import is
-resampled to a 1 s grid. A missing second takes the previous sample's value when the gap is short (`MAX_SAMPLE_GAP_S`, 5 s, a
-late frame) and counts as **0 W** when it is longer (a dropout); a sample without power is 0 W as well. Both can only lower an
-average, never raise it. **A ride shorter than the window has no value (`None`), it is not padded with zeros**, and a
-recording with no power at all has no curve. Timestamps past 28 hours are not read (a corrupt `t` must not allocate gigabytes).
+**Mean-maximal power.** For a window length (`DURATIONS`: 1, 5, 10, 30 s, 1, 2, 3, 5, 8, 10, 12, 20, 30, 60 and 90 minutes)
+the highest average power held over any stretch of that length, by a prefix-sum sliding window (O(n) per window). The
+recording is first put on a **one-second grid by timer time** (`dense_power`), not read by index: the live engine can skip a
+second under load, and an import is resampled to a 1 s grid. A missing second takes the previous sample's value when the gap
+is short (`MAX_SAMPLE_GAP_S`, 5 s, a late frame) and counts as **0 W** when it is longer (a dropout); a sample without power is
+0 W as well. Both can only lower an average, never raise it. **A ride shorter than the window has no value (`None`)**, and a
+recording with no power at all has no curve. Timestamps past 28 hours are not read. `analyze` reports the best of a chosen
+period (`Window`: 28, 42, 90, 365 days or all) and the best ever.
 
-**FTP suggestion.** `estimate_ftp` = 95 % of the best 20 minutes, rounded to whole watts and clamped to the setting's range
-(50-600 W). It is only a suggestion: the page offers "FTP beállítása N W-ra", the rider decides. The ramp tests of the workout
-library are not recognised (a ride record stores no workout id); the 20 minute best is what counts, test or not.
+**FTP estimate** (`fitness::{fit_cp, estimate_ftp_from}`), always over the **last 90 days** (`FTP_LOOKBACK_DAYS`), so it
+follows the rider down after a break as well as up. Its basis is `RideMeta.free_mmp`: the curve with every second a workout held
+the trainer at a target set to 0 W (`ride_detail::free_power`), because watts a workout prescribed only return the FTP that set
+them. A two-parameter critical-power model `work = CP·t + W′` is fitted by least squares to the bests between 2 and 20 minutes
+(at least three durations, the longest ≥ 8 min; refused unless 50 ≤ CP ≤ 700 W, 2 ≤ W′ ≤ 60 kJ, r² ≥ 0.95). The suggestion is
+95 % of the better of the measured best 20 minutes and the model's 20 minutes (`CP + W′/1200`), whole watts, 50-600 W.
+Without a model it is the classic 95 % of the best 20 minutes. `ftp_weeks` repeats it at the end of each of the last twelve
+weeks; `ftp_history` lists the FTP the rides were analysed with (`RideRecord.ftp_w`) whenever it changed. It stays a
+suggestion: the page offers "FTP beállítása N W-ra", the rider decides.
 
-**Only measured watts count** (`is_measured`: not simulated, not `power_estimated`). A simulated rider's power comes from the
-physics model, and an estimated ride's watts were computed backwards from speed and grade; an FTP derived from either would
-only confirm the model's own assumptions. An imported ride **with** real watts counts. The curve of an excluded ride is stored
-as "computed, nothing to show" so it is never retried.
+**Only measured watts count** (`is_measured`: not simulated, not `power_estimated`) in the curve and the FTP. A simulated
+rider's power comes from the physics model, and an estimated ride's watts were computed backwards from speed and grade. An
+imported ride **with** real watts counts. The curve of an excluded ride is stored as "computed, nothing to show".
 
-**Trend.** `bucket` adds up the last twelve weeks (Monday to Sunday, UTC) or calendar months, empty periods included. Time
-counts every ride that is not simulated, TSS only rides with measured watts. TSS is the value stored with the ride, computed
-against the FTP of its day; changing the FTP later does not rewrite history.
+**Training load** (`fitness::ride_load`): TSS from measured watts; else **hrTSS** (Banister TRIMP, men's weighting
+`0.64·e^(1.92x)` of the heart-rate reserve fraction, divided by the TRIMP of an hour at the threshold heart rate, ×100); else the
+TSS of estimated watts; simulated rides have none. The heart rate is kept per ride as a seconds-per-bpm histogram
+(`RideMeta.hr_secs`), so hrTSS and the heart-rate zones follow the *current* settings without opening a record.
 
-**Where the numbers live.** `index_numbers(record)` gives the TSS and the curve of one ride; `Store::save_ride` keeps them in
-`RideMeta.{tss, mmp}`, so `analyze(&[RouteRides], now)` never opens a record. An index written before the power page has
-`mmp: None` ("not computed"); `Store::backfill_analysis` fills those in from the records once (records read one at a time,
-the index patched under the lock after re-reading it, so a ride saved meanwhile is not lost) and the review page runs it at
-every refresh. `ride-sim` has no clock: the caller passes `now`.
+**Performance management** (`fitness::pmc`): per UTC day, CTL += (load − CTL)/42, ATL += (load − ATL)/7, TSB = yesterday's
+CTL − ATL (TrainingPeaks definitions). The run starts at the first ride (at most three years back) so the first day shown
+carries the fitness built before it. `ramp_7d` is CTL today minus CTL a week ago.
+
+**Trend and zones.** `bucket` adds up the last twelve weeks (Monday to Sunday, UTC) or months: rides, time, distance, TSS,
+hrTSS and estimated TSS kept apart, power-zone seconds (measured rides, with the FTP of their day) and heart-rate-zone seconds
+(current model). The same sums over the chosen period are `Analysis.period`.
+
+**Heart-rate zones** (`zones::hr_zone_of`): five zones by `HrZoneModel`: % of max (60/70/80/90), heart-rate reserve (Karvonen,
+rest + 60/70/80/90 % of max − rest) or % of LTHR (Coggan 69/84/95/106). `RiderSettings.lthr = 0` means "not set": 90 % of max.
+
+**Zone time** is counted one second at a time (the engine's summary and `analysis::summarize` alike), as analysis tools do;
+the live zone *display* still follows the 3 s average.
+
+**Where the numbers live.** `fill_meta(meta, record)` writes everything an index entry derives from its record (TSS, `mmp`,
+`free_mmp`, `hr_secs`, zone seconds, NP, work, max HR, distance, the ride's FTP and mass, the workout name, RPE, note) and stamps
+`analysis_version = ANALYSIS_VERSION`. `analyze` never opens a record. `Store::backfill_analysis` recomputes every entry whose
+version is older (or whose curve has another length) once, from the records (read one at a time, the index patched under the
+lock after re-reading it); the review page runs it at every refresh. `ride-sim` has no clock: the caller passes `now`.
+
+## 7c. One ride second by second (`ride_detail.rs`, `journal.rs`)
+
+`dense(record)` puts power, heart rate, cadence, speed and the **workout target** of every second (`target_at`, from the stored
+`RideWorkout`: its steps start with the ride's timer) on the one-second grid. `workout_laps` cuts the steps at the end of the
+ride and gives each its average target, average / normalised / max power, heart rate, cadence and **compliance** (average power ÷
+average target). Without a workout, `auto_intervals` finds efforts: the 30 s centred mean ≥ 88 % of FTP for ≥ 60 s, dips under
+20 s bridged, edges moved to where the raw watts cross the threshold. `ride_detail` adds VI (NP / average power), EF (NP /
+average heart rate), Pw:HR decoupling (EF of the first half vs the second over the seconds that have both, ≥ 20 min), W/kg, work
+above FTP, zone seconds, cadence bands and the lowest **W′ balance** (Skiba's differential model with the 90-day CP model; shown
+from 0, a negative balance means the effort beat the model). `journal` groups every ride of every route into weeks with their
+totals and daily load.
 
 ## 8. Tests worth knowing
 

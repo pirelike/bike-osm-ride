@@ -133,6 +133,19 @@ files so riders can bring their own.
 **S5. Segments are detected climbs; ghosts replay earlier rides or the GPX's own timeline** (2026-11-02). No online
 segment database needed. · Simulated rides never become PRs.
 
+**S6. The FTP estimate looks back 90 days, leaves ERG out and fits a CP model** (2026-11-11). The user saw that the
+suggestion came from a single ride; a coach's review added that an all-time best never lets the FTP go down after a break,
+that 95 % of a sub-maximal 20 minutes underestimates, and that an ERG workout at a fraction of FTP only returns that fraction.
+· 95 % of the better of the measured and the CP model's 20 minutes; the ERG seconds count as 0 W in its basis
+([`SIMULATION.md`](SIMULATION.md) §7b). Still only a suggestion.
+
+**S7. Load without power is hrTSS; zones and hrTSS follow the current settings** (2026-11-11). A ride with heart rate but no
+measured watts counted as zero load. · The index keeps a heart-rate histogram per ride instead of zone seconds, so a new
+LTHR or zone model applies to every past ride without opening the records. Estimated watts are the last resort.
+
+**S8. Zone time is counted second by second** (2026-11-11). Analysis tools count it that way; the 3 s average made the
+summary disagree with them. The live zone display keeps the 3 s average (a 1 s zone flickers).
+
 ## UI
 
 **U1. The "head unit / printed race sheet" design** (2026-10-31, second round). Flat panels with hairlines, huge
@@ -182,6 +195,14 @@ needs a paid subscription since June 2026 and a shared secret cannot ship in ope
 hidden WebView on strava.com (desktop) and the share intent (Android). In use the rider had to sign in again after every
 ride, which defeated the point (the suspected cause, Strava guarding against automation, was not verified). Code, the
 details form of the summary and `docs/STRAVA.md` were deleted; the TCX export stays and is uploaded by hand.
+
+**V6. The AI agent is a coach that may change the plan, but only through the rider's approval** (2026-11-13). The agent could only
+add entries; to personalise the plan after a bad ride it also has to move, swap and remove the ones still ahead. A draft
+therefore carries `changes` (new content or removal, plus a mandatory reason) next to `entries`; the field has a serde
+default, so old drafts load. A change is refused unless its entry exists and no saved ride completed it (completed
+entries are history); the calendar is written in one atomic step together with the approval journal, and recovery tells
+"committed" from "not yet" by looking at the calendar. The coach reads the rider's RPE (a number) but not the free-text ride
+note, which stays out of the agent (see `PRIVACY.md`). · `crates/ride-app/src/agent.rs`, `agent_ui.rs`, `agent/server.rs`.
 
 **V5. The FTP suggestion and the power curve use only measured watts** (2026-11-05). The review page can show the rider's
 best 5 s to 60 min and suggest 95 % of the best 20 minutes as the FTP. A simulated rider's and an estimated ride's watts are the

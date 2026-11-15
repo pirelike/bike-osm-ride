@@ -378,3 +378,13 @@
   color: var(--text);
   white-space: nowrap;
 }
+
+/* ───────────────────────────── phones ─────────────────────────────
+   The corner buttons are 44 px squares (the kit's phone size): the map is the one part of the
+   screen that is only ever handled with a finger, and a 28-32 px zoom button was a coin toss.
+   The picture-in-picture map of the Street View keeps its 28 px, it has no room. */
+@media (max-width: 699px), (max-height: 520px) and (orientation: landscape) {
+  .map:not(.map--compact) .map-controls .btn-group > .btn { width: 44px; height: 44px; }
+  .map:not(.map--compact) .map-controls__zoom { top: var(--space-2); right: var(--space-2); }
+  .map:not(.map--compact) .map-controls__style { top: var(--space-2); left: var(--space-2); }
+}

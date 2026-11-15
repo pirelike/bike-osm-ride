@@ -56,9 +56,9 @@ pub fn DevicesDialog(
         IconName::Search
     };
     let scan_class = if scanning {
-        "btn btn--sm"
+        "btn btn--sm dlg-scan"
     } else {
-        "btn btn--primary btn--sm"
+        "btn btn--primary btn--sm dlg-scan"
     };
 
     rsx! {
@@ -316,7 +316,7 @@ fn FoundRow(
                     for kind in device.kinds.iter().copied() {
                         if Some(kind) != suggested {
                             button {
-                                class: "btn btn--ghost btn--sm",
+                                class: "btn btn--ghost btn--sm dlg-found__role",
                                 r#type: "button",
                                 key: "connect-{kind:?}",
                                 title: t("ui_dialogs.devices.csatlakozas_masik_szerepkent").to_string(),

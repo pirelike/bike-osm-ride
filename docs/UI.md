@@ -74,10 +74,29 @@ Befejezés, gear − / +, or just "Fokozat N" with a Zwift shifter).
   content-height column.
 - The profile has swipe pages (`ride_ui_profile::swipe`): workout (ahead / full) and elevation (ahead / full), with
   dots, a one-time "húzd oldalra" hint and a nudge until `profile_swipe_learned`.
-- Under 700 px the top bar drops the logo (the app icon plus the name, see `DESIGN.md` § Icons; the route length would not fit), dialogs are full screen, the workout
+- Under 700 px the top bar drops the logo (the app icon plus the name, see `DESIGN.md` § Icons; the route length would not fit), from 400 to 419 px the route length too (the seven buttons share the width; the profile header shows the length), under 400 px a hamburger menu (state `AppState::top_menu`, closed by a tap outside or `Esc`) holds the route, review and AI agent actions, dialogs are full screen, the workout
   picker becomes two pages (Lista | Részletek) with categories as a strip and the tag filters behind a button;
   the footer is a two-column grid. The top bar and the tabs are padded by `env(safe-area-inset-*)`.
 - At 1000 px and above, even on a landscape phone or tablet, the tiling layout is used.
+
+**Touch sizes (reviewed 2026-11-12, 412 x 860 at 2x, 360 x 640, 915 x 412, text 140 %, German, light).** The kit has a phone layer
+(`@media (max-width: 699px), (max-height: 520px) and (orientation: landscape)` in `kit.css`): every `.btn` / `.btn--sm`
+is 44 px high, `.seg__item` 40, interactive `.chip` 40, number fields, their steppers, the switch and the range slider 44, and
+`--t-11` is 12 px. A control with a height of its own (`.dlg-key__control`, `.dlg-quick`, the map's corner buttons, the
+review page's select and RPE scale) has a rule in the same media list in its crate. Profile page buttons have 44 × 44 px
+touch targets; their compact header lets the readout and page label shrink to keep all pages reachable. New controls must not set a pixel height below that on a phone.
+
+**Short and sideways phones.** `max-width: 699px` and `max-height: 700px` (360 x 640): the ride tab's row is `max-content` (an `auto`
+row was squeezed under the head unit because the panel clips its overflow, and the profile was drawn over the four cells),
+the head unit is tighter and the profile keeps 150 px. `max-height: 520px` and landscape: the transport buttons and the
+tabs sit in a 172 px rail on the right (`.compact` is a two-column grid), the ride tab is head unit | profile, the map tab
+is (strip over profile) | map, dialogs use the whole height. The map tab's strip has no four-cell row (`.compact-extra--power
+.hud-dash__cells`), so the map gets about half of the screen.
+
+**Notifications** (`.toasts`) sit above the transport bar and the tabs on every width under 1000 px, let a touch through and keep only
+the close button clickable. **Finish** is a two-step button on the phone (`RideControls { confirm_finish }`, `FinishButton`): the
+first press arms it ("Biztos?", `--crit`), blur or a change of ride state disarms it. The ride tab without a route shows
+`.shell-noroute` with a "choose a route" button instead of the empty profile.
 - Text scale (Beállítások → Megjelenés, 80-160 %) multiplies every `--t-*` type token through `--ui-scale`;
   from 115 % `data-text="large"` lays the head unit's four cells out two by two.
 - Language (Beállítások → Megjelenés → Nyelv) switches the catalog in force; the root component is keyed by the
@@ -133,13 +152,23 @@ first has a real size (on a phone it is hidden behind a tab until then). On a ph
 `Áttekintés` (the theme is in Settings → Appearance); the route dialog still carries a link (`on_review`). Hooks are classes
 (`shell-tb--theme`, `shell-tb--fullscreen`): an `[aria-label="…"]` selector with an accented value did not match in the webview.
 
-**The power view** (`power.rs`, `PowerView`) is a second page of the same layer, switched by a `Segmented` row under the header
-(`Összehasonlítás` | `Teljesítmény`, view state only; the phone's four-tab strip belongs to the comparison and is hidden on the
-power page). It is fed by `ReviewSignals.analysis` (an `Arc<ride_sim::power_curve::Analysis>`, computed in `review_refresh` after
-the index backfill) plus the loaded records of the comparison (their curves are computed on the spot by `mean_max`), the
-current FTP and `on_apply_ftp` (`Controller::review_apply_ftp`: rounds, clamps to 50-600 W, toasts). Three cards: the curve
-(a table with an accent bar, no chart geometry), the FTP card and the twelve-period trend (flat CSS columns, `rv-trend-*`).
-Everything is `rv-`-prefixed and token-only like the rest of the page; `PowerView` is tested on its own with SSR.
+**The other views** are pages of the same layer, switched by a `Segmented` row under the header (`Összehasonlítás` |
+`Napló` | `Teljesítmény`, view state only; the phone's four-tab strip belongs to the comparison and is hidden elsewhere).
+`ReviewPage` computes `Analysis` itself in a `use_memo` from `routes` (every index entry), `ReviewSignals.now_s` (set by
+`review_refresh` after the index backfill), its own period choice (`Window`, default 90 days) and the rider settings.
+
+* `PowerView` (`power.rs`): a period bar, then cards: fitness and form (key figures plus a `plot::PlotFrame` with CTL/ATL lines
+  and TSB bars), FTP (estimate, CP model, a drop warning, weekly estimate columns, FTP history, `on_apply_ftp`), heart rate
+  (`on_apply_max_hr` when a higher max was measured), the curve (log-time `PlotFrame` and a table whose date opens the ride),
+  zone bars (`ZoneBars`) and the twelve-period load trend (flat CSS columns, `rv-trend-*`).
+* `JournalView` (`journal.rs`): week cards with a seven-day load strip and one button per ride.
+* `RideDetailView` (`detail.rs`): replaces the whole body while `ReviewSignals.detail` holds a record (opened by
+  `Controller::review_open_ride` from the journal, the comparison list's ⓘ button or a date of the curve table). Key-figure grid,
+  a time `PlotFrame` with a metric switch (power with the target, heart rate, cadence, speed, W′ balance), the laps table, zone and
+  cadence bars, the RPE / note form (`review_save_journal`) and the TCX / FIT export (`review_export` → `export_ride`).
+
+`plot.rs` is the shared, pure plot helper (data-space SVG with HTML axis numerals, like the distance chart). Everything is
+`rv-`-prefixed and token-only like the rest of the page; the views are tested on their own with SSR.
 
 Looking at it: `RIDE_REVIEW=1 RIDE_DATA_DIR=<folder>` after `cargo run -p ride-route --example seed_review -- <folder>`, or
 `node scripts/readme_shots.mjs --only review,review-phone`.

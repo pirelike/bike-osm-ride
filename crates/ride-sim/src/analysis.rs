@@ -3,7 +3,8 @@
 //!
 //! The same definitions as `RideEngine::summary` (see `docs/SIMULATION.md` §2): normalised power
 //! is the fourth-power mean of the 30 s rolling mean, IF is NP / FTP, TSS is
-//! `elapsed · IF² / 3600 · 100`, and the zone seconds follow the 3 s average power.
+//! `elapsed · IF² / 3600 · 100`, and the zone seconds are counted one second at a time (the
+//! usual definition of the analysis tools; the live zone display smooths over 3 s).
 
 use ride_model::{RecordPoint, RideSummary, RiderSettings};
 
@@ -11,8 +12,8 @@ use crate::zones;
 
 /// Normalised power uses a 30 s rolling mean of the 1 Hz samples.
 const NP_WINDOW: usize = 30;
-/// The zone of a sample follows the average of the last few seconds, like the live display.
-const ZONE_WINDOW: usize = 3;
+/// The zone time follows each one-second sample on its own.
+const ZONE_WINDOW: usize = 1;
 /// A gap longer than this between two samples is not counted as riding time, seconds.
 pub(crate) const MAX_SAMPLE_GAP_S: f64 = 5.0;
 
@@ -146,7 +147,7 @@ pub fn summarize(
             }
         }
         if let Some(hr) = point.hr_bpm.filter(|h| h.is_finite()) {
-            let zone = zones::hr_zone(hr.max(0.0), rider.max_hr);
+            let zone = zones::hr_zone_of(hr.max(0.0), rider);
             if (1..=5).contains(&zone) {
                 hr_zone_secs[usize::from(zone) - 1] += dt;
             }

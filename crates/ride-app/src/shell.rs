@@ -1,7 +1,8 @@
 //! The shell: layout, theme attribute, CSS injection, keyboard bridge and drag & drop.
 //!
 //! ```text
-//! top bar   mark · name | route · km | parked panels (chips) ........ Edzés | Útvonal | Eszközök (3 dots) | Beállítások | theme | full | about
+//! top bar   mark · name | route · km | parked panels (chips) ... Edzés | Naptár | AI-agent | Útvonal | Áttekintés | Eszközök (3 dots) | Beállítások | theme | full
+//!           (the About dialog opens from the bottom of the Settings dialog)
 //! workspace the ride screen: a 24 x 16 grid of panels (map, profile, controls, metrics, ...)
 //! ```
 //! The language is a printed race sheet: every panel is a flush rectangle drawn with 1 px rules,
@@ -119,6 +120,70 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .shell-chip:focus-visible { outline-offset: 1px; }
 .shell-chip[data-dragging="true"] { border-color: var(--accent); color: var(--text); cursor: grabbing; }
 .shell-nav { display: flex; align-items: stretch; margin-left: auto; flex: none; }
+.shell-calendar-form { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); }
+.shell-calendar-nav { display: flex; align-items: center; justify-content: center; gap: var(--space-4); margin-bottom: var(--space-2); }
+.shell-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-1); margin-bottom: var(--space-4); }
+.shell-calendar-grid > strong { text-align: center; }
+.shell-calendar-day { display: flex; align-items: center; justify-content: space-between; min-width: 0; min-height: 44px; padding: var(--space-2); background: var(--bg-1); border: 1px solid var(--rule); color: var(--text); cursor: pointer; }
+@media (max-width: 380px) { .shell-calendar-grid { column-gap: 2px; } }
+.shell-calendar-day[data-today="true"] { border-color: var(--accent); }
+.shell-calendar-day[data-selected="true"] { background: var(--fill-3); border-color: var(--accent); }
+.shell-calendar-day small { color: var(--accent); }
+.shell-calendar-upcoming { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-bottom: var(--space-4); }
+.shell-calendar-upcoming h3 { width: 100%; margin: 0; }
+.shell-calendar-upcoming button { min-width: 0; max-width: 100%; min-height: var(--btn-h); height: auto; padding-block: var(--space-1); line-height: 1.25; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.shell-calendar-status { color: var(--text-dim); }
+.shell-calendar-form label { display: grid; gap: var(--space-1); min-width: 0; max-width: 100%; }
+.shell-calendar-form label:first-child { flex: 1 1 14rem; }
+.shell-calendar-form input, .shell-calendar-form select { max-width: 100%; color: var(--text); background: var(--bg-1); border: 1px solid var(--rule-strong); padding: var(--space-2); }
+.shell-calendar-list { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: var(--space-4); }
+.shell-calendar-entry { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); min-width: 0; padding: var(--space-3) 0; border-bottom: 1px solid var(--rule); }
+.shell-calendar-entry > div { flex: 1 1 13rem; min-width: 0; overflow-wrap: anywhere; }
+.shell-calendar-linked { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.shell-calendar-linked span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.shell-agent { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); min-width: 0; }
+.shell-agent__card, .shell-agent-draft { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--bg-1); border: 1px solid var(--rule); }
+.shell-agent__section { display: grid; gap: var(--space-3); min-width: 0; }
+.shell-agent__head { display: flex; align-items: center; gap: var(--space-3); min-width: 0; font: 500 var(--t-13)/1.3 var(--font-ui); color: var(--text-dim); }
+.shell-agent__head > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.shell-agent__head h3 { margin: 0; font: 600 var(--t-15)/1.2 var(--font-ui); color: var(--text); }
+.shell-agent__head .btn { flex: none; }
+.shell-agent__refresh { margin-left: auto; }
+.shell-agent__title { margin: 0; font: 600 var(--t-15)/1.2 var(--font-ui); color: var(--text); }
+.shell-agent__code { margin: 0; padding: var(--space-3); max-height: 12rem; overflow: auto; background: var(--bg-2); border: 1px solid var(--rule); color: var(--text); font: 400 var(--t-13)/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.shell-agent__status { justify-self: start; max-width: 100%; height: auto; min-height: 24px; padding-block: var(--space-1); margin: 0; white-space: normal; overflow-wrap: anywhere; }
+.shell-agent__empty { margin: 0; color: var(--text-dim); }
+.shell-agent__hint { margin: 0; color: var(--text-dim); font: 400 var(--t-13)/1.4 var(--font-ui); }
+.shell-agent-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); margin: 0; border-top: 1px solid var(--rule); font: 400 var(--t-13)/1.4 var(--font-ui); }
+.shell-agent-facts dt, .shell-agent-facts dd { margin: 0; padding: var(--space-2) 0; border-bottom: 1px solid var(--rule); }
+.shell-agent-facts dt { padding-right: var(--space-4); color: var(--text-dim); }
+.shell-agent-facts dd { min-width: 0; overflow-wrap: anywhere; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: var(--t-13); }
+.shell-agent__raw summary { cursor: pointer; color: var(--text-dim); font: 500 var(--t-13)/1.3 var(--font-ui); padding: var(--space-1) 0; }
+.shell-agent__raw summary:hover { color: var(--text); }
+.shell-agent__raw[open] summary { margin-bottom: var(--space-2); }
+.shell-agent__kv { display: grid; gap: var(--space-1); margin: 0; }
+.shell-agent__kv dt { margin-top: var(--space-2); font: 500 var(--t-11)/1.2 var(--font-ui); color: var(--text-dim); }
+.shell-agent__kv dt:first-child { margin-top: 0; }
+.shell-agent__kv dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.shell-agent-draft h4 { margin: 0; font: 600 var(--t-15)/1.25 var(--font-ui); overflow-wrap: anywhere; }
+.shell-agent-draft__when { margin: 0; color: var(--text-dim); overflow-wrap: anywhere; }
+.shell-agent-draft__when strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.shell-agent-workout { display: grid; gap: var(--space-2); min-width: 0; }
+.shell-agent-workout__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.shell-agent-workout__title span { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.shell-agent-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.shell-agent-steps li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--space-3); padding: var(--space-1) 0; border-bottom: 1px solid var(--rule); font: 400 var(--t-13)/1.3 var(--font-ui); }
+.shell-agent-steps li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.shell-agent-steps li > span:not(:first-child) { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shell-agent-change { display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-3); background: var(--bg-2); border: 1px solid var(--rule); }
+.shell-agent-change__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.shell-agent-change__reason { margin: 0; color: var(--text-dim); overflow-wrap: anywhere; }
+.shell-agent-change__reason strong { color: var(--text); }
+.shell-agent-draft__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 760px) {
+  .shell-agent__card, .shell-agent-draft { padding: var(--space-3); }
+  .shell-agent-draft__actions .btn { flex: 1 1 8rem; min-height: 44px; }
+}
 .shell-tb--update { color: var(--accent); }
 .shell-tb {
   display: inline-flex; align-items: center; gap: var(--space-2);
@@ -132,6 +197,30 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .shell-tb:active { background: var(--fill-3); }
 .shell-tb:focus-visible { outline-offset: -2px; }
 .shell-tb--icon { width: var(--top-h); padding: 0; justify-content: center; }
+/* the hamburger menu: a button and a list of the actions a very small screen has no room for. Both
+   exist only under 400 px (see the phone rules below); the list drops from the bar. While it is open
+   the bar rises over the review page (20), still under the dialogs. */
+.shell-tb--menu, .shell-menu, .shell-menu-catcher { display: none; }
+.shell-tb--menu[aria-expanded="true"] { background: var(--fill-3); color: var(--text); }
+.shell-top:has(.shell-menu) { z-index: 30; }
+.shell-menu-catcher { position: fixed; inset: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.shell-menu {
+  position: absolute; top: 100%; right: 0;
+  width: min(280px, 100%);
+  background: var(--bg-1);
+  border: 1px solid var(--rule-strong); border-top: 0;
+}
+.shell-menu__item {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; min-height: 52px; padding: 0 var(--space-4);
+  border: 0; border-bottom: 1px solid var(--rule); border-radius: 0;
+  background: transparent; color: var(--text);
+  font: 600 var(--t-15)/1 var(--font-ui); text-align: left;
+}
+.shell-menu__item:last-child { border-bottom: 0; }
+.shell-menu__item:hover { background: var(--hover); }
+.shell-menu__item:active { background: var(--fill-3); }
+.shell-menu__item svg { flex: none; color: var(--text-dim); }
 .shell-dots { display: inline-flex; align-items: center; gap: 4px; margin-left: var(--space-1); }
 .shell-dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -343,11 +432,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 8px; padding: 8px;
 }
-.compact[data-tab="map"] .compact-stage { grid-template-rows: auto minmax(0, 1fr) 176px; align-content: stretch; overflow: hidden; }
+.compact[data-tab="map"] .compact-stage { grid-template-rows: auto minmax(0, 1fr) 160px; align-content: stretch; overflow: hidden; }
 .compact-extra--power { order: -1; }
+/* the map is what the map tab is for: the strip above it keeps the power and the zone, the four
+   small numbers are one tab away (they took a quarter of the map's height) */
+.compact-extra--power .hud-dash__cells { display: none; }
 .compact-extra--profile { order: 1; }
 /* the ride tab: the head unit at its own height, the profile takes the rest of the screen */
-.compact[data-tab="ride"] .compact-stage { grid-template-rows: auto minmax(200px, 1fr); align-content: stretch; }
+/* (`max-content`, not `auto`: the head unit clips its overflow, so the grid was free to squeeze its
+   row below the content when the screen was short, and the profile was drawn over the four
+   cells. A row that cannot shrink makes the stage scroll instead.) */
+.compact[data-tab="ride"] .compact-stage { grid-template-rows: max-content minmax(200px, 1fr); align-content: stretch; }
 .compact-panel {
   display: flex; flex-direction: column; min-width: 0;
   background: var(--bg-1); border: 1px solid var(--rule-strong); overflow: hidden;
@@ -370,7 +465,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
    no second frame, its own head kept (the phone's panels have no title bar) */
 .compact-panel__body .dlg-vr { width: 100%; max-width: none; }
 .compact-panel__body .dlg-vr.panel { border: 0; background: transparent; }
+/* the arrow keys that change the simulated power are no use on a touch screen */
+.shell--compact .dlg-vr__keys { display: none; }
 .compact-panel[data-panel="profile"] { height: auto; min-height: 200px; }
+/* the ride tab without a route: the message and the button that fixes it, in the middle of the
+   space the profile would take */
+.shell-noroute {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-3); padding: var(--space-5) var(--space-4); text-align: center; color: var(--text-dim);
+}
+.shell-noroute__title { font: 600 var(--t-20)/1.15 var(--font-display); color: var(--text); }
+.shell-noroute__hint { max-width: 32ch; font: 400 var(--t-13)/1.45 var(--font-ui); }
+.shell-noroute .btn { margin-top: var(--space-2); }
 /* the charts tab holds only the charts: they take the whole height (at least 600 px) */
 .compact[data-tab="charts"] .compact-stage { grid-template-rows: minmax(600px, 1fr); align-content: stretch; }
 .compact-panel[data-panel="charts"] { height: auto; min-height: 600px; }
@@ -412,6 +518,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 .shell--compact .shell-tray,
 .shell--compact .shell-logo > span:last-child,
 .shell--compact .shell-tb .shell-label { display: none; }
+/* the AI agent keeps its name wherever the bar has room for it (measured: the nav is 850 px wide
+   with every label, and the logo and the route length need about 280 px beside it) */
+@media (max-width: 1119px) { .shell-tb--agent .shell-label { display: none; } }
+/* and the wide layout starts at 1000 px: with the AI agent's button on the bar the buttons give up
+   some padding there, so the route length is not squeezed out */
+@media (max-width: 1079px) {
+  .shell:not(.shell--compact) .shell-tb { padding: 0 var(--space-2); }
+  .shell:not(.shell--compact) .shell-route { padding: 0 var(--space-2); }
+}
 .shell--compact .shell-route { max-width: none; flex: 1 1 auto; min-width: 0; }
 .shell--compact .shell-tb { min-width: 44px; }
 /* portrait tablet: one column, never wider than a table can be read (two columns left a lot of
@@ -421,19 +536,29 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 }
 /* touch layouts (the compact one, same width limit as `COMPACT_BELOW_PX`): a finger needs a
    bigger target than a mouse, and these buttons are the only way to reach the dialogs. The
-   notifications drop in under the bar, clear of the transport buttons and the tabs. */
+   notifications sit above the transport bar and the tabs: at the top they covered the top bar,
+   the title of a dialog and the review page's header (the way out) for several seconds. They
+   let a touch through (only their own close button takes one), so none of them blocks a button
+   under it. */
 @media (max-width: 999.98px) {
   /* on the same element the token is declared on: an inherited value from `:root` never wins
      over `.shell`'s own declaration */
-  .shell { --top-h: 52px; }
+  .shell { --top-h: 52px; --compact-chrome-h: 128px; }
   :root .toasts {
-    top: calc(var(--top-h) + env(safe-area-inset-top, 0px) + 8px);
-    bottom: auto; left: 8px; right: 8px; max-width: none;
+    top: auto;
+    bottom: calc(var(--compact-chrome-h) + env(safe-area-inset-bottom, 0px) + 8px);
+    left: 8px; right: 8px; max-width: none;
   }
+  :root .toast { pointer-events: none; min-width: 0; padding: 4px 4px 4px 16px; align-items: center; }
+  :root .toast__text { padding: 8px 0; }
+  :root .toast__close { pointer-events: auto; }
 }
 /* phones: the top bar keeps only the route length (no logo: with it the length did not fit), and
-   six icons at 46 px still fit next to the length and the dots */
+   the icons at 46 px still fit next to the length and the dots from 420 px up (see below) */
 @media (max-width: 699px) {
+  /* the route dialog's footer holds only a note about drag and drop and Ctrl+O: with the note hidden
+     there is no footer to leave an empty strip */
+  .dialog__foot:has(> .dlg-foot__note--desktop:only-child) { display: none; }
   .shell--compact .shell-logo { display: none; }
   .shell--compact .shell-route__name { display: none; }
   .shell--compact .shell-route { flex: 0 0 auto; padding: 0 8px; }
@@ -444,6 +569,81 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
      through the route dialog before). Classes, not `[aria-label=…]`: an accented attribute value
      did not match here. */
   .shell--compact .shell-tb--theme { display: none; }
+}
+/* a narrow phone (under 420 px): the buttons share what the route length leaves, and grow to fill it */
+@media (max-width: 419px) {
+  .shell--compact .shell-nav { flex: 1 1 auto; }
+  .shell--compact .shell-nav .shell-tb { flex: 1 1 auto; }
+}
+/* 400 to 419 px (411, 412, 414 wide phones): seven buttons (6 x 46 px + the 73 px of Devices = 349 px)
+   do not fit beside the route length (65 px), which the profile header shows as well, so the bar gives
+   its width to the buttons. From 420 px up the length fits again (414 px). */
+@media (min-width: 400px) and (max-width: 419px) {
+  .shell--compact .shell-route { display: none; }
+}
+/* a very small phone (under 400 px: 360, 375, 384, 390, 393 wide): the hamburger menu. Settings,
+   Devices (with the dots), Calendar and Workout stay on the bar; the route, the review page and the
+   AI agent move into the menu. The route length stays: five buttons (4 x 46 px + 73 px = 257 px) leave
+   room for it. */
+@media (max-width: 399px) {
+  .shell--compact .shell-tb--menu { display: inline-flex; }
+  .shell--compact .shell-menu,
+  .shell--compact .shell-menu-catcher { display: block; }
+  .shell--compact .shell-tb--route,
+  .shell--compact .shell-tb--review,
+  .shell--compact .shell-tb--agent { display: none; }
+}
+/* a 320 px phone: 4 buttons at 44 px (the tablet width) + Devices + the length still fit */
+@media (max-width: 339px) { .shell--compact .shell-tb { min-width: 44px; } }
+
+/* a short portrait phone (360 x 640 and the like): the head unit gets tighter so that the profile still
+   has its 150 px under it, instead of the stage scrolling the profile out of sight */
+@media (max-width: 699px) and (max-height: 700px) {
+  .compact[data-tab="ride"] .compact-stage { grid-template-rows: max-content minmax(150px, 1fr); }
+  .compact-panel[data-panel="profile"] { min-height: 150px; }
+  .compact .hud-dash .num--xl { font-size: calc(var(--t-56) * 0.8); }
+  .compact .hud-dash__wo { padding: var(--space-2) var(--space-3); gap: var(--space-1); }
+  .compact .hud-dash__power { padding: var(--space-2) var(--space-3) var(--space-1); }
+  .compact .hud-dash__cell { padding: var(--space-1) var(--space-2); }
+}
+
+/* a phone on its side: a bar on top, a transport bar and a tab bar under the content would leave
+   under 230 px for it. The transport buttons and the tabs move into a rail on the right, the ride
+   tab shows the head unit and the profile side by side, the map tab the map beside both. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .shell.shell--compact { --top-h: 44px; }
+  /* Keep brief notifications out of the transport rail and avoid covering the entire ride. */
+  :root .toasts { left: auto; right: 180px; bottom: 8px; max-width: min(360px, calc(100vw - 196px)); }
+  .compact { grid-template-columns: minmax(0, 1fr) 172px; grid-template-rows: minmax(0, 1fr) auto; }
+  .compact-stage { grid-column: 1; grid-row: 1 / span 2; }
+  .compact-controls {
+    grid-column: 2; grid-row: 1; flex-direction: column; justify-content: center;
+    border-top: 0; border-left: 1px solid var(--rule-strong);
+    padding: 8px calc(8px + env(safe-area-inset-right, 0px)) 8px 8px;
+  }
+  .compact-controls .btn-group { flex-direction: column; }
+  .compact-controls .hud-controls__btn { flex: none; width: 100%; }
+  .compact-controls .hud-controls__btn.btn--primary { --btn-h: 56px; }
+  .compact-gears { justify-content: space-between; }
+  .compact-tabs {
+    grid-column: 2; grid-row: 2; grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid var(--rule-strong); border-left: 1px solid var(--rule-strong);
+    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) 0;
+  }
+  .compact-tab { min-height: 48px; border-top: 0; font-size: var(--t-11); }
+  .compact-tab.is-active { background: var(--fill-2); }
+  .compact[data-tab="ride"] .compact-stage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+  }
+  .compact[data-tab="ride"] .compact-panel[data-panel="metrics"] { overflow-y: auto; min-height: 0; }
+  .compact[data-tab="map"] .compact-stage {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); grid-template-rows: auto minmax(0, 1fr);
+  }
+  .compact[data-tab="map"] .compact-extra--power { grid-column: 1; grid-row: 1; }
+  .compact[data-tab="map"] .compact-extra--profile { grid-column: 1; grid-row: 2; }
+  .compact[data-tab="map"] .compact-panel[data-panel="map"] { grid-column: 2; grid-row: 1 / span 2; }
+  .compact[data-tab="charts"] .compact-stage { grid-template-rows: minmax(420px, 1fr); }
+  .compact-panel[data-panel="charts"] { min-height: 420px; }
 }
 
 /* ── narrow windows: the labels give way to the icons ── */
@@ -725,49 +925,54 @@ pub fn App() -> Element {
         });
     };
     rsx! {
-        div {
-            key: "{lang}",
-            class: if compact { "shell shell--compact" } else { "shell" },
-            id: "shell",
-            onmounted: on_mount,
-            ondragover: move |e| {
-                e.prevent_default();
-                if !*drag.peek() {
-                    drag.set(true);
-                }
-            },
-            ondragleave: move |_| {
-                if *drag.peek() {
-                    drag.set(false);
-                }
-            },
-            ondrop: move |e| {
-                e.prevent_default();
-                drag.set(false);
-                if let Some(file) = e.files().into_iter().next() {
-                    // on the review page a dropped file is a ride to compare, not a route
-                    if *st.review.open.peek() {
-                        ctl.review_import_path(file.path());
-                    } else {
-                        ctl.open_path(file.path());
+        // A key only counts among siblings: on a lone root it was ignored, and a component whose
+        // props did not change (the backup group of the settings) kept the old language. A
+        // one-item keyed list makes a language change really remount the whole UI.
+        for lang in std::iter::once(lang) {
+            div {
+                key: "{lang}",
+                class: if compact { "shell shell--compact" } else { "shell" },
+                id: "shell",
+                onmounted: on_mount,
+                ondragover: move |e| {
+                    e.prevent_default();
+                    if !*drag.peek() {
+                        drag.set(true);
                     }
+                },
+                ondragleave: move |_| {
+                    if *drag.peek() {
+                        drag.set(false);
+                    }
+                },
+                ondrop: move |e| {
+                    e.prevent_default();
+                    drag.set(false);
+                    if let Some(file) = e.files().into_iter().next() {
+                        // on the review page a dropped file is a ride to compare, not a route
+                        if *st.review.open.peek() {
+                            ctl.review_import_path(file.path());
+                        } else {
+                            ctl.open_path(file.path());
+                        }
+                    }
+                },
+                TopBar {}
+                if compact {
+                    CompactArea {}
+                } else {
+                    WorkArea {}
                 }
-            },
-            TopBar {}
-            if compact {
-                CompactArea {}
-            } else {
-                WorkArea {}
+                if *st.review.open.read() {
+                    ReviewLayer { compact }
+                }
+                if let Some(op) = active_drag {
+                    DragCatcher { op }
+                }
+                Dialogs {}
+                DropOverlay {}
+                CrashBanner {}
             }
-            if *st.review.open.read() {
-                ReviewLayer { compact }
-            }
-            if let Some(op) = active_drag {
-                DragCatcher { op }
-            }
-            Dialogs {}
-            DropOverlay {}
-            CrashBanner {}
         }
     }
 }
@@ -783,7 +988,6 @@ fn ReviewLayer(compact: bool) -> Element {
     let theme = use_memo(move || settings.read().ui.theme);
     let map_style = use_memo(move || settings.read().ui.map_style);
     let rider = use_memo(move || settings.read().rider.clone());
-    let ftp_w = use_memo(move || settings.read().rider.ftp_w);
     rsx! {
         div { class: "shell-review",
             ReviewPage {
@@ -797,8 +1001,8 @@ fn ReviewLayer(compact: bool) -> Element {
                 rider,
                 theme,
                 map_style,
-                analysis: r.analysis,
-                ftp_w,
+                now_s: r.now_s,
+                detail: r.detail,
                 compact,
                 on_close: move |_| ctl.review_close(),
                 on_route: move |id: String| ctl.review_select_route(id),
@@ -809,6 +1013,16 @@ fn ReviewLayer(compact: bool) -> Element {
                 on_map_style: move |style| ctl.set_map_style(style),
                 on_dismiss_notes: move |_| ctl.review_dismiss_notes(),
                 on_apply_ftp: move |watts: f64| ctl.review_apply_ftp(watts),
+                on_apply_max_hr: move |bpm: f64| ctl.review_apply_max_hr(bpm),
+                on_open_ride: move |(route_id, stem): (String, String)| ctl.review_open_ride(route_id, stem),
+                on_close_ride: move |_| ctl.review_close_ride(),
+                on_save_journal: move |(rpe, note): (Option<u8>, String)| ctl.review_save_journal(rpe, note),
+                on_agent: move |_| {
+                    let mut agent_ride = ctl.st.agent_ride;
+                    agent_ride.set(ctl.st.review.detail_key.peek().clone());
+                    ctl.open_dialog(DialogKind::Agent);
+                },
+                on_export: move |format: String| ctl.review_export(format),
             }
         }
     }
@@ -1108,6 +1322,16 @@ fn TopBar() -> Element {
     let mut drag = st.drag;
     let update = st.update.read().clone();
     let updating = *st.updating.read();
+    // The route, review and AI agent actions sit on the bar and, on a very small screen, in the
+    // hamburger menu instead: one definition for both.
+    let mut top_menu = st.top_menu;
+    let open_route = move || ctl.open_dialog(DialogKind::Route);
+    let open_review = move || ctl.review_open();
+    let open_agent = move || {
+        let mut agent_ride = ctl.st.agent_ride;
+        agent_ride.set(ctl.st.last_saved_ride.peek().clone());
+        ctl.open_dialog(DialogKind::Agent);
+    };
 
     rsx! {
         header { class: "shell-top", role: "banner",
@@ -1202,9 +1426,27 @@ fn TopBar() -> Element {
                 button {
                     class: "shell-tb",
                     r#type: "button",
+                    aria_label: t("app.calendar.title").to_string(),
+                    title: t("app.calendar.title").to_string(),
+                    onclick: move |_| ctl.open_dialog(DialogKind::Calendar),
+                    Icon { name: IconName::Calendar, size: 16 }
+                    span { class: "shell-label", {t("app.calendar.title")} }
+                }
+                button {
+                    class: "shell-tb shell-tb--agent",
+                    r#type: "button",
+                    aria_label: t("app.agent.title").to_string(),
+                    title: t("app.agent.settings_hint").to_string(),
+                    onclick: move |_| open_agent(),
+                    Icon { name: IconName::Robot, size: 16 }
+                    span { class: "shell-label", {t("app.agent.title")} }
+                }
+                button {
+                    class: "shell-tb shell-tb--route",
+                    r#type: "button",
                     aria_label: t("app.shell.utvonal").to_string(),
                     title: t("app.shell.utvonal_kivalasztasa_ctrl_o_megnyitja_a_fajlvalaszto").to_string(),
-                    onclick: move |_| ctl.open_dialog(DialogKind::Route),
+                    onclick: move |_| open_route(),
                     Icon { name: IconName::Folder, size: 16 }
                     span { class: "shell-label", {t("app.shell.utvonal")} }
                 }
@@ -1213,7 +1455,7 @@ fn TopBar() -> Element {
                     r#type: "button",
                     aria_label: t("app.shell.attekintes").to_string(),
                     title: t("app.shell.az_edzesek_attekintese_es_osszehasonlitasa").to_string(),
-                    onclick: move |_| ctl.review_open(),
+                    onclick: move |_| open_review(),
                     Icon { name: IconName::Gauge, size: 16 }
                     span { class: "shell-label", {t("app.shell.attekintes")} }
                 }
@@ -1254,13 +1496,64 @@ fn TopBar() -> Element {
                     onclick: move |_| ctl.toggle_fullscreen(),
                     Icon { name: IconName::Fullscreen, size: 16 }
                 }
+                // very small screens only (CSS): the route, review and AI agent buttons live in here
                 button {
-                    class: "shell-tb shell-tb--icon",
+                    class: "shell-tb shell-tb--menu",
                     r#type: "button",
-                    aria_label: t("app.shell.nevjegy_es_licencek").to_string(),
-                    title: t("app.shell.nevjegy_es_licencek").to_string(),
-                    onclick: move |_| ctl.open_dialog(DialogKind::About),
-                    Icon { name: IconName::Info, size: 16 }
+                    aria_label: t("app.shell.menu").to_string(),
+                    title: t("app.shell.menu").to_string(),
+                    "aria-haspopup": "menu",
+                    "aria-expanded": if top_menu() { "true" } else { "false" },
+                    onclick: move |_| {
+                        let open = *top_menu.peek();
+                        top_menu.set(!open);
+                    },
+                    Icon { name: IconName::Menu, size: 16 }
+                }
+            }
+            if top_menu() {
+                // a tap anywhere else closes the menu (and does nothing more)
+                button {
+                    class: "shell-menu-catcher",
+                    r#type: "button",
+                    tabindex: "-1",
+                    aria_hidden: "true",
+                    onclick: move |_| top_menu.set(false),
+                }
+                div { class: "shell-menu", role: "menu", aria_label: t("app.shell.menu").to_string(),
+                    button {
+                        class: "shell-menu__item",
+                        r#type: "button",
+                        role: "menuitem",
+                        onclick: move |_| {
+                            top_menu.set(false);
+                            open_route();
+                        },
+                        Icon { name: IconName::Folder, size: 18 }
+                        span { {t("app.shell.utvonal")} }
+                    }
+                    button {
+                        class: "shell-menu__item",
+                        r#type: "button",
+                        role: "menuitem",
+                        onclick: move |_| {
+                            top_menu.set(false);
+                            open_review();
+                        },
+                        Icon { name: IconName::Gauge, size: 18 }
+                        span { {t("app.shell.attekintes")} }
+                    }
+                    button {
+                        class: "shell-menu__item",
+                        r#type: "button",
+                        role: "menuitem",
+                        onclick: move |_| {
+                            top_menu.set(false);
+                            open_agent();
+                        },
+                        Icon { name: IconName::Robot, size: 18 }
+                        span { {t("app.agent.title")} }
+                    }
                 }
             }
         }
@@ -1545,7 +1838,7 @@ fn CompactArea() -> Element {
                 }
             }
             div { class: "compact-controls",
-                ControlsPanel {}
+                ControlsPanel { confirm_finish: true }
                 CompactGears {}
             }
             nav { class: "compact-tabs", role: "tablist", aria_label: t("app.shell.nezetek").to_string(),
@@ -1746,6 +2039,26 @@ fn ProfilePanel(#[props(default)] phone: bool) -> Element {
     let has_workout = workout.read().is_some();
     let view = settings.read().ui.profile_view;
     let pages = phone.then(|| phone_pages(st, ctl, has_workout));
+    // The phone's empty ride tab: a 450 px box that said what to do but had nothing to press (the
+    // way out was the folder icon in the top bar), so the button is here.
+    if phone && st.route.read().is_none() {
+        return rsx! {
+            div { class: "shell-noroute",
+                Icon { name: IconName::Mountain, size: 24 }
+                span { class: "shell-noroute__title", {t("ui_profile.nincs_betoltott_utvonal")} }
+                span { class: "shell-noroute__hint",
+                    {t("ui_profile.nyiss_meg_egy_gpx_fajlt_vagy_illessz_be_egy_bikerout")}
+                }
+                button {
+                    class: "btn btn--primary btn--lg",
+                    r#type: "button",
+                    onclick: move |_| ctl.open_dialog(DialogKind::Route),
+                    Icon { name: IconName::Folder, size: 16 }
+                    {t("app.shell.utvonal_valasztasa")}
+                }
+            }
+        };
+    }
     if has_workout && view == ProfileView::Workout {
         return rsx! {
             WorkoutProfile {
@@ -1775,11 +2088,12 @@ fn ProfilePanel(#[props(default)] phone: bool) -> Element {
 }
 
 #[component]
-fn ControlsPanel() -> Element {
+fn ControlsPanel(#[props(default)] confirm_finish: bool) -> Element {
     let st = use_context::<AppState>();
     let ctl = use_context::<Controller>();
     rsx! {
         RideControls {
+            confirm_finish,
             snapshot: st.snapshot,
             on_start: move |_| ctl.start(),
             on_pause: move |_| ctl.pause(),
@@ -2158,6 +2472,12 @@ fn Dialogs() -> Element {
             on_close: move |_| ctl.close_dialog(),
             on_backup: move |_| ctl.backup_save(),
             on_restore: move |_| ctl.backup_restore(),
+            on_agent: move |_| {
+                let mut agent_ride = ctl.st.agent_ride;
+                agent_ride.set(None);
+                ctl.open_dialog(DialogKind::Agent);
+            },
+            on_about: move |_| ctl.open_dialog(DialogKind::About),
         }
         WorkoutsDialog {
             open: open == Some(DialogKind::Workouts),
@@ -2168,12 +2488,25 @@ fn Dialogs() -> Element {
             on_select: move |id| ctl.select_workout(id),
             on_close: move |_| ctl.close_dialog(),
         }
+        if open == Some(DialogKind::Calendar) {
+            crate::calendar::CalendarDialog { imported: st.imported_workouts }
+        }
+        if open == Some(DialogKind::Agent) {
+            crate::agent_ui::AgentDialog {}
+        }
         SummaryDialog {
             open: open == Some(DialogKind::Summary),
             summary: st.summary,
             route: st.route,
             comparison: st.comparison,
             on_save_tcx: move |_| ctl.save_tcx(),
+            on_save_fit: move |_| ctl.save_fit(),
+            agent_ready: st.last_saved_ride.read().is_some(),
+            on_agent: move |_| {
+                let mut agent_ride = ctl.st.agent_ride;
+                agent_ride.set(ctl.st.last_saved_ride.peek().clone());
+                ctl.open_dialog(DialogKind::Agent);
+            },
             on_close: move |_| ctl.close_dialog(),
             on_new_ride: move |_| ctl.new_ride(),
         }

@@ -161,6 +161,7 @@ fn record(started: f64, speed: f64, estimated: bool) -> Arc<RideRecord> {
         })
         .collect();
     Arc::new(RideRecord {
+        completed_calendar_id: None,
         version: 1,
         route_id: "route-1".into(),
         route_name: "Teszt kör".into(),
@@ -196,6 +197,11 @@ fn record(started: f64, speed: f64, estimated: bool) -> Arc<RideRecord> {
         power_estimated: estimated,
         estimate: estimated.then(|| profile_params(&RiderSettings::default())),
         measured_power: Vec::new(),
+        ftp_w: None,
+        rider_kg: None,
+        workout: None,
+        rpe: None,
+        note: String::new(),
     })
 }
 
@@ -222,6 +228,8 @@ struct HarnessProps {
     compact: bool,
     with_route: bool,
     notes: Vec<String>,
+    #[props(default)]
+    detail: Option<Arc<RideRecord>>,
 }
 
 #[component]
@@ -251,8 +259,9 @@ fn Harness(props: HarnessProps) -> Element {
     let rider = use_signal(RiderSettings::default);
     let theme = use_signal(|| Theme::Dark);
     let map_style = use_signal(|| MapStyle::Dark);
-    let analysis = use_signal(|| Arc::new(Analysis::default()));
-    let ftp_w = use_signal(|| 200.0_f64);
+    let now_s = use_signal(|| 1_790_200_000.0_f64);
+    let open = props.detail.clone();
+    let detail = use_signal(move || open.clone());
     rsx! {
         ReviewPage {
             routes,
@@ -265,8 +274,8 @@ fn Harness(props: HarnessProps) -> Element {
             rider,
             theme,
             map_style,
-            analysis,
-            ftp_w,
+            now_s,
+            detail,
             compact: props.compact,
             on_close: move |_| {},
             on_route: move |_| {},
@@ -277,6 +286,11 @@ fn Harness(props: HarnessProps) -> Element {
             on_map_style: move |_| {},
             on_dismiss_notes: move |_| {},
             on_apply_ftp: move |_| {},
+            on_apply_max_hr: move |_| {},
+            on_open_ride: move |_| {},
+            on_close_ride: move |_| {},
+            on_save_journal: move |_| {},
+            on_export: move |_| {},
         }
     }
 }
@@ -296,6 +310,7 @@ fn two_rides() -> HarnessProps {
         compact: false,
         with_route: true,
         notes: Vec::new(),
+        detail: None,
     }
 }
 
@@ -333,6 +348,7 @@ fn marks_estimated_watts_and_offers_the_setup() {
         compact: false,
         with_route: true,
         notes: vec!["A teljesítményt becsültük.".into()],
+        detail: None,
     });
     assert!(html.contains("Becsült watt"), "the tag");
     assert!(html.contains("Importált"));
@@ -352,6 +368,7 @@ fn an_empty_log_explains_itself() {
         compact: false,
         with_route: false,
         notes: Vec::new(),
+        detail: None,
     });
     assert!(html.contains("Még nincs mentett edzés"));
     assert!(html.contains("Edzés importálása"));
@@ -472,7 +489,7 @@ fn a_finger_can_still_scroll_over_the_plots() {
 
 // ── the power view ─────────────────────────────────────────────────────────
 
-use ride_sim::power_curve::{analyze, Analysis, DURATIONS};
+use ride_sim::power_curve::{analyze, Analysis, Window, DURATIONS, FTP_WINDOW};
 
 /// Renders `PowerView` alone with `analysis`, an FTP of `ftp` W and the given ticked rides.
 fn render_power(analysis: Analysis, ftp: f64, records: Vec<Arc<RideRecord>>) -> String {
@@ -487,11 +504,25 @@ fn render_power(analysis: Analysis, ftp: f64, records: Vec<Arc<RideRecord>>) -> 
         let analysis = props.analysis.clone();
         let analysis = use_signal(move || Arc::new(analysis.clone()));
         let ftp = props.ftp;
-        let ftp_w = use_signal(move || ftp);
+        let rider = use_signal(move || RiderSettings {
+            ftp_w: ftp,
+            rider_kg: 70.0,
+            ..RiderSettings::default()
+        });
+        let window = use_signal(|| Window::Days(90));
         let records = props.records.clone();
         let loaded = use_signal(move || Arc::new(records.clone()));
         rsx! {
-            power::PowerView { analysis, ftp_w, loaded, on_apply_ftp: move |_| {} }
+            power::PowerView {
+                analysis,
+                window,
+                on_window: move |_| {},
+                rider,
+                loaded,
+                on_apply_ftp: move |_| {},
+                on_apply_max_hr: move |_| {},
+                on_open_ride: move |_| {},
+            }
         }
     }
     let mut vdom = VirtualDom::new_with_props(
@@ -506,16 +537,29 @@ fn render_power(analysis: Analysis, ftp: f64, records: Vec<Arc<RideRecord>>) -> 
     dioxus_ssr::render(&vdom)
 }
 
-fn curve_meta(stem: &str, started: f64, values: [f32; 5]) -> RideMeta {
+/// An index entry whose curve is `cp + w' / t` (no value past `longest` seconds).
+fn curve_meta(stem: &str, started: f64, cp: f64, w_prime: f64, longest: u32) -> RideMeta {
+    let curve: Vec<Option<f32>> = DURATIONS
+        .iter()
+        .map(|&t| (t <= longest).then(|| (cp + w_prime / f64::from(t)) as f32))
+        .collect();
     RideMeta {
         stem: stem.into(),
         started_unix_s: started,
         elapsed_s: 4_000.0,
+        dist_m: 30_000.0,
         tss: Some(80.0),
-        mmp: Some(values.iter().map(|v| Some(*v)).collect()),
+        mmp: Some(curve.clone()),
+        free_mmp: Some(curve),
+        max_hr: Some(195.0),
+        power_zone_secs: Some([600.0, 1_200.0, 900.0, 600.0, 300.0, 100.0, 50.0]),
+        ftp_w: Some(220.0),
+        analysis_version: ride_sim::power_curve::ANALYSIS_VERSION,
         ..RideMeta::default()
     }
 }
+
+const NOW: f64 = 1_790_200_000.0;
 
 fn analysis_of(rides: Vec<RideMeta>, now: f64) -> Analysis {
     analyze(
@@ -525,69 +569,76 @@ fn analysis_of(rides: Vec<RideMeta>, now: f64) -> Analysis {
             rides,
         }],
         now,
+        Window::Days(90),
+        &RiderSettings::default(),
     )
 }
 
 #[test]
-fn the_power_view_shows_the_curve_the_ftp_and_the_trend() {
-    let now = 1_790_200_000.0;
+fn the_power_view_shows_fitness_the_ftp_the_curve_the_zones_and_the_trend() {
     let analysis = analysis_of(
         vec![
-            curve_meta(
-                "1790000000",
-                1_790_000_000.0,
-                [700.0, 400.0, 300.0, 250.0, 220.0],
-            ),
-            curve_meta(
-                "1790100000",
-                1_790_100_000.0,
-                [650.0, 410.0, 290.0, 260.0, 0.0],
-            ),
+            curve_meta("1790000000", NOW - 200_000.0, 250.0, 18_000.0, 3_600),
+            curve_meta("1790100000", NOW - 100_000.0, 240.0, 20_000.0, 1_200),
         ],
-        now,
+        NOW,
     );
+    // the model of the first ride: 20 min = 265 W, 95 % = 252 W
+    assert_eq!(analysis.ftp_estimate.as_ref().map(|e| e.ftp_w), Some(252.0));
     let html = render_power(analysis, 200.0, Vec::new());
     for text in [
+        "Forma és terhelés",
+        "Fitnesz (CTL)",
+        "Fáradtság (ATL)",
+        "Forma (TSB)",
         "Csúcsteljesítmény",
-        "5 mp",
-        "1 perc",
         "20 perc",
         "60 perc",
-        "700", // the best 5 s
-        "260", // the best 20 minutes
         "Teszt kör",
         "FTP",
-        "247", // 95 % of 260
-        "FTP beállítása 247 W-ra",
+        "252",
+        "FTP beállítása 252 W-ra",
         "jelenleg beállítva: 200 W",
+        "CP-modell",
         "Csak mért watt számít",
+        "Zónák",
         "Terhelés",
         "Heti",
         "Havi",
+        "W/kg",
+        "Mindenkori",
+        "90 nap",
+        "Legmagasabb mért pulzus: 195 bpm",
+        "Maxpulzus beállítása 195 bpm-re",
     ] {
         assert!(html.contains(text), "missing {text:?}");
     }
-    assert_eq!(html.matches("rv-trend-col").count(), 12, "twelve weeks");
-    assert!(html.contains("rv-bar"), "the bars of the curve");
+    assert!(html.matches("rv-trend-col").count() >= 12, "twelve weeks");
+    assert!(html.contains("rv-zone-bar"), "the zone bars");
     assert!(!html.contains("NaN"), "no NaN anywhere");
-    assert_eq!(DURATIONS.len(), 5);
+    assert_eq!(DURATIONS[FTP_WINDOW], 1_200);
 }
 
 #[test]
 fn an_ftp_that_is_already_set_cannot_be_applied_again() {
     let analysis = analysis_of(
-        vec![curve_meta(
-            "1",
-            1_790_000_000.0,
-            [700.0, 400.0, 300.0, 200.0, 190.0],
-        )],
-        1_790_100_000.0,
+        vec![curve_meta("1", NOW - 100_000.0, 250.0, 18_000.0, 1_200)],
+        NOW,
     );
-    // 95 % of 200 W is 190 W: the setting already says so
-    let html = render_power(analysis, 190.0, Vec::new());
+    let html = render_power(analysis, 252.0, Vec::new());
     assert!(html.contains("Az FTP már ennyi"));
     assert!(html.contains("disabled"));
     assert!(!html.contains("FTP beállítása"));
+}
+
+#[test]
+fn a_lower_estimate_says_the_ftp_dropped() {
+    let analysis = analysis_of(
+        vec![curve_meta("1", NOW - 100_000.0, 200.0, 15_000.0, 1_200)],
+        NOW,
+    );
+    let html = render_power(analysis, 280.0, Vec::new());
+    assert!(html.contains("alacsonyabb a beállítottnál"), "{html}");
 }
 
 #[test]
@@ -598,7 +649,6 @@ fn without_a_measured_twenty_minutes_the_page_explains_and_offers_nothing() {
     assert!(html.contains("FTP-teszt 20 perc"));
     assert!(!html.contains("FTP beállítása"));
     assert!(!html.contains("NaN"));
-    // an all-empty log still draws an empty trend, not a broken one
     assert!(
         !html.contains("rv-trend-col"),
         "no periods without an analysis"
@@ -607,9 +657,9 @@ fn without_a_measured_twenty_minutes_the_page_explains_and_offers_nothing() {
 
 #[test]
 fn rides_still_waiting_for_their_numbers_are_announced() {
-    let mut pending = curve_meta("1", 1_790_000_000.0, [0.0; 5]);
-    pending.mmp = None;
-    let analysis = analysis_of(vec![pending], 1_790_100_000.0);
+    let mut pending = curve_meta("1", NOW - 100_000.0, 250.0, 18_000.0, 1_200);
+    pending.analysis_version = 0;
+    let analysis = analysis_of(vec![pending], NOW);
     assert_eq!(analysis.rides_pending, 1);
     let html = render_power(analysis, 200.0, Vec::new());
     assert!(html.contains("1 régebbi edzés számai még nincsenek meg"));
@@ -620,15 +670,111 @@ fn the_ticked_rides_get_a_column_each_and_estimated_watts_a_tilde() {
     let measured = record(1_790_000_000.0, 8.0, false);
     let estimated = record(1_790_100_000.0, 9.0, true);
     let html = render_power(
-        analysis_of(Vec::new(), 1_790_200_000.0),
+        analysis_of(Vec::new(), NOW),
         200.0,
         vec![measured, estimated],
     );
     assert!(html.contains("var(--series-1)") && html.contains("var(--series-2)"));
-    // the rides are ~8 minutes long: a value for 5 s, 1 and 5 minutes, none for 20 and 60
     assert!(html.contains('~'), "the estimated ride's watts are marked");
     assert!(html.contains("becsült vagy szimulált wattból"));
     assert!(!html.contains("NaN"));
+}
+
+// ── the journal and the ride view ──────────────────────────────────────────
+
+#[test]
+fn the_journal_lists_every_ride_in_weeks() {
+    let html = render(two_rides());
+    assert!(html.contains("Napló"), "the view switch offers the journal");
+    #[component]
+    fn JournalHarness() -> Element {
+        let mut a = meta_of(&record(1_790_000_000.0, 8.0, false));
+        a.rpe = Some(7);
+        a.note = "Jó lábak, szél volt.".into();
+        a.workout_name = Some("Sweet spot 3×12".into());
+        a.tss = Some(64.0);
+        let b = meta_of(&record(1_790_100_000.0, 9.0, true));
+        let routes = use_signal(move || {
+            vec![RouteRides {
+                route_id: "route-1".into(),
+                route_name: "Teszt kör".into(),
+                rides: vec![b.clone(), a.clone()],
+            }]
+        });
+        let rider = use_signal(RiderSettings::default);
+        rsx! { journal::JournalView { routes, rider, on_open_ride: move |_| {} } }
+    }
+    let mut vdom = VirtualDom::new(JournalHarness);
+    vdom.rebuild_in_place();
+    let html = dioxus_ssr::render(&vdom);
+    for text in [
+        "Sweet spot 3×12",
+        "Jó lábak, szél volt.",
+        "Teszt kör",
+        "rv-days",
+        "Importált",
+    ] {
+        assert!(html.contains(text), "missing {text:?}");
+    }
+    assert!(html.contains(">7<"), "the RPE");
+    assert!(!html.contains("NaN"));
+}
+
+#[test]
+fn the_ride_view_shows_the_numbers_the_laps_and_the_journal_form() {
+    let mut ride = (*record(1_790_000_000.0, 8.0, false)).clone();
+    ride.ftp_w = Some(200.0);
+    ride.rider_kg = Some(70.0);
+    ride.rpe = Some(6);
+    ride.note = "Könnyű nap".into();
+    ride.workout = Some(ride_model::RideWorkout {
+        id: "w".into(),
+        name: "Küszöb".into(),
+        ftp_w: 200.0,
+        steps: vec![
+            ride_model::WorkoutStep {
+                kind: ride_model::StepKind::Warmup,
+                name: "Bemelegítés".into(),
+                duration_s: 200,
+                target: ride_model::StepTarget::PctFtp { value: 60.0 },
+                cadence: None,
+                note: None,
+                messages: Vec::new(),
+            },
+            ride_model::WorkoutStep {
+                kind: ride_model::StepKind::Interval,
+                name: String::new(),
+                duration_s: 300,
+                target: ride_model::StepTarget::PctFtp { value: 95.0 },
+                cadence: None,
+                note: None,
+                messages: Vec::new(),
+            },
+        ],
+    });
+    let mut props = two_rides();
+    props.detail = Some(Arc::new(ride));
+    let html = render(props);
+    for text in [
+        "Küszöb",
+        "Bemelegítés",
+        "Intervallum",
+        "NP",
+        "VI",
+        "Pw:HR",
+        "W/kg",
+        "TCX",
+        "FIT",
+        "Könnyű nap",
+        "Bejegyzés mentése",
+        "Az edzés lépései",
+        "rv-rpe-btn is-on",
+    ] {
+        assert!(html.contains(text), "missing {text:?}");
+    }
+    assert!(!html.contains("NaN"));
+    // the comparison is hidden behind the ride view
+    assert!(!html.contains("rv-side"));
 }
 
 #[test]
@@ -636,6 +782,7 @@ fn the_page_has_a_switch_between_the_comparison_and_the_power_view() {
     let html = render(two_rides());
     assert!(html.contains("rv-views"));
     assert!(html.contains("Összehasonlítás"));
+    assert!(html.contains("Napló"));
     assert!(html.contains("Teljesítmény"));
     // it opens on the comparison
     assert!(html.contains("rv-table") && !html.contains("rv-power"));

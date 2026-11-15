@@ -154,6 +154,13 @@ the `sources` field of `workouts.json`).
 
 ![Workout in ERG mode](../../screenshots/workout.png)
 
+### Workout calendar and AI agent
+
+Use Calendar to schedule a workout for a date and optional time, then prepare it for a ride. Open AI agent from the top bar (also from Calendar, Settings, the ride summary and the review page), enable the local connection, pick your client (Claude Code or JSON) and copy the configuration with one button. The agent works as a coach: it sees the calendar (which workouts are done), your recent rides, your RPE and how closely you held the targets, and when a ride went badly it can add workouts and move, swap or remove scheduled workouts that are not completed yet, each with a reason. Completed workouts are history and stay as they are. Nothing changes without your approval: review the proposal in the app (changes are shown as before → after). Use AI analysis from a saved ride to copy a request to your agent and save its feedback.
+
+
+The calendar also shows past saved rides, including rides without a scheduled workout, and opens their detailed analysis.
+
 ## Virtual gearbox
 
 *Settings → Trainer → Virtual gearbox.* 2 × 12 drivetrain (50/34 and 11–34), **23 gears**. You shift with the `←`/`→`
@@ -223,27 +230,67 @@ narrow to the same section. A drag shorter than 100 m does not count as a sectio
 average and maximum heart rate, cadence, climb, VAM and the difference from the reference ride. There is data only for a
 section that the ride **covered in full**; a partial ride is empty on the other sections.
 
-### Power: peaks, FTP, load
+### Power: form, FTP, peaks, zones, load
 
 ![The power page](../../screenshots/review-power.png)
 
-At the top of the review, the **Comparison | Power** switch takes you to the other page. Here are the numbers of **all**
-your rides, independently of the route:
+The **Comparison | Journal | Power** switch at the top of the review page changes the view. The Power page has the numbers of
+**all** your rides, whatever the route. **Period** at the top (*28 days*, *42 days*, *90 days*, *1 year*, *All*) chooses what the
+curve, the zones and the form chart cover; 90 days by default.
 
-- **Peak power.** The best average watts for 5 seconds, 1, 5, 20 and 60 minutes, with the ride's date and route. If you
-  have selected rides in the Comparison, their values stand beside it in columns (A–D). A ride has no value for a
-  duration longer than it was.
-- **FTP.** It suggests 95% of your best 20-minute power as FTP, and shows the currently set one beside it. The **Set the
-  FTP to N W** button writes it into the Settings; the app never changes it by itself. The TSS of saved rides stays
-  calculated with the FTP of their own time. For an exact suggestion you need a real 20-minute best effort: the *FTP
-  test 20 minutes* workout (*Workouts*, `W`) gives exactly that.
-- **Load.** The last 12 weeks or months (*Weekly* | *Monthly*): its columns show the TSS, the value above it, and the
-  tooltip (standing on the column) shows the number and time of the rides.
+- **Fitness and form.** *Fitness (CTL)*: the 42-day weighted average of your daily load. *Fatigue (ATL)*: the same over 7
+  days. *Form (TSB)*: their difference the day before. Negative form: you are loading; between +5 and +25 you are fresh for a
+  race. *Weekly change* is how much fitness rose in the last seven days; faster than 5–8 points a week can lead to overload.
+  The load of a ride is TSS from measured watts; without them **hrTSS** from heart rate (an hour at threshold heart rate is
+  100); without that, the TSS of estimated watts. Under the chart: how many rides came from which source.
+- **FTP.** The suggestion always uses the **last 90 days** of measured rides, so it also goes down after a break or an
+  illness. Stretches ridden at a prescribed wattage in ERG **do not count**: what a workout prescribed says nothing about what
+  you could do. A **critical-power model** (CP and W′) is fitted to your best 2–20 minute efforts, and the app suggests 95 % of
+  the better of your measured best 20 minutes and the model's 20 minutes, so a realistic number comes out without a test if you
+  had a few maximal shorter efforts. Next to it: W/kg, the FTP set now, and a warning when the suggestion is lower. **Set FTP to
+  N W** writes it into the settings; the app never changes it by itself. Below: *Estimated FTP by week* and *FTP changes* (the
+  FTP your rides were analysed with).
+- **Heart rate.** The maximum, threshold (LTHR) and resting heart rate you set, the zone model, and the highest heart rate of
+  the period; if it is above the maximum you set, **Set max. heart rate** writes it.
+- **Peak power.** The best average watts from 1 second to 90 minutes on a logarithmic time axis: the chosen period (solid) and
+  the best ever (dashed). The table lists the main durations with watts, W/kg (with that day's body mass), when and where (a
+  click opens that ride), the best ever, and the rides ticked in the comparison (A–D).
+- **Zones.** Time in power and heart-rate zones over the period, second by second, with shares, and the easy (Z1–Z2) /
+  moderate (Z3) / hard (Z4+) split.
+- **Load.** The last 12 weeks or months (*Weekly* | *Monthly*): a column is the whole load; its tooltip splits it into TSS,
+  hrTSS and estimated, with rides, time and distance.
 
-**Only measured watts count.** The simulated rider and rides with estimated (`~`) watts do not go among the peaks and the
-FTP suggestion (in the trend's time they do, in its TSS they do not). An imported ride in which there was real power
-counts. The trainer's own watts are not a power meter, so the FTP suggestion is only as accurate as that. The numbers of
-older rides are calculated and saved on first opening, which can take a few seconds with many rides.
+**Only measured watts count** for the peaks and the FTP. The simulated rider and rides with estimated (`~`) watts are left
+out. The trainer's own watts are not a power meter, so the suggestion is only as accurate as they are. Older rides are
+recomputed once when the page first opens; with many rides this can take a few seconds.
+
+### Journal
+
+The **Journal** lists every ride of every route in time order, a week (Monday to Sunday) at a time: rides, time, distance,
+load and a bar per day. Each row: date, route, workout name, time, distance, NP (or average power), load (`(heart rate)`:
+hrTSS, `~`: estimated watts), the start of your note and your rating (RPE). A row opens the ride. *Older weeks* loads more.
+
+### One ride in detail
+
+Opened from the journal, from the **ⓘ** button of the comparison list, or from a date in the peak table. *Back to the list*
+closes it.
+
+- **Numbers**: time, distance, average speed, average power, NP, IF, TSS (with the FTP of that day), hrTSS, **VI** (NP / average
+  power; under 1.05 the pace was steady), **EF** (NP / average heart rate; rising on the same kind of ride means progress),
+  **Pw:HR decoupling** (how much the heart rate rose for the same watts in the second half; under 5 % means a solid aerobic
+  base; needs 20 minutes), W/kg, work, work above FTP, **W′ low point** (how much of the reserve above CP was left at the
+  hardest point, by the CP model), heart rate, cadence, the FTP and body mass of that day.
+- A **chart over time**: power (with the **target** of a workout), heart rate, cadence, speed or **W′ balance**.
+- **Workout steps**: target, average power, **compliance in %** (outside 90–110 % is highlighted), NP, W/kg, heart rate and
+  cadence per step. Without a workout, the **hard efforts**: stretches of at least a minute where the 30-second average stayed
+  above 88 % of FTP, found automatically.
+- **Zones**: power and heart-rate zones second by second, and the cadence spread.
+- **Journal entry**: your **feel (RPE)** from 1 to 10 and a **note**; *Save entry* stores them.
+- **TCX** and **FIT**: save the ride as a file, any time. In the FIT file the workout steps are laps.
+
+The summary at the end of a ride also has **Save as FIT** next to *Save as TCX*. Settings → Rider has the **resting heart
+rate**, the **threshold heart rate (LTHR)** (90 % of the maximum when not set) and what the **heart-rate zones are based on**
+(*Max. heart rate*: 60/70/80/90 % of it; *Reserve*: Karvonen; *LTHR*: Coggan).
 
 ### Importing a ride from another app
 
@@ -258,7 +305,8 @@ exported from Strava, Garmin or Wahoo. Heart rate, cadence and (if present) watt
 - The same ride (the same start time) cannot be imported twice.
 - The imported ride **will not be a PR and will not be a ghost**: an outdoor ride with stops and freewheeling cannot be
   compared with your trainer times. In the list the `Imported` tag marks it.
-- On the phone the import is not available yet. We do not read the FIT format; Strava exports both GPX and TCX.
+- On the phone the import is not available yet. GPX, TCX and **FIT** files are read; points of a FIT file without a position
+  (an indoor ride without GPS) are left out, because the ride is placed on the route by position.
 
 ### Estimated watts
 
@@ -301,6 +349,10 @@ workout's block (time remaining, next block, the coach's message), power measure
 high*), the zone bar, cadence, heart rate, speed, gradient, below it the profile (dragging sideways switches between its
 views). The dialogs are full-screen on the phone.
 
+On a very small screen (narrower than 400 px) the top bar gets a **hamburger menu** (≡): *Workout*, *Calendar*, *Devices*
+and *Settings* stay on the bar, while *Route*, *Review* and *AI agent* open from the menu. A tap outside the menu, or
+`Esc`, closes it.
+
 <p align="center">
   <img src="../../screenshots/phone-ride.png" width="280" alt="Phone layout, Ride tab with a workout">
   &nbsp;&nbsp;
@@ -328,6 +380,8 @@ Every change takes effect immediately and is saved.
 | **Layout** | reset the default |
 | **Backup** | *Save to a file* and *Restore from a file* (see below) |
 | **Street View** | show, the Google key, save panorama ids, download images, delete the stored data |
+| **AI agent** | opens the *AI agent* window (the local connection on or off, the proposals that arrived) |
+| **About and licences** | the program version, the licences of the open-source parts it uses and the sources of the data (it has no button on the top bar) |
 
 ### Backup
 

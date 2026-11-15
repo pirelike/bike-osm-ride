@@ -151,6 +151,7 @@ pub fn import_activity(
 
     Ok(Imported {
         record: RideRecord {
+            completed_calendar_id: None,
             version: RIDE_RECORD_VERSION,
             route_id: route.id.clone(),
             route_name: route.name.clone(),
@@ -161,6 +162,12 @@ pub fn import_activity(
             power_estimated: params.is_some(),
             estimate: params,
             measured_power,
+            // the ride is analysed with the FTP and mass set now (the day's are not known)
+            ftp_w: Some(rider.ftp_w).filter(|w| w.is_finite() && *w > 0.0),
+            rider_kg: Some(rider.rider_kg).filter(|w| w.is_finite() && *w > 0.0),
+            workout: None,
+            rpe: None,
+            note: String::new(),
         },
         warnings,
         name: activity.name.clone(),
@@ -198,6 +205,7 @@ pub fn reestimate(
     // the stem of the stored file is the start time: it must stay as it was
     summary.started_unix_s = record.summary.started_unix_s;
     Ok(RideRecord {
+        completed_calendar_id: None,
         summary,
         points,
         estimate: Some(params),

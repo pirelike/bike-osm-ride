@@ -60,6 +60,7 @@ webbrowser = "1.2"
 # Android has no native file dialog (see `controller::pick_file`).
 [target.'cfg(not(target_os = "android"))'.dependencies]
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+rmcp = { version = "3.9.0", default-features = false, features = ["server", "transport-io"] }
 
 # On Android the same desktop renderer runs inside the mobile shell `dx` generates.
 [target.'cfg(target_os = "android")'.dependencies]

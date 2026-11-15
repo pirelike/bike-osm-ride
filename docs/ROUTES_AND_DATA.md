@@ -113,9 +113,23 @@ A GPX/TCX recorded by another app is **not** a route: it becomes a ride of a sto
 Record additions (all `#[serde(default)]`, version stays 1): `RideRecord.{source, power_estimated, estimate, measured_power}`,
 `RideMeta.{source, power_estimated, avg_power_w, avg_hr, route_name}`, and for the power page
 `RideMeta.{tss, mmp}`: the TSS and the best average power per window of `ride_sim::power_curve::DURATIONS` (watts as `f32`,
-`null` = no value). `mmp: None` means "not computed yet" (an index from an older version; filled in from the record the next
-time the review page refreshes, `Store::backfill_analysis`), `Some` with only `null`s means "computed, nothing to show"
+`null` = no value). `mmp: None` means "not computed yet", `Some` with only `null`s means "computed, nothing to show"
 ([`SIMULATION.md`](SIMULATION.md) §7b).
+
+Since the journal and the new power view (all optional, version still 1): `RideRecord.{ftp_w, rider_kg, workout, rpe, note}`:
+the FTP and body mass the ride was analysed with, the workout that ran (`RideWorkout`: id, name, the FTP of its targets, the
+steps without their coaching texts), the rider's rating 1-10 and note (≤ 2000 characters). `RideMeta` adds
+`analysis_version, dist_m, np_w, work_kj, max_hr, free_mmp, hr_secs, power_zone_secs, ftp_w, rider_kg, workout_name, rpe,
+note`. An entry whose `analysis_version` is older than `ride_sim::power_curve::ANALYSIS_VERSION` is recomputed from its record
+the next time the review page refreshes (`Store::backfill_analysis`). `Store::update_ride_journal` patches the rating and the
+note of a record and its index entry in place (nothing recomputed, so a ride whose route is gone keeps its segments).
+
+**FIT.** `activity::from_bytes` recognises a FIT file by its header (`.FIT` at byte 8) and reads its `record` messages
+(`fit.rs`: definition and data messages, compressed time stamps, developer fields, either byte order, invalid values as
+missing; written from the public protocol description, no SDK code). A record without a position is dropped like a GPX point
+without one. The export (`ride_sim::fit::to_fit`) writes `file_id`, timer events, one `record` per sample, the laps (the
+workout's steps, or one), a `session` and the `activity`, with the FIT CRC; `sub_sport` is *virtual activity* for a ride of this
+app and *generic* for an import.
 
 ## 3. The data folder
 
@@ -130,6 +144,12 @@ Android. `RIDE_DATA_DIR` overrides it everywhere (tests, portable installs, scre
 | `routes/<id>.json` | the processed `Route` | cache so a reopened route is not rebuilt |
 | `rides/<route id>/<start>.json`, `index.json` | the ride log (recorded and imported rides) | never touched by the recents housekeeping; [`SIMULATION.md`](SIMULATION.md) §6, §2a above |
 | `workouts/<id>.json` | imported workouts | one file each |
+| `calendar.json` | scheduled workouts and their local dates and optional times | workout snapshots are kept with each entry |
+| `ai-drafts/`, `ai-processed/` | agent proposals and processed proposal identifiers | local inbox and idempotency records |
+| `ai-pending/` | interrupted plan approval journal | recovered on startup, excluded from backups |
+| `ai-feedback/<route id>/<start>.json` | accepted agent feedback for a ride | included in backups |
+| `ai-enabled` | local agent connection switch | device-specific, excluded from backups |
+| `calendar.lock` | cross-process calendar write lock | excluded from backups |
 | `tiles/<dark\|light\|osm>/<z>/<x>/<y>.png` | map tile cache | fresh for 30 days; stale offline fallback up to 90 days / 512 MiB total, pruned at startup and hourly during use; no bulk prefetching (OSM tile policy) |
 | `streetview/<route id>.json` | panorama ids per 25 m bucket | 30 days; "no panorama" 7 days; ids, our own coordinates, heading and a timestamp, never imagery |
 | `streetview/img/<route id>/` | downloaded images and `manifest.json` | only after an explicit download; shown for 30 days |
@@ -172,6 +192,8 @@ recent.json                      the recent-routes index
 routes/<id>.json                 processed routes
 rides/<route id>/<start>.json    ride records;  rides/<route id>/index.json  the per-route index
 workouts/<id>.json               imported workouts
+calendar.json                    scheduled workouts
+ai-feedback/<route id>/<start>.json  accepted agent feedback
 ```
 
 Not in it: `tiles/`, `streetview/` (ids and imagery), the logs, `webview/`, `firefox-profile/`, `strava*/`,

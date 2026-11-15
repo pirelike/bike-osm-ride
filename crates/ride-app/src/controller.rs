@@ -22,9 +22,9 @@ use dioxus::desktop::DesktopContext;
 use dioxus::prelude::*;
 use ride_ble::{spawn_sensor_hub, HubOptions, SensorLink};
 use ride_model::{
-    ConnState, DeviceKind, GhostStatus, MapStyle, ProfileMode, ProfileView, RideRecord, RideState,
-    Route, RouteSource, SensorCommand, SensorEvent, Settings, Theme, Workout, WorkoutLibrary,
-    RIDE_RECORD_VERSION,
+    CalendarEntry, ConnState, DeviceKind, GhostStatus, MapStyle, ProfileMode, ProfileView,
+    RideRecord, RideState, Route, RouteSource, SensorCommand, SensorEvent, Settings, Theme,
+    Workout, WorkoutLibrary, RIDE_RECORD_VERSION,
 };
 use ride_ui_kit::format::{fmt_km, fmt_m};
 use ride_ui_kit::ToastKind;
@@ -57,6 +57,27 @@ struct BrowserHost {
     slot: Option<browser::Slot>,
     visible: bool,
     starting: bool,
+}
+
+/// Association with a planned workout, valid only for the ride being prepared.
+#[derive(Default)]
+struct ScheduledWorkout(Option<CalendarEntry>);
+
+impl ScheduledWorkout {
+    fn clear(&mut self) {
+        self.0 = None;
+    }
+
+    fn prepare(&mut self, entry: CalendarEntry) {
+        self.0 = Some(entry);
+    }
+
+    fn finish(&mut self, complete: bool, simulated: bool) -> Option<String> {
+        self.0
+            .take()
+            .filter(|_| complete && !simulated)
+            .map(|entry| entry.id)
+    }
 }
 
 static BROWSER: Mutex<BrowserHost> = Mutex::new(BrowserHost {
@@ -196,6 +217,9 @@ pub struct Inner {
     wake_retry_at: Option<Instant>,
     time_scale: f64,
     finished: Option<FinishedRide>,
+    /// Scheduled workout prepared for the next ride.
+    scheduled_workout: ScheduledWorkout,
+    ride_generation: u64,
     /// Slots (by kind) that were connected to the simulated rider.
     sim_kinds: HashSet<DeviceKind>,
     expected_disconnect: HashSet<DeviceKind>,
@@ -262,6 +286,8 @@ impl Controller {
             wake_retry_at: None,
             time_scale: b.hooks.time_scale,
             finished: None,
+            scheduled_workout: ScheduledWorkout::default(),
+            ride_generation: 0,
             sim_kinds: HashSet::new(),
             expected_disconnect: HashSet::new(),
             save_gen: 0,
@@ -1069,11 +1095,38 @@ impl Controller {
                 None => None,
             };
             let out = i.core.set_workout(workout, Instant::now());
+            i.scheduled_workout.clear();
             i.apply(out);
             true
         });
         if changed {
             self.update_settings(|s| s.ui.workout_id = id);
+        }
+    }
+
+    /// Prepare the exact snapshot saved in the calendar, even if its source changed.
+    pub fn prepare_scheduled_workout(self, entry: CalendarEntry) {
+        let workout_id = entry.workout.id.clone();
+        let changed = self.with(|i| {
+            if matches!(i.core.state(), RideState::Riding | RideState::Paused) {
+                i.toast(
+                    ToastKind::Warning,
+                    t("app.controller.tekeres_kozben_nem_lehet_edzest_valtani_elobb_tarts_"),
+                );
+                return false;
+            }
+            if i.core.state() == RideState::Finished {
+                i.reset();
+            }
+            let out = i
+                .core
+                .set_workout(Some(Arc::new(entry.workout.clone())), Instant::now());
+            i.scheduled_workout.prepare(entry);
+            i.apply(out);
+            true
+        });
+        if changed {
+            self.update_settings(|s| s.ui.workout_id = Some(workout_id));
         }
     }
 
@@ -1094,13 +1147,27 @@ impl Controller {
             // an old failure should not greet the next attempt
             self.st.welcome_error_set(None);
         }
+        if dialog == DialogKind::Agent {
+            let current = *self.st.dialog.peek();
+            if current != Some(DialogKind::Agent) {
+                let mut previous = self.st.agent_return;
+                previous.set(current);
+            }
+        }
         let mut d = self.st.dialog;
         d.set(Some(dialog));
     }
 
     pub fn close_dialog(self) {
         let mut d = self.st.dialog;
-        d.set(None);
+        if *d.peek() == Some(DialogKind::Agent) {
+            let mut previous = self.st.agent_return;
+            let target = previous.peek().as_ref().copied();
+            previous.set(None);
+            d.set(target);
+        } else {
+            d.set(None);
+        }
     }
 
     pub fn toggle_fullscreen(self) {
@@ -1116,7 +1183,10 @@ impl Controller {
         let review_open = *self.st.review.open.peek();
         match key {
             "esc" => {
-                if dialog_open {
+                if *self.st.top_menu.peek() {
+                    let mut top_menu = self.st.top_menu;
+                    top_menu.set(false);
+                } else if dialog_open {
                     self.close_dialog();
                 } else if review_open {
                     self.review_close();
@@ -1146,11 +1216,43 @@ impl Controller {
 
     /// "Mentés TCX-ként": native save dialog, then the file is written.
     pub fn save_tcx(self) {
+        self.save_finished(ExportFormat::Tcx);
+    }
+
+    /// "Mentés FIT-ként": the same as a Garmin FIT activity.
+    pub fn save_fit(self) {
+        self.save_finished(ExportFormat::Fit);
+    }
+
+    fn save_finished(self, format: ExportFormat) {
         let Some(finished) = self.with(|i| i.finished.clone()) else {
             self.st
                 .toast(ToastKind::Warning, t("app.controller.nincs_mentendo_tura"));
             return;
         };
+        let laps = finished
+            .workout
+            .as_ref()
+            .map(|w| workout_lap_ranges(w, &finished.points))
+            .unwrap_or_default();
+        self.export_ride(
+            format,
+            finished.summary,
+            finished.points,
+            laps,
+            ride_sim::fit::SUB_SPORT_VIRTUAL,
+        );
+    }
+
+    /// Renders a ride in `format` and saves it through the platform's save dialog.
+    pub(crate) fn export_ride(
+        self,
+        format: ExportFormat,
+        summary: ride_model::RideSummary,
+        points: Vec<ride_model::RecordPoint>,
+        laps: Vec<(usize, usize)>,
+        sub_sport: u8,
+    ) {
         let Some(lease) = self.acquire_file_dialog() else {
             return;
         };
@@ -1161,24 +1263,40 @@ impl Controller {
         };
         spawn(async move {
             let _lease = lease;
-            let rendered = guarded("tcx", || {
-                (
-                    ride_sim::tcx::to_tcx(&finished.summary, &finished.points),
-                    ride_sim::tcx::suggested_filename(&finished.summary),
-                )
+            let rendered = guarded("export", || match format {
+                ExportFormat::Tcx => Some((
+                    ride_sim::tcx::to_tcx(&summary, &points).into_bytes(),
+                    ride_sim::tcx::suggested_filename(&summary),
+                )),
+                ExportFormat::Fit => ride_sim::fit::to_fit(&summary, &points, &laps, sub_sport)
+                    .map(|bytes| (bytes, ride_sim::fit::suggested_filename(&summary))),
             });
-            let Ok((xml, suggested)) = rendered else {
+            let Ok(Some((bytes, suggested))) = rendered else {
                 self.st.toast(
                     ToastKind::Error,
-                    t("app.controller.a_tcx_fajl_eloallitasa_nem_sikerult"),
+                    match format {
+                        ExportFormat::Tcx => {
+                            t("app.controller.a_tcx_fajl_eloallitasa_nem_sikerult")
+                        }
+                        ExportFormat::Fit => {
+                            t("app.controller.a_fit_fajl_eloallitasa_nem_sikerult")
+                        }
+                    },
                 );
                 return;
             };
+            let (extension, filter) = match format {
+                ExportFormat::Tcx => ("tcx", "TCX (Garmin)"),
+                ExportFormat::Fit => ("fit", "FIT (Garmin)"),
+            };
             #[cfg(not(target_os = "android"))]
             let picked = rfd::AsyncFileDialog::new()
-                .set_title(t("app.controller.tura_mentese_tcx_fajlkent"))
+                .set_title(match format {
+                    ExportFormat::Tcx => t("app.controller.tura_mentese_tcx_fajlkent"),
+                    ExportFormat::Fit => t("app.controller.tura_mentese_fit_fajlkent"),
+                })
                 .set_file_name(suggested)
-                .add_filter("TCX (Garmin)", &["tcx"])
+                .add_filter(filter, &[extension])
                 .set_parent(&*win.window)
                 .save_file()
                 .await
@@ -1188,12 +1306,12 @@ impl Controller {
             // dialog; its answer is toasted by the shell (`Controller::backup_saved`).
             #[cfg(target_os = "android")]
             {
-                let _ = &win;
+                let _ = (&win, filter, extension);
 
                 let temp = crate::paths::data_dir().join("export-tmp");
                 let path = temp.join(&suggested);
                 let written = match tokio::fs::create_dir_all(&temp).await {
-                    Ok(()) => tokio::fs::write(&path, xml.as_bytes()).await,
+                    Ok(()) => tokio::fs::write(&path, &bytes).await,
                     Err(err) => Err(err),
                 };
                 if let Err(err) = written {
@@ -1225,9 +1343,9 @@ impl Controller {
             {
                 let Some(mut path) = picked else { return };
                 if path.extension().is_none() {
-                    path.set_extension("tcx");
+                    path.set_extension(extension);
                 }
-                match tokio::fs::write(&path, xml.as_bytes()).await {
+                match tokio::fs::write(&path, &bytes).await {
                     Ok(()) => {
                         let name = path
                             .file_name()
@@ -1249,6 +1367,40 @@ impl Controller {
             }
         });
     }
+}
+
+/// The file formats a ride can be saved in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    Tcx,
+    Fit,
+}
+
+/// The timer-second ranges of a workout's steps, cut at the end of the recording (the laps of a
+/// FIT export). Riding on after the workout is one more lap.
+pub(crate) fn workout_lap_ranges(
+    workout: &ride_model::RideWorkout,
+    points: &[ride_model::RecordPoint],
+) -> Vec<(usize, usize)> {
+    let end = points
+        .last()
+        .map(|p| p.t)
+        .filter(|t| t.is_finite() && *t > 0.0)
+        .unwrap_or(0.0) as usize;
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    for step in &workout.steps {
+        if start >= end {
+            break;
+        }
+        let stop = (start + step.duration_s as usize).min(end);
+        out.push((start, stop));
+        start += step.duration_s as usize;
+    }
+    if start < end && !out.is_empty() {
+        out.push((start, end));
+    }
+    out
 }
 
 /// Next sensor event, or never if the hub is gone.
@@ -1535,6 +1687,8 @@ impl Inner {
     fn start(&mut self) {
         match self.core.state() {
             RideState::Ready => {
+                self.ride_generation = self.ride_generation.wrapping_add(1);
+                self.st.last_saved_ride.set(None);
                 // A ride counts as simulated when the virtual rider takes part, or when a test
                 // hook loaded the demo route / started the simulated rider.
                 self.simulated = simulated_hooks() || *self.st.sim_connected.peek();
@@ -1589,6 +1743,7 @@ impl Inner {
     }
 
     fn reset(&mut self) {
+        self.scheduled_workout.clear();
         self.finished = None;
         let mut summary = self.st.summary;
         summary.set(None);
@@ -1682,7 +1837,16 @@ impl Inner {
         let Some(route) = self.st.route.peek().clone() else {
             return;
         };
+        let completed = self
+            .st
+            .snapshot
+            .peek()
+            .workout
+            .as_ref()
+            .is_some_and(|w| w.finished);
+        let completed_calendar_id = self.scheduled_workout.finish(completed, self.simulated);
         let record = RideRecord {
+            completed_calendar_id,
             version: RIDE_RECORD_VERSION,
             route_id: route.id.clone(),
             route_name: finished.summary.route_name.clone(),
@@ -1693,6 +1857,11 @@ impl Inner {
             power_estimated: false,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: Some(finished.ftp_w).filter(|w| w.is_finite() && *w > 0.0),
+            rider_kg: Some(finished.rider_kg).filter(|w| w.is_finite() && *w > 0.0),
+            workout: finished.workout,
+            rpe: None,
+            note: String::new(),
         };
         // The comparison must use the PRs *before* this ride is saved, so the read, the compare
         // and the write happen in this order on the same blocking thread.
@@ -1705,6 +1874,8 @@ impl Inner {
             .and_then(|ghost| ghost.delta_s);
         let mut comparison = self.st.comparison;
         let saved_route = route;
+        let saved_route_id = saved_route.id.clone();
+        let ride_generation = self.ride_generation;
         let ctl = self.controller();
         spawn(async move {
             let joined = tokio::task::spawn_blocking(move || {
@@ -1722,6 +1893,11 @@ impl Inner {
                     comparison.set(Some(value));
                     match saved {
                         Ok(Some(meta)) => {
+                            ctl.with(|i| {
+                                if i.ride_generation == ride_generation {
+                                    i.st.last_saved_ride.set(Some((saved_route_id.clone(), meta.stem.clone())));
+                                }
+                            });
                             if *ctl.st.review.open.peek() {
                                 let page = ctl.st.review;
                                 let id = page.route_id.peek().clone();
@@ -1912,6 +2088,7 @@ impl Inner {
 
     /// Clears everything that belongs to the loaded route.
     fn drop_route_signals(&mut self) {
+        self.scheduled_workout.clear();
         self.finished = None;
         self.ghost_plan = None;
         self.ghost_gen += 1;
@@ -2003,6 +2180,7 @@ impl Inner {
         if old.ui.workout_id != new.ui.workout_id {
             let current = self.core.workout().map(|w| w.id.clone());
             if current != new.ui.workout_id {
+                self.scheduled_workout.clear();
                 let workout = new
                     .ui
                     .workout_id
@@ -2092,6 +2270,55 @@ mod review;
 mod tests {
     use super::*;
     use ride_model::testing::straight_route;
+
+    #[test]
+    fn scheduled_workout_tracks_only_a_completed_real_attempt() {
+        let workout = WorkoutLibrary::embedded().all()[0].clone();
+        let entry = CalendarEntry {
+            id: "scheduled-1".into(),
+            date: "2028-01-01".into(),
+            time: None,
+            workout,
+        };
+        let mut scheduled = ScheduledWorkout::default();
+        scheduled.prepare(entry.clone());
+        assert_eq!(scheduled.finish(false, false), None);
+        scheduled.prepare(entry.clone());
+        assert_eq!(scheduled.finish(true, true), None);
+        scheduled.prepare(entry.clone());
+        scheduled.clear();
+        assert_eq!(scheduled.finish(true, false), None);
+        scheduled.prepare(entry);
+        assert_eq!(
+            scheduled.finish(true, false).as_deref(),
+            Some("scheduled-1")
+        );
+        assert_eq!(scheduled.finish(true, false), None);
+    }
+
+    #[test]
+    fn preparing_a_schedule_survives_loading_the_requested_route() {
+        let workout = WorkoutLibrary::embedded().all()[0].clone();
+        let entry = CalendarEntry {
+            id: "scheduled-1".into(),
+            date: "2028-01-01".into(),
+            time: None,
+            workout: workout.clone(),
+        };
+        let mut scheduled = ScheduledWorkout::default();
+        let mut core = RideCore::new();
+        let now = Instant::now();
+        core.set_workout(Some(Arc::new(workout.clone())), now);
+        scheduled.prepare(entry);
+        let route = Arc::new(straight_route(&[(100.0, 0.0)], 100.0));
+        core.load(route, ride_model::RiderSettings::default(), now)
+            .unwrap();
+        assert_eq!(core.workout().map(|value| &value.id), Some(&workout.id));
+        assert_eq!(
+            scheduled.finish(true, false).as_deref(),
+            Some("scheduled-1")
+        );
+    }
 
     #[test]
     fn connection_toasts() {

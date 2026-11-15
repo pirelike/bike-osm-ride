@@ -123,17 +123,22 @@ A teljes leírás: **[Felhasználói kézikönyv](docs/USER_GUIDE.md)**.
 **Edzés és elemzés**
 - 93 beépített edzés 12 kategóriában, címkékkel, zónaszínes blokkvázlattal és 943 időzített edzői üzenettel; MyWhoosh-
   és Zwift-edzések (`.zwo`, XML, JSON) importja.
+- **Edzésnaptár és AI-agent**: edzések ütemezése, korábbi menetek visszanézése és elemzése, helyi MCP-kapcsolat edzéstervek és menet utáni visszajelzések készítéséhez, a javaslatok jóváhagyásával.
 - Coggan-zónák, NP, IF, TSS, kcal; pulzuszónák; másodpercenkénti felvétel.
 - **Szellem** (legutóbbi, legjobb, vagy a GPX saját időbélyegei) és **helyi szegmensek PR-rel**.
 - **Edzések áttekintése és összehasonlítása**: az ugyanazon az útvonalon tett edzések (legfeljebb négy) egymás mellett
   teljesítmény, pulzus, kadencia, sebesség és időkülönbség szerint; ráközelítés egy szakaszra (húzással vagy az emelkedőkre),
-  szakasztábla. Strava-, Garmin-exportból **GPX- vagy TCX-edzés importja** pulzussal, kadenciával; ha nincs benne watt, a
+  szakasztábla. Strava-, Garmin-exportból **GPX-, TCX- vagy FIT-edzés importja** pulzussal, kadenciával; ha nincs benne watt, a
   szimuláció fizikája visszabecsüli (saját vagy megadott testsúllyal, kerékpárral, gördülési ellenállással).
-- **Teljesítmény oldal**: csúcsteljesítmény 5 mp-től 60 percig, FTP-javaslat a legjobb 20 percből (egy gombbal beállítható), heti és
-  havi terhelés. Csak mért watt számít.
-- **Biztonsági mentés**: az útvonalak, a túrák, az importált edzések és a beállítások egyetlen zip-fájlban (a Google-kulcs nélkül),
+- **Teljesítmény oldal**: forma és terhelés (CTL, ATL, TSB, hrTSS a watt nélküli edzésekre), FTP-javaslat az utolsó 90 napból
+  CP-modellel, az ERG-szakaszok nélkül (egy gombbal beállítható), csúcsteljesítmény 1 mp-től 90 percig W/kg-mal, időszakra
+  szűrve, zónaidők, heti és havi terhelés. Csak mért watt számít.
+- **Napló és edzés-részletek**: minden edzés hetekre bontva; egy edzés idő szerinti grafikonja a célwattal, az edzés lépései
+  teljesítési százalékkal (vagy a kemény szakaszok automatikusan), VI, EF, Pw:HR szétcsúszás, W′-egyenleg, zónák, kadencia;
+  érzet (RPE) és megjegyzés.
+- **Biztonsági mentés**: az útvonalak, a túrák, az edzések, a naptár, az elfogadott AI-visszajelzések és a beállítások egyetlen zip-fájlban (a Google-kulcs nélkül),
   összefésülő visszaállítással. Semmi nem megy ki a hálózatra.
-- **TCX-export** (Garmin-séma): a Strava, az Intervals.icu és a TrainingPeaks kézzel feltöltve elfogadja. Beépített feltöltés nincs: a Strava-bejelentkezés minden tekerés után újra kellett volna, ezért kivettük (0.3.2).
+- **FIT- és TCX-export** (Garmin-formátumok), utólag is: a Strava, a Garmin Connect, az Intervals.icu és a TrainingPeaks kézzel feltöltve elfogadja. Beépített feltöltés nincs: a Strava-bejelentkezés minden tekerés után újra kellett volna, ezért kivettük (0.3.2).
 
 **Felület**
 - **Tiling elrendezés**: a panelek úgy működnek, mint egy tiling ablakkezelőben (nincs átfedés, nincs lyuk); húzással

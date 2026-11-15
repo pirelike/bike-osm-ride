@@ -190,6 +190,11 @@
   text-align: right;
 }
 
+/* a phone: "Munka (kJ)" and "Energia (kcal)" ended in an ellipsis over a 90 px column, they wrap now */
+@media (max-width: 699px), (max-height: 520px) and (orientation: landscape) {
+  .hud-tbl .hud-tbl__head th { white-space: normal; padding-top: 3px; padding-bottom: 3px; line-height: 1.15; }
+}
+
 .hud-tbl tbody tr:not(.hud-tbl__head) th {
   text-align: left;
   font: 500 var(--t-13)/1 var(--font-ui);
@@ -396,6 +401,9 @@
   padding: 0 var(--space-3);
   font-size: var(--t-13);
 }
+/* the second press of "Befejezés" on the phone: red, so it cannot be taken for the pause button */
+.hud-controls__btn--confirm { background: var(--crit); border-color: var(--crit); color: var(--bg-1); }
+.hud-controls__btn--confirm:hover { background: var(--crit); border-color: var(--crit); color: var(--bg-1); }
 
 /* the panels of the shell are freely resizable: the data grid follows the width of its own panel */
 .hud-metrics { container-type: inline-size; }

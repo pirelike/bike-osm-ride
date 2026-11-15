@@ -619,8 +619,12 @@
    The header keeps one line: the read-out, then the page name and the dots. The plot takes
    the sideways drags itself (vertical ones still scroll the screen). */
 
-.profile-head.profile-head--pages { flex-wrap: nowrap; height: 32px; padding-top: 0; padding-bottom: 0; }
-.profile-head--pages .profile-readout { order: 0; flex-basis: auto; }
+/* at least 32 px, taller with the rider's larger text (a fixed height cut the readout off at 140 %) */
+.profile-head.profile-head--pages { flex-wrap: nowrap; height: auto; min-height: 32px; padding-top: 0; padding-bottom: 0; }
+/* one row of read-outs: the pairs that do not fit wrap under it and are clipped. The row is as tall as the
+   rider's text size makes a line (a fixed 18 px cut the numerals off at 140 %) */
+.profile-head--pages .profile-readout { order: 0; flex-basis: auto; height: calc(18px * var(--ui-scale, 1)); }
+.profile-head--pages .profile-pair { line-height: calc(16px * var(--ui-scale, 1)); }
 
 .profile-pages {
   display: flex;
@@ -630,10 +634,11 @@
 }
 .profile-pages__label { font: 600 var(--t-11)/1 var(--font-ui); color: var(--text); white-space: nowrap; }
 .profile-pages__hint { font: 500 var(--t-11)/1 var(--font-ui); color: var(--accent); white-space: nowrap; }
-.profile-pages__dots { display: flex; align-items: center; gap: 2px; }
+.profile-pages__dots { display: flex; align-items: center; gap: 0; }
+/* The visible square stays small; the control around it is the direct way to any page. */
 .profile-pages__dot {
-  width: 14px;
-  height: 22px;
+  width: 24px;
+  height: 32px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -648,6 +653,25 @@
   border: 1px solid var(--text-dim);
 }
 .profile-pages__dot.is-current::after { background: var(--text); border-color: var(--text); }
+
+@media (max-width: 380px) {
+  /* a narrow phone has no room for the hint next to the label and the dots; the plot nudges anyway */
+  .profile-pages__hint { display: none; }
+}
+
+/* On touch layouts the page buttons need room for a fingertip. Let the page name shrink before
+   the controls do, and keep the readout visible alongside them on narrow phones. */
+@media (max-width: 699px), (max-height: 520px) and (orientation: landscape) {
+  .profile-head.profile-head--pages { min-height: 44px; }
+  .profile-head--pages .profile-readout { flex: 1 1 0; }
+  .profile-pages { flex: 0 1 auto; min-width: 0; max-width: calc(100% - 72px); }
+  .profile-pages__label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .profile-pages__dots { flex: none; }
+  .profile-pages__dot { width: 44px; height: 44px; }
+}
+@container (max-width: 500px) {
+  .profile-pages__hint { display: none; }
+}
 
 .profile-hit--swipe { touch-action: pan-y; }
 

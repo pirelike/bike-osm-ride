@@ -1346,4 +1346,34 @@ mod tests {
         assert_eq!(t.id, 3);
         assert_eq!(t.text, "Kész");
     }
+
+    /// The phone layer: a finger needs 44 px and nothing is set below 12 px. A 24 px close button
+    /// and a 28 px zoom button were found on a phone in the 2026-11-12 review; this keeps the kit's
+    /// own controls from sliding back (a control with a height of its own has a rule next to it).
+    #[test]
+    fn the_phone_layer_makes_the_controls_thumb_sized() {
+        let marker =
+            "@media (max-width: 699px), (max-height: 520px) and (orientation: landscape) {";
+        let block = CSS
+            .split(marker)
+            .nth(1)
+            .and_then(|rest| {
+                rest.split(
+                    "
+}
+",
+                )
+                .next()
+            })
+            .expect("the phone layer of kit.css");
+        for needle in [
+            "--t-11: calc(12px * var(--ui-scale))",
+            ".btn, .btn--sm { --btn-h: 44px; }",
+            ".field__step { width: 44px; }",
+            ".switch { min-height: 44px; }",
+            ".slider input[type=\"range\"] { height: 44px; }",
+        ] {
+            assert!(block.contains(needle), "the phone layer lost `{needle}`");
+        }
+    }
 }

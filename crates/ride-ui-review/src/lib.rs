@@ -10,6 +10,10 @@
 //!   ticked rides, zoomed to the same section, with a shared cursor;
 //! * the **section table**: time, speeds, watts, heart rate, cadence and climbing per ride.
 //!
+//! Next to the comparison the page has a **journal** of every ride of every route ([`journal`]),
+//! a **power** view with fitness, the FTP estimate, the curve and the zones ([`power`]), and a
+//! **ride** view that opens one ride on the time axis ([`detail`]).
+//!
 //! The page owns only view state (metric, section, cursor, open forms). What is stored, which
 //! rides are ticked and the file I/O belong to the app; it passes the loaded records in and gets
 //! events back. The numbers come from [`chart`] and `ride_sim::compare`, pure and tested.
@@ -24,16 +28,21 @@ use ride_model::{
 };
 use ride_sim::compare::{DistSeries, SectionStats, GRID_M};
 use ride_sim::estimate::{custom_params, profile_params};
-use ride_sim::power_curve::Analysis;
+use ride_sim::power_curve::{analyze, Window};
 use ride_ui_kit::format::{fmt_delta_duration, fmt_duration, fmt_km, fmt_opt0, fmt_speed_kmh};
 use ride_ui_kit::{Icon, IconName, NumberField, Segmented};
 use ride_ui_map::{MapOverlay, MapView, OverlayMarker};
 use ride_ui_profile::geom;
 
 pub mod chart;
+pub mod detail;
+pub mod journal;
+pub mod plot;
 pub mod power;
 
 use chart::{Metric, SLOTS};
+use detail::RideDetailView;
+use journal::JournalView;
 use power::PowerView;
 use ride_i18n::{t, tf};
 
@@ -407,10 +416,10 @@ pub fn ReviewPage(
     rider: ReadSignal<RiderSettings>,
     theme: ReadSignal<Theme>,
     map_style: ReadSignal<MapStyle>,
-    /// The power curve, the FTP suggestion and the trend of every ride (the "Teljesítmény" view).
-    analysis: ReadSignal<Arc<Analysis>>,
-    /// The FTP in the settings, watts.
-    ftp_w: ReadSignal<f64>,
+    /// "Now" of the power view (the end of its charts), fixed when the list was read.
+    now_s: ReadSignal<f64>,
+    /// The ride opened in the ride view, if any.
+    detail: ReadSignal<Option<Arc<RideRecord>>>,
     compact: bool,
     on_close: EventHandler<()>,
     on_route: EventHandler<String>,
@@ -422,8 +431,28 @@ pub fn ReviewPage(
     on_dismiss_notes: EventHandler<()>,
     /// "FTP beállítása N W-ra": the app changes the setting.
     on_apply_ftp: EventHandler<f64>,
+    /// "Maxpulzus beállítása": the app changes the setting.
+    on_apply_max_hr: EventHandler<f64>,
+    /// Opens a ride in the ride view: `(route id, stem)`.
+    on_open_ride: EventHandler<(String, String)>,
+    on_close_ride: EventHandler<()>,
+    /// The rating and the note of the open ride.
+    on_save_journal: EventHandler<(Option<u8>, String)>,
+    #[props(default)] on_agent: EventHandler<()>,
+    /// Saves the open ride as `"tcx"` or `"fit"`.
+    on_export: EventHandler<String>,
 ) -> Element {
     let mut view = use_signal(|| "compare".to_string());
+    let mut window = use_signal(|| Window::Days(90));
+    // the power view's numbers: every ride's index entry, the chosen period, the rider's zones
+    let analysis = use_memo(move || {
+        Arc::new(analyze(
+            &routes.read(),
+            *now_s.read(),
+            *window.read(),
+            &rider.read(),
+        ))
+    });
     let mut metric = use_signal(|| Metric::Power);
     let mut range = use_signal(|| None::<(f64, f64)>);
     let mut cursor = use_signal(|| None::<f64>);
@@ -571,6 +600,9 @@ pub fn ReviewPage(
     let tab_now = tab.read().clone();
     let view_now = view.read().clone();
     let power_view = view_now == "power";
+    let journal_view = view_now == "journal";
+    let detail_open = detail.read().is_some();
+    let cp_model = analysis.read().ftp_estimate.as_ref().and_then(|e| e.model);
     let table_span = chart::common_span(&smoothed.read());
     let rows = rows.read();
     let climbs = route_now
@@ -685,6 +717,10 @@ pub fn ReviewPage(
             t("ui_review.osszehasonlitas").to_string(),
         ),
         (
+            "journal".to_string(),
+            t("ui_review.journal.naplo").to_string(),
+        ),
+        (
             "power".to_string(),
             t("ui_review.chart.teljesitmeny").to_string(),
         ),
@@ -754,7 +790,7 @@ pub fn ReviewPage(
                     }
                 }
             }
-            if compact && !power_view {
+            if compact && !power_view && !journal_view && !detail_open {
                 div { class: "rv-tabs",
                     Segmented {
                         options: vec![
@@ -789,8 +825,30 @@ pub fn ReviewPage(
             if busy_now {
                 div { class: "rv-busy", role: "status", {t("ui_review.betoltes")} }
             }
-            if power_view {
-                PowerView { analysis, ftp_w, loaded, on_apply_ftp }
+            if detail_open {
+                RideDetailView {
+                    record: detail,
+                    rider,
+                    model: cp_model,
+                    compact,
+                    on_close: move |_| on_close_ride.call(()),
+                    on_save_journal,
+                    on_agent,
+                    on_export,
+                }
+            } else if power_view {
+                PowerView {
+                    analysis,
+                    window,
+                    on_window: move |w: Window| window.set(w),
+                    rider,
+                    loaded,
+                    on_apply_ftp,
+                    on_apply_max_hr,
+                    on_open_ride,
+                }
+            } else if journal_view {
+                JournalView { routes, rider, on_open_ride }
             } else if no_rides {
                 div { class: "rv-empty",
                     Icon { name: IconName::Bike, size: 28 }
@@ -872,6 +930,17 @@ pub fn ReviewPage(
                                                 }
                                             }
                                             div { class: "rv-ride-actions",
+                                                button {
+                                                    class: "btn btn--ghost btn--icon btn--sm",
+                                                    title: t("ui_review.reszletek").to_string(),
+                                                    "aria-label": t("ui_review.reszletek"),
+                                                    onclick: {
+                                                        let stem = stem.clone();
+                                                        let route_id = current_id.clone().unwrap_or_default();
+                                                        move |_| on_open_ride.call((route_id.clone(), stem.clone()))
+                                                    },
+                                                    Icon { name: IconName::Info, size: 16 }
+                                                }
                                                 if meta.power_estimated && ticked {
                                                     button {
                                                         class: "btn btn--ghost btn--icon btn--sm",

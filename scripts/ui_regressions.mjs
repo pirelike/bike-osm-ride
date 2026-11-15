@@ -14,9 +14,25 @@ const output = path.resolve(arg('--out', 'scratch/ui-regressions'));
 const port = Number(arg('--port', '9467'));
 fs.mkdirSync(output, { recursive: true });
 const data = fs.mkdtempSync(path.join(output, 'data-'));
+// Exercise long, unbroken imported/agent-generated names in both dialogs.
+const source = JSON.parse(fs.readFileSync('crates/ride-model/assets/workouts.json', 'utf8'));
+const workout = structuredClone(source.workouts[0]);
+const longName = 'Supercalifragilisticexpialidocious'.repeat(4);
+workout.id = 'import-ui-long-name';
+workout.name = longName;
+workout.steps[0].name = longName;
+const now = new Date();
+const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+const entry = { id: 'ui-calendar-long-name', date: today, time: null, workout };
+fs.writeFileSync(path.join(data, 'calendar.json'), JSON.stringify([entry]));
+fs.mkdirSync(path.join(data, 'ai-drafts'));
+fs.writeFileSync(path.join(data, 'ai-drafts', 'ui-long-name.json'), JSON.stringify({
+  id: 'ui-long-name',
+  kind: { type: 'training', title: longName, workouts: [workout], entries: [entry] },
+}));
 const child = spawn(exe, [], {
   env: { ...process.env, RIDE_DATA_DIR: data, RIDE_DEMO: '1', RIDE_SIM: '220',
-    RIDE_TIMESCALE: '50', RIDE_WINDOW: '412x860', RIDE_DEBUG_PORT: String(port),
+    RIDE_TIMESCALE: '50', RIDE_WORKOUT: 'c-threshold-2x20', RIDE_WINDOW: '412x860', RIDE_DEBUG_PORT: String(port),
     RIDE_TILE_BASE: 'http://127.0.0.1:9', RIDE_LANG: 'hu' },
   windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -66,6 +82,30 @@ try {
     await delay(100);
   }
   assert(await evaluate(`!!document.querySelector('.profile-hit')`), 'Phone profile did not mount');
+  // All four pages must remain tappable and inside the profile even on small or sideways phones.
+  for (const [width, height] of [[412, 860], [360, 640], [915, 412]]) {
+    await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
+    await delay(250);
+    const pages = await evaluate(`(() => {
+      const head = document.querySelector('.profile-head--pages').getBoundingClientRect();
+      return [...document.querySelector('.profile-head--pages').querySelectorAll('.profile-pages__dot')].map(el => {
+        const r = el.getBoundingClientRect();
+        return {x:r.x, right:r.right, width:r.width, height:r.height, headLeft:head.left, headRight:head.right};
+      });
+    })()`);
+    assert.equal(pages.length, 4, `Four profile pages expected at ${width}x${height}`);
+    for (const page of pages) assert(page.width >= 44 && page.height >= 44 && page.x >= page.headLeft && page.right <= page.headRight,
+      `Profile page target clipped or too small at ${width}x${height}: ${JSON.stringify(page)}`);
+    await evaluate(`document.querySelector('.profile-head--pages').querySelectorAll('.profile-pages__dot')[3].click()`);
+    await delay(100);
+    assert(await evaluate(`document.querySelector('.profile-head--pages').querySelectorAll('.profile-pages__dot')[3].getAttribute('aria-selected') === 'true'`), 'Last profile page must be selectable');
+    await evaluate(`document.querySelector('.profile-head--pages').querySelectorAll('.profile-pages__dot')[0].click()`);
+    await delay(100);
+  }
+  await call('Emulation.setDeviceMetricsOverride', { width: 412, height: 860, deviceScaleFactor: 1, mobile: true });
+  // The hover lifecycle below exercises the elevation profile, not the workout preview.
+  await evaluate(`document.querySelector('.profile-head--pages').querySelectorAll('.profile-pages__dot')[2].click()`);
+  await delay(250);
   const pointEvents = (pointerType, names) => `(() => {
     const el = document.querySelector('.profile-hit');
     const r = el.getBoundingClientRect();
@@ -104,10 +144,47 @@ try {
   assert(Math.hypot(after.x - before.x, after.y - before.y) < 3, `Tapping a following map moved its camera: ${JSON.stringify({before, after})}`);
   const dimensions = await evaluate(`({ width: innerWidth, height: innerHeight, content: document.scrollingElement.scrollWidth })`);
   assert(dimensions.content <= dimensions.width + 2, `Phone layout overflows: ${JSON.stringify(dimensions)}`);
+  await evaluate(`document.querySelector('[aria-label="Beállítások"]').click()`);
+  await delay(250);
+  const stepper = await evaluate(`(() => { const r = document.querySelector('.dialog .field__step').getBoundingClientRect(); return {width:r.width,height:r.height}; })()`);
+  assert(stepper.width >= 44 && stepper.height >= 44, `Settings stepper target is too small: ${JSON.stringify(stepper)}`);
+  await evaluate(`document.querySelector('.dialog [aria-label="Bezárás"]').click()`);
+  await call('Emulation.setDeviceMetricsOverride', { width: 360, height: 640, deviceScaleFactor: 1, mobile: true });
+  await evaluate(`document.querySelector('[aria-label="Naptár"]').click()`);
+  await delay(300);
+  const calendarLayout = await evaluate(`(() => {
+    const body = document.querySelector('.dialog__body');
+    const day = document.querySelector('.shell-calendar-day').getBoundingClientRect();
+    const box = body.getBoundingClientRect();
+    const overflow = [...body.querySelectorAll('*')].filter(el => el.getBoundingClientRect().right > box.right + 2)
+      .map(el => ({ tag: el.tagName, class: el.className, text: (el.innerText || '').slice(0, 80) })).slice(0, 5);
+    return { width: body.clientWidth, content: body.scrollWidth, dayWidth: day.width, dayHeight: day.height, overflow,
+      longName: document.querySelector('.shell-calendar-entry')?.innerText.includes('Supercalifragilisticexpialidocious') };
+  })()`);
+  assert(calendarLayout.longName, 'Long scheduled workout must be visible in the calendar');
+  assert(calendarLayout.content <= calendarLayout.width + 2, `Calendar content overflows: ${JSON.stringify(calendarLayout)}`);
+  assert(calendarLayout.dayWidth >= 44 && calendarLayout.dayHeight >= 44, `Calendar day target is too small: ${JSON.stringify(calendarLayout)}`);
+  await evaluate(`document.querySelector('.dialog [aria-label="Bezárás"]').click()`);
+  await evaluate(`document.querySelector('[aria-label="Beállítások"]').click()`);
+  await delay(250);
+  assert(await evaluate(`(() => {
+    const button = [...document.querySelectorAll('.dialog button')].find(b => b.textContent.trim() === 'AI-agent megnyitása');
+    button?.click(); return !!button;
+  })()`), 'AI-agent settings button must be available');
+  await delay(300);
+  const agentLayout = await evaluate(`(() => {
+    const body = document.querySelector('.dialog__body');
+    return { width: body.clientWidth, content: body.scrollWidth,
+      longName: document.querySelector('.shell-agent-draft')?.innerText.includes('Supercalifragilisticexpialidocious') };
+  })()`);
+  assert(agentLayout.longName, 'Long AI workout proposal must be visible');
+  assert(agentLayout.content <= agentLayout.width + 2, `AI proposal content overflows: ${JSON.stringify(agentLayout)}`);
+  await evaluate(`document.querySelector('.dialog [aria-label="Bezárás"]').click()`);
+  await call('Emulation.setDeviceMetricsOverride', { width: 412, height: 860, deviceScaleFactor: 1, mobile: true });
   const screenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   fs.writeFileSync(path.join(output, 'phone.png'), Buffer.from(screenshot.data, 'base64'));
-  fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ dimensions, before, after, checks: ['phone-layout', 'touch-release', 'touch-cancel', 'mouse-after-touch', 'map-follow-tap'] }, null, 2));
-  console.log('Passed phone layout, touch tooltip lifecycle, mouse recovery and following-map tap regressions.');
+  fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ dimensions, before, after, stepper, calendarLayout, agentLayout, checks: ['phone-layout', 'profile-page-targets', 'settings-stepper-target', 'touch-release', 'touch-cancel', 'mouse-after-touch', 'map-follow-tap', 'calendar-long-name', 'agent-long-name'] }, null, 2));
+  console.log('Passed phone layout, touch targets, map interactions, and long calendar and AI proposal text regressions.');
 } finally {
   socket?.close();
   if (child.pid && child.exitCode === null) spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });

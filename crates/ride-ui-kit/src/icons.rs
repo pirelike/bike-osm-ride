@@ -57,10 +57,13 @@ pub enum IconName {
     Compass,
     Refresh,
     Sliders,
+    Robot,
+    Calendar,
+    Menu,
 }
 
 impl IconName {
-    pub const ALL: [IconName; 42] = [
+    pub const ALL: [IconName; 45] = [
         IconName::Play,
         IconName::Pause,
         IconName::Stop,
@@ -103,6 +106,9 @@ impl IconName {
         IconName::Compass,
         IconName::Refresh,
         IconName::Sliders,
+        IconName::Robot,
+        IconName::Calendar,
+        IconName::Menu,
     ];
 
     /// Identifier as written in the source (`"ChevronLeft"`), used for the showcase captions.
@@ -150,6 +156,9 @@ impl IconName {
             IconName::Compass => "Compass",
             IconName::Refresh => "Refresh",
             IconName::Sliders => "Sliders",
+            IconName::Robot => "Robot",
+            IconName::Calendar => "Calendar",
+            IconName::Menu => "Menu",
         }
     }
 
@@ -242,6 +251,16 @@ pub fn icon_inner(name: IconName) -> &'static str {
         IconName::Sliders => {
             r#"<path d="M4 7h7M17 7h3M4 12h3M13 12h7M4 17h9M19 17h1"/><path d="M14 4v6M10 9v6M16 14v6"/>"#
         }
+        // antenna, a square head with ear plates, two square eyes and a mouth slot
+        IconName::Robot => {
+            r#"<path d="M12 3v3"/><path d="M4 7h16v13H4z"/><path d="M2 11v5M22 11v5"/><path d="M9 12h.01M15 12h.01"/><path d="M9 16h6"/>"#
+        }
+        // a month sheet: two binder rings, a header rule and a grid of days
+        IconName::Calendar => {
+            r#"<path d="M3 5h18v16H3z"/><path d="M8 3v4M16 3v4"/><path d="M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>"#
+        }
+        // the "hamburger": three rules, for the menu that holds the buttons a small screen has no room for
+        IconName::Menu => r#"<path d="M4 6h16M4 12h16M4 18h16"/>"#,
     }
 }
 
@@ -271,7 +290,7 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), total, "duplicate icon in ALL");
-        assert_eq!(total, 42);
+        assert_eq!(total, 45);
     }
 
     #[test]

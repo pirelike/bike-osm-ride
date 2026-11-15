@@ -3,7 +3,7 @@
 
 use dioxus::prelude::*;
 use ride_i18n::{t, tf, tn};
-use ride_model::{GhostStatus, Settings};
+use ride_model::{GhostStatus, HrZoneModel, Settings};
 use ride_ui_kit::{Dialog, NumberField, Segmented, Slider, Switch};
 use ride_ui_streetview::imagestore::ImageOverview;
 
@@ -34,6 +34,10 @@ pub fn SettingsDialog(
     /// rider confirmed in the dialog.
     #[props(default)]
     on_restore: EventHandler<()>,
+    #[props(default)] on_agent: EventHandler<()>,
+    /// "Névjegy és licencek": the app opens its About dialog (it has no button on the top bar).
+    #[props(default)]
+    on_about: EventHandler<()>,
 ) -> Element {
     if !open {
         return rsx! {};
@@ -55,6 +59,19 @@ pub fn SettingsDialog(
     });
     let set_max_hr = setter(&current, on_change, |s: &mut Settings, v: f64| {
         s.rider.max_hr = v
+    });
+    let set_rest_hr = setter(&current, on_change, |s: &mut Settings, v: f64| {
+        s.rider.rest_hr = v
+    });
+    let set_lthr = setter(&current, on_change, |s: &mut Settings, v: f64| {
+        s.rider.lthr = v
+    });
+    let set_hr_model = setter(&current, on_change, |s: &mut Settings, v: String| {
+        s.rider.hr_zone_model = match v.as_str() {
+            "reserve" => HrZoneModel::Reserve,
+            "lthr" => HrZoneModel::Lthr,
+            _ => HrZoneModel::MaxHr,
+        };
     });
     let set_cda = setter(&current, on_change, |s: &mut Settings, v: f64| {
         s.rider.cda = v
@@ -160,6 +177,26 @@ pub fn SettingsDialog(
                             on_change: set_max_hr,
                         }
                         NumberField {
+                            label: t("ui_dialogs.settings.nyugalmi_pulzus").to_string(),
+                            value: rider.effective_rest_hr(),
+                            min: 30.0,
+                            max: 100.0,
+                            step: 1.0,
+                            unit: "bpm".to_string(),
+                            hint: t("ui_dialogs.settings.nyugalmi_pulzus_sugo").to_string(),
+                            on_change: set_rest_hr,
+                        }
+                        NumberField {
+                            label: t("ui_dialogs.settings.kuszobpulzus_lthr").to_string(),
+                            value: rider.effective_lthr(),
+                            min: 100.0,
+                            max: 220.0,
+                            step: 1.0,
+                            unit: "bpm".to_string(),
+                            hint: t("ui_dialogs.settings.kuszobpulzus_sugo").to_string(),
+                            on_change: set_lthr,
+                        }
+                        NumberField {
                             label: "CdA".to_string(),
                             value: rider.cda,
                             min: 0.1,
@@ -179,6 +216,28 @@ pub fn SettingsDialog(
                             hint: t("ui_dialogs.settings.gordulesi_ellenallasi_egyutthato_crr_jo_aszfalton_kb").to_string(),
                             on_change: set_crr,
                         }
+                    }
+                    div { class: "dlg-control",
+                        span { class: "label", {t("ui_dialogs.settings.pulzuszonak_alapja")} }
+                        div { class: "dlg-segrow",
+                            Segmented {
+                                options: vec![
+                                    ("max".to_string(), t("ui_dialogs.settings.zona_max_pulzus").to_string()),
+                                    ("reserve".to_string(), t("ui_dialogs.settings.zona_tartalek").to_string()),
+                                    ("lthr".to_string(), "LTHR".to_string()),
+                                ],
+                                value: match rider.hr_zone_model {
+                                    HrZoneModel::MaxHr => "max".to_string(),
+                                    HrZoneModel::Reserve => "reserve".to_string(),
+                                    HrZoneModel::Lthr => "lthr".to_string(),
+                                },
+                                aria_label: t("ui_dialogs.settings.pulzuszonak_alapja").to_string(),
+                                small: true,
+                                wrap: true,
+                                on_change: set_hr_model,
+                            }
+                        }
+                        span { class: "dlg-note", {t("ui_dialogs.settings.pulzuszonak_alapja_sugo")} }
                     }
                 }
 
@@ -340,9 +399,28 @@ pub fn SettingsDialog(
                     }
                 }
 
+                Group {
+                    title: t("app.agent.title").to_string(),
+                    note: t("app.agent.settings_hint").to_string(),
+                    button { class: "btn", r#type: "button", onclick: move |_| on_agent.call(()),
+                        {t("app.agent.open")}
+                    }
+                }
                 BackupGroup { on_backup, on_restore }
 
                 StreetViewGroup { settings: current.clone(), on_change }
+
+                Group {
+                    title: t("ui_dialogs.about.nevjegy_es_licencek").to_string(),
+                    note: t("ui_dialogs.settings.about_hint").to_string(),
+                    button {
+                        class: "btn",
+                        r#type: "button",
+                        "data-open": "about",
+                        onclick: move |_| on_about.call(()),
+                        {t("ui_dialogs.settings.about_open")}
+                    }
+                }
             }
         }
     }
@@ -734,6 +812,13 @@ mod tests {
     }
 
     #[test]
+    fn the_about_dialog_opens_from_the_settings_because_the_top_bar_has_no_button_for_it() {
+        let html = render(Settings::default());
+        assert!(html.contains("data-open=\"about\""), "{html}");
+        assert!(html.contains("Névjegy és licencek megnyitása"), "{html}");
+    }
+
+    #[test]
     fn the_street_view_section_is_complete_and_hungarian() {
         let html = render(Settings::default());
         for text in [
@@ -820,6 +905,23 @@ mod tests {
     }
 
     #[test]
+    fn the_heart_rate_settings_are_offered() {
+        let mut settings = Settings::default();
+        settings.rider.max_hr = 180.0;
+        let html = render(settings);
+        for text in [
+            "Nyugalmi pulzus",
+            "Küszöbpulzus (LTHR)",
+            "Pulzuszónák alapja",
+            "Tartalék",
+        ] {
+            assert!(html.contains(text), "missing {text:?}");
+        }
+        // an LTHR that was never set shows 90 % of the maximum
+        assert!(html.contains("162"), "the derived threshold");
+    }
+
+    #[test]
     fn the_ghost_selector_offers_the_four_modes() {
         let html = render(Settings::default());
         for text in [
@@ -835,14 +937,14 @@ mod tests {
         // the default is "Best": the segmented control marks exactly one option per group
         assert_eq!(
             html.matches(r#"aria-checked="true""#).count(),
-            5,
-            "theme, map style, language, profile mode and ghost each have one selected option"
+            6,
+            "heart-rate zones, theme, map style, language, profile mode and ghost each have one              selected option"
         );
         // choosing "Ki" moves the selection to that option
         let mut off = Settings::default();
         off.ui.ghost = ride_model::GhostMode::Off;
         let html = render(off);
-        assert_eq!(html.matches(r#"aria-checked="true""#).count(), 5);
+        assert_eq!(html.matches(r#"aria-checked="true""#).count(), 6);
         // inside the ghost group the selected option is the first one ("Ki")
         let group = html.find("Szellem</span>").expect("the ghost group label");
         let after = &html[group..];

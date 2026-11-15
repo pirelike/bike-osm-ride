@@ -15,7 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{RecordPoint, RideSummary, RoutePosition};
+use crate::{RecordPoint, RideSummary, RoutePosition, WorkoutStep};
 
 /// On-disk version of [`RideRecord`]. A reader must ignore a record it does not know.
 pub const RIDE_RECORD_VERSION: u32 = 1;
@@ -50,6 +50,50 @@ pub struct RideRecord {
     /// ride, and for a record written before this field existed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub measured_power: Vec<[u32; 2]>,
+    /// The FTP the ride was analysed with (IF, TSS, zones), watts. `None` in records written
+    /// before it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ftp_w: Option<f64>,
+    /// The rider's body mass at the time of the ride, kg (W/kg over time).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rider_kg: Option<f64>,
+    /// The workout that ran during the ride, as it was then. Its steps start with the ride's
+    /// timer, so step `i` covers the timer seconds after the steps before it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workout: Option<RideWorkout>,
+    /// Calendar entry completed by this saved real ride.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_calendar_id: Option<String>,
+    /// How hard the ride felt, 1..=10 (rating of perceived exertion), set by the rider afterwards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rpe: Option<u8>,
+    /// The rider's own note about the ride.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+}
+
+/// The workout of a stored ride: enough to rebuild its targets second by second.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RideWorkout {
+    pub id: String,
+    pub name: String,
+    /// The FTP the targets were computed with, watts.
+    pub ftp_w: f64,
+    /// The steps, without their coaching texts.
+    pub steps: Vec<WorkoutStep>,
+}
+
+/// The longest note kept with a ride, in characters.
+pub const MAX_RIDE_NOTE_CHARS: usize = 2_000;
+
+/// A rating of perceived exertion, when it is one (1..=10).
+pub fn valid_rpe(rpe: Option<u8>) -> Option<u8> {
+    rpe.filter(|r| (1..=10).contains(r))
+}
+
+/// A note as it is stored: trimmed, at most [`MAX_RIDE_NOTE_CHARS`] characters.
+pub fn clean_note(note: &str) -> String {
+    note.trim().chars().take(MAX_RIDE_NOTE_CHARS).collect()
 }
 
 /// Where a stored ride came from.
@@ -85,6 +129,8 @@ pub struct EstimateParams {
 pub struct RideMeta {
     /// File stem of the record: the start time in whole seconds since the Unix epoch.
     pub stem: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_calendar_id: Option<String>,
     pub started_unix_s: f64,
     pub elapsed_s: f64,
     /// Distance of the first recorded point (metres). `> 0` when the ride started with a seek.
@@ -120,7 +166,54 @@ pub struct RideMeta {
     /// nothing to show (no power, or not the rider's own watts).
     #[serde(default)]
     pub mmp: Option<Vec<Option<f32>>>,
+    /// Which version of the derived numbers below (and of `tss` / `mmp`) the entry carries;
+    /// an entry of an older version is recomputed from its record once
+    /// (`ride_sim::power_curve::ANALYSIS_VERSION`). `0` in older index files.
+    #[serde(default)]
+    pub analysis_version: u32,
+    /// Distance ridden, metres.
+    #[serde(default)]
+    pub dist_m: f64,
+    /// Normalised power, watts.
+    #[serde(default)]
+    pub np_w: Option<f64>,
+    /// Mechanical work, kJ (`None` without power).
+    #[serde(default)]
+    pub work_kj: Option<f64>,
+    /// Highest heart rate of the ride.
+    #[serde(default)]
+    pub max_hr: Option<f64>,
+    /// The power curve without the seconds the trainer held a workout target (ERG): an effort
+    /// the workout prescribed says nothing about what the rider could do, so the FTP estimate
+    /// uses this one. Same layout as `mmp`.
+    #[serde(default)]
+    pub free_mmp: Option<Vec<Option<f32>>>,
+    /// Seconds spent at each heart rate: entry `i` is `HR_HIST_FROM + i` bpm. Zones and hrTSS
+    /// are computed from it with the current settings. Empty without heart rate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hr_secs: Vec<u32>,
+    /// Seconds in power zones Z1..Z7 (with the FTP of the ride's day).
+    #[serde(default)]
+    pub power_zone_secs: Option<[f64; 7]>,
+    /// See [`RideRecord::ftp_w`].
+    #[serde(default)]
+    pub ftp_w: Option<f64>,
+    /// See [`RideRecord::rider_kg`].
+    #[serde(default)]
+    pub rider_kg: Option<f64>,
+    /// Name of the workout that ran, if any.
+    #[serde(default)]
+    pub workout_name: Option<String>,
+    /// See [`RideRecord::rpe`].
+    #[serde(default)]
+    pub rpe: Option<u8>,
+    /// See [`RideRecord::note`].
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
 }
+
+/// The lowest heart rate of [`RideMeta::hr_secs`], bpm.
+pub const HR_HIST_FROM: u32 = 30;
 
 /// All stored rides of one route, for the review page.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -275,6 +368,7 @@ mod tests {
         );
 
         let record = RideRecord {
+            completed_calendar_id: None,
             version: RIDE_RECORD_VERSION,
             route_id: "abc".into(),
             route_name: "Teszt".into(),
@@ -306,6 +400,11 @@ mod tests {
             power_estimated: true,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: None,
+            rider_kg: None,
+            workout: None,
+            rpe: None,
+            note: String::new(),
         };
         let mut value = serde_json::to_value(&record).unwrap();
         let object = value.as_object_mut().unwrap();

@@ -10,9 +10,12 @@
 // Release builds are GUI-subsystem executables (no console window); debug builds keep the console for logs.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod agent;
+mod agent_ui;
 #[cfg(target_os = "android")]
 mod android_picker;
 mod browser;
+mod calendar;
 mod controller;
 mod crash;
 mod dock;
@@ -45,11 +48,22 @@ fn init_linux_webkit() {
 }
 
 fn main() {
+    #[cfg(not(target_os = "android"))]
+    if std::env::args().nth(1).as_deref() == Some("--mcp") {
+        if let Err(err) = agent::run() {
+            eprintln!("[agent] {err}");
+            std::process::exit(1);
+        }
+        return;
+    }
     // First of all: a panic must never disappear. On Android it would otherwise take the process
     // down without a single line anywhere (see `crash.rs`).
     #[cfg(target_os = "android")]
     paths::init_android_data_dir();
     crash::install();
+    if let Err(err) = agent_ui::recover_pending() {
+        crash::record("agent plan recovery", &err.to_string());
+    }
     #[cfg(target_os = "linux")]
     init_linux_webkit();
     #[cfg(not(target_os = "android"))]
@@ -182,7 +196,8 @@ mod packaging_tests {
                     );
                 }
                 attrs.clear();
-            } else if line.starts_with("use ") || line.starts_with("fn ") {
+            } else if line.starts_with("use ") || line.starts_with("fn ") || line.starts_with("#![")
+            {
                 attrs.clear();
             } else if !line.starts_with("//") {
                 attrs.push_str(line);

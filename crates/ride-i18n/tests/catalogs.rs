@@ -268,8 +268,10 @@ fn surrounding_whitespace_is_preserved() {
 #[test]
 fn a_translation_is_never_left_in_hungarian() {
     // Values that are legitimately identical: proper nouns, unit templates, pure placeholder
-    // templates and words Spanish or English share with Hungarian.
+    // templates and words Spanish, English or German share with Hungarian ("Menü" is also the
+    // German word for the hamburger menu).
     const SAME: &[&str] = &[
+        "app.shell.menu",
         "app.state.trainer",
         "model.workout.anaerob",
         "model.workout.sprint",

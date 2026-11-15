@@ -1,4 +1,4 @@
-//! A recorded ride from another app: GPX with sensor extensions, or TCX.
+//! A recorded ride from another app: GPX with sensor extensions, TCX, or a Garmin FIT file.
 //!
 //! The route reader ([`crate::gpx`]) skips everything inside `<extensions>` on purpose: a planned
 //! route has no heart rate. A *recorded* activity (a Strava / Garmin export, or this app's own
@@ -9,6 +9,8 @@
 //!   `powerinwatts`. Only track points count; waypoints and route points are not an activity.
 //! * TCX — `<Trackpoint>` with `Time`, `Position`, `AltitudeMeters`, `HeartRateBpm/Value`,
 //!   `Cadence` and `Extensions/TPX/Watts`. A sport other than `Biking` is refused.
+//! * FIT — the `record` messages (see [`crate::fit`]); the position, time, altitude, heart rate,
+//!   cadence and power of each.
 //!
 //! A sample needs a valid position and a time stamp; the others are dropped and counted in
 //! [`Activity::skipped`]. Out-of-range sensor values (a heart rate of 0 or 400) are `None`.
@@ -33,6 +35,7 @@ const POWER_RANGE: std::ops::RangeInclusive<f64> = 0.0..=3000.0;
 pub enum ActivityFormat {
     Gpx,
     Tcx,
+    Fit,
 }
 
 /// One time-stamped sample of the recording.
@@ -72,8 +75,11 @@ impl Activity {
     }
 }
 
-/// Reads a GPX or TCX file (the format is recognised from the content, not the file name).
+/// Reads a GPX, TCX or FIT file (the format is recognised from the content, not the file name).
 pub fn from_bytes(bytes: &[u8]) -> Result<Activity> {
+    if crate::fit::is_fit(bytes) {
+        return parse_fit(bytes);
+    }
     let text = decode_bytes(bytes);
     let text = text.trim_start_matches('\u{feff}').trim_start();
     if text.is_empty() {
@@ -342,6 +348,24 @@ pub fn parse_gpx(text: &str) -> Result<Activity> {
         ));
     }
     collector.finish(name, ActivityFormat::Gpx)
+}
+
+/// A Garmin FIT activity: its `record` messages.
+pub fn parse_fit(bytes: &[u8]) -> Result<Activity> {
+    let records = crate::fit::read_records(bytes)?;
+    let mut out = Collector::default();
+    for r in records {
+        out.push(Pending {
+            time: r.time,
+            lat: r.lat,
+            lon: r.lon,
+            ele: r.altitude,
+            hr: r.hr,
+            cadence: r.cadence,
+            power: r.power,
+        });
+    }
+    out.finish(String::new(), ActivityFormat::Fit)
 }
 
 /// A Garmin TrainingCenterDatabase activity (also what this app exports).

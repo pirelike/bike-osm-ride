@@ -254,9 +254,53 @@ impl Store {
         Ok(existed)
     }
 
-    /// Fills in the power numbers of the index entries that have none (rides saved before the
-    /// power page existed): their TSS and their power curve, computed from the record once and kept
-    /// in the index from then on. Returns how many entries were updated.
+    /// Stores the rider's own entries of a ride: how hard it felt (1..=10, `None` clears it) and
+    /// a note. The record and its index entry are patched in place; nothing is recomputed, so a
+    /// ride whose route is no longer cached keeps its segments. `Ok(false)` when there is no such
+    /// ride.
+    pub fn update_ride_journal(
+        &self,
+        route_id: &str,
+        stem: &str,
+        rpe: Option<u8>,
+        note: &str,
+    ) -> io::Result<bool> {
+        let dir = route_dir(self, route_id).ok_or_else(store::invalid_id)?;
+        if !valid_stem(stem) {
+            return Ok(false);
+        }
+        let rpe = ride_model::valid_rpe(rpe);
+        let note = ride_model::clean_note(note);
+        let _guard = store::lock();
+        let file = dir.join(format!("{stem}.json"));
+        let Some(bytes) = store::read_limited(&file) else {
+            return Ok(false);
+        };
+        let Ok(mut record) = serde_json::from_slice::<RideRecord>(&bytes) else {
+            return Ok(false);
+        };
+        if !usable_record(&record) {
+            return Ok(false);
+        }
+        record.rpe = rpe;
+        record.note = note.clone();
+        let json = serde_json::to_vec(&record).map_err(io::Error::other)?;
+        store::write_atomic(&file, &json)?;
+        let mut index = self.read_ride_index(&dir);
+        for meta in index.iter_mut().filter(|m| m.stem == stem) {
+            meta.rpe = rpe;
+            meta.note = note.clone();
+        }
+        let index_json = serde_json::to_vec_pretty(&index).map_err(io::Error::other)?;
+        store::write_atomic(&dir.join(INDEX_FILE), &index_json)?;
+        Ok(true)
+    }
+
+    /// Fills in the derived numbers of the index entries that lack them or carry an older version
+    /// of them (rides saved before the power page, or before `ANALYSIS_VERSION` was raised): the
+    /// TSS, the curves, the heart-rate histogram, the zones ([`power_curve::fill_meta`]), computed
+    /// from the record once and kept in the index from then on. Returns how many entries were
+    /// updated.
     ///
     /// The records are read one at a time without the lock held; only the final patch of each
     /// index takes it, and it re-reads the index first, so a ride saved meanwhile is not lost.
@@ -277,14 +321,13 @@ impl Store {
             let todo: Vec<String> = self
                 .list_rides(&route_id)
                 .into_iter()
-                .filter(|meta| power_curve::stored_curve(meta).is_none())
+                .filter(power_curve::needs_fill)
                 .map(|meta| meta.stem)
                 .collect();
-            let mut computed: Vec<Computed> = Vec::new();
+            let mut computed: Vec<(String, RideRecord)> = Vec::new();
             for stem in todo {
                 if let Some(record) = self.load_ride(&route_id, &stem) {
-                    let (tss, mmp) = power_curve::index_numbers(&record);
-                    computed.push((stem, tss, mmp));
+                    computed.push((stem, record));
                 }
             }
             if computed.is_empty() {
@@ -297,13 +340,11 @@ impl Store {
             let mut index = self.read_ride_index(&dir);
             let mut changed = 0;
             for meta in &mut index {
-                if power_curve::stored_curve(meta).is_some() {
+                if !power_curve::needs_fill(meta) {
                     continue;
                 }
-                if let Some((_, tss, mmp)) = computed.iter().find(|(stem, _, _)| *stem == meta.stem)
-                {
-                    meta.tss = *tss;
-                    meta.mmp = mmp.clone();
+                if let Some((_, record)) = computed.iter().find(|(stem, _)| *stem == meta.stem) {
+                    power_curve::fill_meta(meta, record);
                     changed += 1;
                 }
             }
@@ -382,7 +423,6 @@ pub(crate) fn meta_of(
     stem: String,
 ) -> Option<RideMeta> {
     let summary = usable_summary(&record.summary)?;
-    let (tss, mmp) = power_curve::index_numbers(record);
     let start_dist = record.points.first().map_or(0.0, |p| p.dist).max(0.0);
     // `summary.dist` is the distance ridden; where the ride ended on the route is the last
     // recorded point (the engine always records the finish line).
@@ -394,8 +434,9 @@ pub(crate) fn meta_of(
         .unwrap_or(start_dist + summary.dist)
         .max(0.0);
     let total = route.map_or(0.0, |r| r.total_dist.max(0.0));
-    Some(RideMeta {
+    let mut meta = RideMeta {
         stem,
+        completed_calendar_id: record.completed_calendar_id.clone(),
         started_unix_s: summary.started_unix_s.round(),
         elapsed_s: summary.elapsed_s,
         start_dist,
@@ -408,9 +449,10 @@ pub(crate) fn meta_of(
         avg_power_w: finite_opt(summary.avg_power_w),
         avg_hr: finite_opt(summary.avg_hr),
         route_name: record.route_name.clone(),
-        tss,
-        mmp,
-    })
+        ..RideMeta::default()
+    };
+    power_curve::fill_meta(&mut meta, record);
+    Some(meta)
 }
 
 /// Record files of the folder that `index` does not list.
@@ -440,9 +482,6 @@ fn free_stem(dir: &std::path::Path, base: &str, json: &[u8]) -> Option<String> {
         }
     })
 }
-
-/// A stem with the TSS and the power curve computed for it (see `Store::backfill_analysis`).
-type Computed = (String, Option<f64>, Option<Vec<Option<f32>>>);
 
 /// The summary if the ride is long enough to keep.
 fn usable_summary(summary: &RideSummary) -> Option<&RideSummary> {
@@ -513,6 +552,13 @@ fn sanitized(record: &RideRecord) -> RideRecord {
         p.hr_bpm = finite_opt(p.hr_bpm);
         p.grade = finite(p.grade);
     }
+    out.ftp_w = finite_opt(out.ftp_w);
+    out.rider_kg = finite_opt(out.rider_kg);
+    if let Some(workout) = &mut out.workout {
+        workout.ftp_w = finite(workout.ftp_w);
+    }
+    out.rpe = ride_model::valid_rpe(out.rpe);
+    out.note = ride_model::clean_note(&out.note);
     out
 }
 
@@ -550,6 +596,16 @@ pub fn delete_ride(route_id: &str, stem: &str) -> io::Result<bool> {
 
 pub fn has_ride(route_id: &str, started_unix_s: f64) -> bool {
     Store::default_location().has_ride(route_id, started_unix_s)
+}
+
+/// See [`Store::update_ride_journal`].
+pub fn update_ride_journal(
+    route_id: &str,
+    stem: &str,
+    rpe: Option<u8>,
+    note: &str,
+) -> io::Result<bool> {
+    Store::default_location().update_ride_journal(route_id, stem, rpe, note)
 }
 
 /// One recorded point, for the tests of other crates.
@@ -626,6 +682,7 @@ mod tests {
             .map(|i| point(i as f64, (i as f64 * dist / elapsed).min(dist)))
             .collect();
         RideRecord {
+            completed_calendar_id: None,
             version: ride_model::RIDE_RECORD_VERSION,
             route_id: "route-1".into(),
             route_name: "Teszt kör".into(),
@@ -636,6 +693,11 @@ mod tests {
             power_estimated: false,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: None,
+            rider_kg: None,
+            workout: None,
+            rpe: None,
+            note: String::new(),
         }
     }
 
@@ -669,6 +731,35 @@ mod tests {
     }
 
     #[test]
+    fn calendar_completion_survives_an_interrupted_index_write() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        let mut ride = record(1_700_000_000.0, 300.0, 2_000.0, false);
+        ride.completed_calendar_id = Some("calendar-1".into());
+        let meta = store.save_ride(&ride, &route).unwrap().expect("saved");
+        assert_eq!(meta.completed_calendar_id.as_deref(), Some("calendar-1"));
+        std::fs::remove_file(tmp.path().join("rides/route-1/index.json")).unwrap();
+        let repaired = store.list_rides("route-1");
+        assert_eq!(
+            repaired[0].completed_calendar_id.as_deref(),
+            Some("calendar-1")
+        );
+        assert!(store.delete_ride("route-1", &meta.stem).unwrap());
+        assert!(store.list_rides("route-1").is_empty());
+    }
+
+    #[test]
+    fn a_short_ride_never_creates_calendar_completion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let mut ride = record(1_700_000_000.0, 30.0, 200.0, false);
+        ride.completed_calendar_id = Some("calendar-1".into());
+        assert!(store.save_ride(&ride, &route()).unwrap().is_none());
+        assert!(store.list_rides("route-1").is_empty());
+    }
+
+    #[test]
     fn the_index_keeps_the_tss_and_the_power_curve() {
         let tmp = tempfile::tempdir().unwrap();
         let store = Store::at(tmp.path());
@@ -679,8 +770,25 @@ mod tests {
         assert_eq!(meta.tss, Some(95.0));
         let curve = meta.mmp.clone().expect("computed at save time");
         assert_eq!(curve.len(), ride_sim::power_curve::DURATIONS.len());
-        assert!((curve[2].expect("5 min") - 200.0).abs() < 1e-3, "{curve:?}");
-        assert_eq!(curve[3], None, "a 5 minute ride has no 20 minute value");
+        let at = |seconds: u32| {
+            ride_sim::power_curve::DURATIONS
+                .iter()
+                .position(|d| *d == seconds)
+                .expect("duration")
+        };
+        assert!(
+            (curve[at(300)].expect("5 min") - 200.0).abs() < 1e-3,
+            "{curve:?}"
+        );
+        assert_eq!(
+            curve[at(1_200)],
+            None,
+            "a 5 minute ride has no 20 minute value"
+        );
+        assert_eq!(
+            meta.analysis_version,
+            ride_sim::power_curve::ANALYSIS_VERSION
+        );
 
         // a simulated ride is computed too, and empty: nothing to back-fill later
         let simulated = store
@@ -688,6 +796,57 @@ mod tests {
             .unwrap()
             .expect("kept");
         assert_eq!(simulated.mmp, Some(vec![None; curve.len()]));
+    }
+
+    #[test]
+    fn the_riders_own_entries_are_patched_in_place() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let meta = store
+            .save_ride(&record(1_700_000_000.0, 300.0, 2_000.0, false), &route())
+            .unwrap()
+            .expect("kept");
+        assert!(store
+            .update_ride_journal("route-1", &meta.stem, Some(8), "  kemény volt  ")
+            .unwrap());
+        let loaded = store.load_ride("route-1", &meta.stem).unwrap();
+        assert_eq!((loaded.rpe, loaded.note.as_str()), (Some(8), "kemény volt"));
+        let listed = store.list_rides("route-1");
+        assert_eq!(
+            (listed[0].rpe, listed[0].note.as_str()),
+            (Some(8), "kemény volt")
+        );
+        assert_eq!(listed[0].segments, meta.segments, "nothing else changed");
+        // out of range clears, a missing ride is not an error
+        store
+            .update_ride_journal("route-1", &meta.stem, Some(11), "")
+            .unwrap();
+        assert_eq!(store.list_rides("route-1")[0].rpe, None);
+        assert!(!store
+            .update_ride_journal("route-1", "1600000000", Some(5), "x")
+            .unwrap());
+        assert!(!store
+            .update_ride_journal("route-1", "../x", None, "")
+            .unwrap());
+    }
+
+    #[test]
+    fn an_index_of_an_older_analysis_version_is_recomputed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        store
+            .save_ride(&record(1_700_000_000.0, 300.0, 2_000.0, false), &route())
+            .unwrap();
+        let index_path = tmp.path().join("rides/route-1/index.json");
+        let mut index: Vec<RideMeta> =
+            serde_json::from_slice(&std::fs::read(&index_path).unwrap()).unwrap();
+        index[0].analysis_version = 0;
+        index[0].free_mmp = None;
+        std::fs::write(&index_path, serde_json::to_vec(&index).unwrap()).unwrap();
+        assert_eq!(store.backfill_analysis(), 1);
+        let listed = store.list_rides("route-1");
+        assert!(listed[0].free_mmp.is_some());
+        assert_eq!(store.backfill_analysis(), 0);
     }
 
     #[test]

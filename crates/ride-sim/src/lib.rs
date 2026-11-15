@@ -12,8 +12,12 @@
 //! * [`segments`] — the local segments (climbs) with their PR times and the ghost choice.
 //! * [`workout_import`] — a workout imported from a MyWhoosh / Zwift file.
 //! * [`tcx`] — Garmin TCX export and the suggested file name.
+//! * [`fit`] — Garmin FIT activity export.
 //! * [`power_curve`] — the mean-maximal power curve, the FTP it suggests and the weekly / monthly
 //!   training load of the ride log.
+//! * [`fitness`] — critical power, the FTP estimate, hrTSS and the performance management chart.
+//! * [`ride_detail`] — one stored ride second by second: laps, compliance, efforts, W′ balance.
+//! * [`journal`] — every ride of the log in weeks.
 //!
 //! Everything is finite-safe: bad sensor values are sanitised, a route without points or a
 //! rider with nonsense settings never panic; the caller (`ride-app`) additionally contains
@@ -23,9 +27,13 @@ pub mod analysis;
 pub mod compare;
 pub mod engine;
 pub mod estimate;
+pub mod fit;
+pub mod fitness;
 pub mod ghost;
+pub mod journal;
 pub mod physics;
 pub mod power_curve;
+pub mod ride_detail;
 pub mod segments;
 pub mod tcx;
 pub mod workout;

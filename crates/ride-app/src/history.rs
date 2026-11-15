@@ -209,6 +209,7 @@ mod tests {
             .map(|i| point(i as f64, (i as f64 * speed).min(len_m)))
             .collect();
         RideRecord {
+            completed_calendar_id: None,
             version: ride_model::RIDE_RECORD_VERSION,
             route_id: "route-1".into(),
             route_name: "Teszt".into(),
@@ -240,6 +241,11 @@ mod tests {
             power_estimated: false,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: None,
+            rider_kg: None,
+            workout: None,
+            rpe: None,
+            note: String::new(),
         }
     }
 
@@ -511,6 +517,7 @@ mod tests {
         let (mut summary, points) = ride_engine(&arc, watts, max_s);
         summary.started_unix_s = started;
         let record = RideRecord {
+            completed_calendar_id: None,
             version: ride_model::RIDE_RECORD_VERSION,
             route_id: route.id.clone(),
             route_name: route.name.clone(),
@@ -521,6 +528,11 @@ mod tests {
             power_estimated: false,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: None,
+            rider_kg: None,
+            workout: None,
+            rpe: None,
+            note: String::new(),
         };
         (record, arc, summary)
     }

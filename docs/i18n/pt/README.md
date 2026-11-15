@@ -95,10 +95,13 @@ A descrição completa: **[Guia do utilizador](USER_GUIDE.md)**.
 - **Fantasma** (a última volta, a melhor, ou as próprias marcas temporais do GPX) e **segmentos locais com PR**.
 - **Revisão e comparação de voltas**: as voltas feitas no mesmo percurso (no máximo quatro) lado a lado por potência, frequência
   cardíaca, cadência, velocidade e diferença de tempo; podes ampliar um troço (arrastando ou a partir das subidas) e consultar a tabela do troço.
-  **Importação de uma volta GPX ou TCX** de uma exportação do Strava ou do Garmin, com frequência cardíaca e cadência; se não tiver watts, a
+  **Importação de uma volta GPX, TCX ou FIT** de uma exportação do Strava ou do Garmin, com frequência cardíaca e cadência; se não tiver watts, a
   física da simulação estima-os ao contrário (com o teu peso corporal ou o indicado, bicicleta e resistência ao rolamento).
-- **Página de potência**: potência de pico de 5 s a 60 minutos, uma sugestão de FTP a partir dos teus melhores 20 minutos (definível com um
-  botão), carga semanal e mensal. Só contam os watts medidos.
+- **Página de potência**: condição, fadiga e frescura (CTL, ATL, TSB; hrTSS para voltas sem watts), sugestão de FTP dos
+  últimos 90 dias com um modelo de potência crítica e sem os troços ERG (definível com um clique), potência de pico de 1 s a 90
+  minutos com W/kg e filtro de período, tempo nas zonas, carga semanal e mensal. Só contam os watts medidos.
+- **Diário e detalhe da volta**: todas as voltas por semanas; uma volta no tempo com o alvo do treino, os passos com
+  cumprimento (ou os esforços intensos detetados), VI, EF, desacoplamento Pw:HR, saldo de W′, zonas, cadência; o teu RPE e uma nota.
 - **Cópia de segurança**: os percursos, as voltas, os treinos importados e as definições num único ficheiro zip (sem a chave da Google),
   com uma reposição que funde os dados. Nada sai para a rede.
 - **Exportação TCX** (esquema Garmin): Strava, Intervals.icu e TrainingPeaks aceitam-no quando é enviado à mão. Não há

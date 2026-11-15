@@ -8,6 +8,8 @@
 //! rides/<route id>/<stem>.json   the ride records
 //! rides/<route id>/index.json    the per-route ride index
 //! workouts/<id>.json             imported workouts
+//! calendar.json                   scheduled workouts
+//! ai-feedback/<route>/<stem>.json accepted ride feedback
 //! ```
 //!
 //! It is a **whitelist**: caches (map tiles, Street View imagery), logs, browser profiles and
@@ -40,6 +42,7 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+use crate::calendar::CALENDAR_FILE;
 use crate::rides::{self, valid_stem, INDEX_FILE, RIDES_DIR};
 use crate::store::{self, valid_id, Store, MAX_FILE_BYTES};
 use ride_i18n::{t, tf};
@@ -51,6 +54,44 @@ const SETTINGS: &str = "settings.json";
 const RECENT: &str = "recent.json";
 const ROUTES_DIR: &str = "routes";
 const WORKOUTS_DIR: &str = "workouts";
+const FEEDBACK_DIR: &str = "ai-feedback";
+
+#[derive(Deserialize)]
+struct FeedbackFile {
+    id: String,
+    kind: FeedbackKind,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum FeedbackKind {
+    Feedback {
+        route_id: String,
+        stem: String,
+        good: String,
+        improve: String,
+        next: String,
+    },
+}
+
+fn valid_feedback(bytes: &[u8], route_id: &str, stem: &str) -> bool {
+    let Ok(feedback) = serde_json::from_slice::<FeedbackFile>(bytes) else {
+        return false;
+    };
+    let FeedbackKind::Feedback {
+        route_id: ref id,
+        stem: ref saved_stem,
+        ref good,
+        ref improve,
+        ref next,
+    } = feedback.kind;
+    valid_id(&feedback.id)
+        && id == route_id
+        && saved_stem == stem
+        && [good, improve, next]
+            .iter()
+            .all(|text| !text.trim().is_empty() && text.len() <= 8_000)
+}
 
 /// Upper bounds for restoring an archive that came from anywhere. The sizes in a zip header are
 /// not trusted: every entry is read through a counter.
@@ -88,6 +129,8 @@ pub struct ExportReport {
     pub routes: usize,
     pub rides: usize,
     pub workouts: usize,
+    pub calendar_entries: usize,
+    pub feedback: usize,
     /// Files of the data folder that could not go in: unreadable, or larger than the store reads.
     pub omitted: usize,
 }
@@ -98,6 +141,8 @@ pub struct RestoreReport {
     pub routes: usize,
     pub rides: usize,
     pub workouts: usize,
+    pub calendar_entries: usize,
+    pub feedback: usize,
     /// Entries left out: unknown names, unreadable JSON, rides of a newer version, ...
     pub skipped: usize,
     /// Files that passed the check but could not be written (a full disk, a locked file).
@@ -166,6 +211,16 @@ pub fn export<W: Write + Seek>(
 
     // One consistent snapshot: a ride saved in the middle of the copy waits for the lock.
     let _guard = store::lock();
+    let calendar_path = store.dir().join(CALENDAR_FILE);
+    if calendar_path.exists() {
+        if let Ok(entries) = store.load_calendar_unlocked() {
+            let bytes = serde_json::to_vec_pretty(&entries).map_err(|err| err.to_string())?;
+            add(&mut zip, options, CALENDAR_FILE, &bytes)?;
+            report.calendar_entries = entries.len();
+        } else {
+            report.omitted += 1;
+        }
+    }
     let recent_path = store.dir().join(RECENT);
     if let Some(bytes) = store::read_limited(&recent_path) {
         add(&mut zip, options, RECENT, &bytes)?;
@@ -225,6 +280,31 @@ pub fn export<W: Write + Seek>(
             report.workouts += 1;
         } else {
             report.omitted += 1;
+        }
+    }
+    for route_dir in sub_dirs(&store.dir().join(FEEDBACK_DIR)) {
+        let Some(route_id) = route_dir.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !valid_id(route_id) {
+            continue;
+        }
+        for (stem, path) in json_files(&route_dir) {
+            if !valid_stem(&stem) {
+                continue;
+            }
+            match store::read_limited(&path) {
+                Some(bytes) if valid_feedback(&bytes, route_id, &stem) => {
+                    add(
+                        &mut zip,
+                        options,
+                        &format!("{FEEDBACK_DIR}/{route_id}/{stem}.json"),
+                        &bytes,
+                    )?;
+                    report.feedback += 1;
+                }
+                _ => report.omitted += 1,
+            }
         }
     }
     zip.finish().map_err(|err| {
@@ -302,6 +382,8 @@ enum Kind {
     RideIndex(String),
     Ride(String, String),
     Workout(String),
+    Calendar,
+    Feedback(String, String),
 }
 
 /// `Err(())`: the name is unsafe (the whole archive is refused). `Ok(None)`: a harmless name this
@@ -325,8 +407,12 @@ fn classify(name: &str) -> Result<Option<Kind>, ()> {
         [MANIFEST] => Some(Kind::Manifest),
         [SETTINGS] => Some(Kind::Settings),
         [RECENT] => Some(Kind::Recent),
+        [CALENDAR_FILE] => Some(Kind::Calendar),
         [ROUTES_DIR, file] => json_stem(file).filter(|id| valid_id(id)).map(Kind::Route),
         [WORKOUTS_DIR, file] => json_stem(file).filter(|id| valid_id(id)).map(Kind::Workout),
+        [FEEDBACK_DIR, route_id, file] if valid_id(route_id) => json_stem(file)
+            .filter(|stem| valid_stem(stem))
+            .map(|stem| Kind::Feedback((*route_id).to_string(), stem)),
         [RIDES_DIR, route_id, file] if valid_id(route_id) => {
             let stem = json_stem(file);
             match stem {
@@ -348,6 +434,8 @@ struct Plan {
     routes: BTreeMap<String, usize>,
     workouts: BTreeMap<String, usize>,
     rides: BTreeMap<(String, String), usize>,
+    calendar: Option<Vec<ride_model::CalendarEntry>>,
+    feedback: BTreeMap<(String, String), usize>,
 }
 
 /// Merges the backup in `input` into the store (see the module docs).
@@ -462,6 +550,21 @@ fn validate<R: Read + Seek>(
                 Ok(list) => plan.recent = list,
                 Err(_) => report.skipped += 1,
             },
+            Kind::Calendar => {
+                match serde_json::from_slice::<Vec<ride_model::CalendarEntry>>(&bytes) {
+                    Ok(entries) if entries.iter().all(|entry| entry.is_valid()) => {
+                        plan.calendar = Some(entries);
+                    }
+                    _ => report.skipped += 1,
+                }
+            }
+            Kind::Feedback(route_id, stem) => {
+                if valid_feedback(&bytes, &route_id, &stem) {
+                    plan.feedback.insert((route_id, stem), index);
+                } else {
+                    report.skipped += 1;
+                }
+            }
             Kind::Route(id) => match serde_json::from_slice::<Route>(&bytes) {
                 Ok(route) if route.id == id && store::usable_route(&route) => {
                     plan.routes.insert(id, index);
@@ -535,6 +638,7 @@ fn write_plan<R: Read + Seek>(
     report: &mut RestoreReport,
 ) -> Result<(), String> {
     let _guard = store::lock();
+    let _calendar_guard = crate::calendar::lock_calendar(store).map_err(|err| err.to_string())?;
     let written = |path: &Path, bytes: &[u8], report: &mut RestoreReport| -> bool {
         match store::write_atomic(path, bytes) {
             Ok(()) => true,
@@ -545,6 +649,25 @@ fn write_plan<R: Read + Seek>(
             }
         }
     };
+
+    if let Some(backup_entries) = &plan.calendar {
+        match store.load_calendar_unlocked() {
+            Ok(mut entries) => {
+                let original_len = entries.len();
+                for entry in backup_entries {
+                    if !entries.iter().any(|local| local.id == entry.id) {
+                        entries.push(entry.clone());
+                    }
+                }
+                entries.sort_by(|a, b| (&a.date, &a.time, &a.id).cmp(&(&b.date, &b.time, &b.id)));
+                let bytes = serde_json::to_vec_pretty(&entries).map_err(|err| err.to_string())?;
+                if written(&store.dir().join(CALENDAR_FILE), &bytes, report) {
+                    report.calendar_entries += entries.len() - original_len;
+                }
+            }
+            Err(_) => report.failed += 1,
+        }
+    }
 
     // Routes: a usable local copy stays, a missing or unreadable one is restored.
     let mut restored_routes: Vec<Route> = Vec::new();
@@ -628,6 +751,36 @@ fn write_plan<R: Read + Seek>(
         }
     }
 
+    for ((route_id, stem), index) in &plan.feedback {
+        let ride_path = store
+            .dir()
+            .join(RIDES_DIR)
+            .join(route_id)
+            .join(format!("{stem}.json"));
+        let ride_ok = store::read_limited(&ride_path)
+            .and_then(|bytes| serde_json::from_slice::<RideRecord>(&bytes).ok())
+            .is_some_and(|ride| {
+                rides::usable_record(&ride)
+                    && (ride.route_id.is_empty() || ride.route_id == *route_id)
+            });
+        if !ride_ok {
+            report.skipped += 1;
+            continue;
+        }
+        let path = store
+            .dir()
+            .join(FEEDBACK_DIR)
+            .join(route_id)
+            .join(format!("{stem}.json"));
+        if store::read_limited(&path).is_some_and(|bytes| valid_feedback(&bytes, route_id, stem)) {
+            continue;
+        }
+        let bytes = read_entry(archive, *index, limits, total)?;
+        if written(&path, &bytes, report) {
+            report.feedback += 1;
+        }
+    }
+
     // Last: an entry of the recent list needs its route file. Every restored route gets one,
     // from the archive's list or made up from the route itself (an archive without a usable
     // `recent.json` must not leave its routes unreachable). No cap here: the normal housekeeping
@@ -701,6 +854,7 @@ mod tests {
 
     fn record(route_id: &str, started: f64) -> RideRecord {
         RideRecord {
+            completed_calendar_id: None,
             version: ride_model::RIDE_RECORD_VERSION,
             route_id: route_id.to_string(),
             route_name: format!("Út {route_id}"),
@@ -734,6 +888,11 @@ mod tests {
             power_estimated: false,
             estimate: None,
             measured_power: Vec::new(),
+            ftp_w: None,
+            rider_kg: None,
+            workout: None,
+            rpe: None,
+            note: String::new(),
         }
     }
 
@@ -818,6 +977,74 @@ mod tests {
         assert!(target.load_recent("bbbb").is_some());
         let restored_settings = report.settings.expect("settings travel");
         assert!((restored_settings.rider.ftp_w - 250.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn calendar_is_backed_up_and_restored_without_overwriting_local_entries() {
+        let src = tempfile::tempdir().expect("tmp");
+        let store = Store::at(src.path());
+        let workout = ride_model::WorkoutLibrary::embedded().all()[0].clone();
+        let entry = ride_model::CalendarEntry {
+            id: "one".into(),
+            date: "2028-02-29".into(),
+            time: None,
+            workout,
+        };
+        store
+            .update_calendar(|items| {
+                items.push(entry.clone());
+                Ok(())
+            })
+            .expect("save");
+        let bytes = make_backup(&store);
+        let dst = tempfile::tempdir().expect("tmp");
+        let target = Store::at(dst.path());
+        let first = restore(&target, Cursor::new(&bytes)).expect("restore");
+        let second = restore(&target, Cursor::new(&bytes)).expect("restore twice");
+        assert_eq!(first.calendar_entries, 1);
+        assert_eq!(second.calendar_entries, 0);
+        assert_eq!(target.load_calendar().expect("calendar"), vec![entry]);
+    }
+
+    #[test]
+    fn feedback_backup_roundtrips_and_keeps_local_feedback() {
+        let src = tempfile::tempdir().expect("tmp");
+        let store = filled(src.path());
+        let route_id = "aaaa";
+        let stem = store.list_rides(route_id)[0].stem.clone();
+        let feedback = serde_json::json!({
+            "id": "draft-1",
+            "kind": { "type": "feedback", "route_id": route_id, "stem": stem,
+                "good": "Steady", "improve": "Pacing", "next": "Recover" }
+        });
+        let bytes = serde_json::to_vec(&feedback).expect("serialize");
+        let path = src
+            .path()
+            .join(FEEDBACK_DIR)
+            .join(route_id)
+            .join(format!("{stem}.json"));
+        store::write_atomic(&path, &bytes).expect("feedback");
+        let archive = make_backup(&store);
+        let dst = tempfile::tempdir().expect("tmp");
+        let target = Store::at(dst.path());
+        let report = restore(&target, Cursor::new(&archive)).expect("restore");
+        assert_eq!(report.feedback, 1);
+        let destination = dst
+            .path()
+            .join(FEEDBACK_DIR)
+            .join(route_id)
+            .join(format!("{stem}.json"));
+        assert_eq!(std::fs::read(&destination).expect("feedback"), bytes);
+        let report = restore(&target, Cursor::new(&archive)).expect("restore twice");
+        assert_eq!(report.feedback, 0);
+    }
+
+    #[test]
+    fn feedback_for_a_different_ride_is_not_accepted() {
+        let bytes = br#"{"id":"x","kind":{"type":"feedback","route_id":"route-a","stem":"100","good":"ok","improve":"ok","next":"ok"}}"#;
+        assert!(valid_feedback(bytes, "route-a", "100"));
+        assert!(!valid_feedback(bytes, "route-b", "100"));
+        assert!(!valid_feedback(bytes, "route-a", "101"));
     }
 
     #[test]
