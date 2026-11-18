@@ -228,7 +228,10 @@ impl ReviewSignals {
 
 #[derive(Clone, Copy)]
 pub struct AppState {
+    /// The loaded route, used for storage and route history.
     pub route: Signal<Option<Arc<Route>>>,
+    /// The geometry of the current stage, used by the live map and profiles.
+    pub active_route: Signal<Option<Arc<Route>>>,
     /// 10 Hz.
     pub snapshot: Signal<RideSnapshot>,
     /// 1 Hz recording of the running ride.
@@ -275,6 +278,12 @@ pub struct AppState {
     /// virtual gearbox has nothing to do and is not shown. Kept by the controller, so the layout
     /// does not have to read the 10 Hz snapshot.
     pub erg: Signal<bool>,
+    /// A real (BLE) trainer is connected in the Trainer slot — not the simulated rider. The
+    /// workout card's ERG-exit action only makes sense then; kept by the controller like `erg`.
+    pub trainer_ble: Signal<bool>,
+    /// A workout ride just started: the screen edges flash for a moment, teaching the
+    /// up (harder) / down (easier) intensity gesture.
+    pub intensity_hint: Signal<bool>,
     pub fullscreen: Signal<bool>,
     /// A file is being dragged over the window.
     pub drag_active: Signal<bool>,
@@ -338,6 +347,7 @@ impl AppState {
             };
         Self {
             route: Signal::new(None),
+            active_route: Signal::new(None),
             snapshot: Signal::new(RideSnapshot::empty()),
             history: Signal::new(Arc::new(Vec::new())),
             settings: Signal::new(settings),
@@ -364,6 +374,8 @@ impl AppState {
             virtual_power: Signal::new(150.0),
             sim_connected: Signal::new(false),
             erg: Signal::new(false),
+            trainer_ble: Signal::new(false),
+            intensity_hint: Signal::new(false),
             fullscreen: Signal::new(false),
             drag_active: Signal::new(false),
             dock: Signal::new(dock),

@@ -154,6 +154,9 @@ pub struct Output {
     pub finished: Option<FinishedRide>,
     /// The selected workout just ran out of steps (toast once).
     pub workout_finished: bool,
+    /// The ride reached the end of the route and is waiting for the continuation decision
+    /// (a loop starts over, a point-to-point route turns around). Fires once per pass.
+    pub route_exhausted: bool,
     /// The engine panicked and was dropped; the message is for the log.
     pub failure: Option<String>,
 }
@@ -166,6 +169,7 @@ pub struct RideCore {
     target_gate: TargetGate,
     workout: Option<Arc<Workout>>,
     workout_finished_emitted: bool,
+    route_exhausted_emitted: bool,
     state: RideState,
     history_len: usize,
     failure: Option<String>,
@@ -189,6 +193,7 @@ impl RideCore {
             target_gate: TargetGate::default(),
             workout: None,
             workout_finished_emitted: false,
+            route_exhausted_emitted: false,
             state: RideState::Empty,
             history_len: 0,
             failure: None,
@@ -214,6 +219,19 @@ impl RideCore {
         }
     }
 
+    /// The live intensity the rider set for the running workout (100 without one).
+    pub fn workout_intensity(&mut self) -> f64 {
+        self.call(|e| e.workout_intensity()).unwrap_or(100.0)
+    }
+
+    /// The rider asked for a harder or easier workout (swipe, buttons, arrow keys): the
+    /// remaining targets are scaled. The ERG target re-send is armed so the trainer gets
+    /// the new watts at once, even when the change is under the 1 W gate.
+    pub fn set_workout_intensity(&mut self, pct: f64) {
+        self.call(|e| e.set_workout_intensity(pct));
+        self.target_gate.reset();
+    }
+
     pub fn set_rider(&mut self, rider: RiderSettings) {
         self.rider = rider.clone();
         self.call(|e| e.set_rider(rider));
@@ -234,6 +252,10 @@ impl RideCore {
 
     pub fn workout(&self) -> Option<&Arc<Workout>> {
         self.workout.as_ref()
+    }
+
+    pub fn active_route(&self) -> Option<&Arc<Route>> {
+        self.engine.as_ref().map(RideEngine::route)
     }
 
     /// Sets what is replayed next to the rider: the ghost ride and the per-climb PR rides.
@@ -264,6 +286,7 @@ impl RideCore {
         self.gate.reset();
         self.target_gate.reset();
         self.workout_finished_emitted = false;
+        self.route_exhausted_emitted = false;
         self.history_len = 0;
         self.state = RideState::Empty;
         let snapshot = self.call(|e| e.snapshot());
@@ -285,6 +308,7 @@ impl RideCore {
         self.gate.reset();
         self.target_gate.reset();
         self.workout_finished_emitted = false;
+        self.route_exhausted_emitted = false;
         let mut out = self.output(None, now);
         out.commands = commands;
         out.history = Some(Vec::new());
@@ -329,6 +353,18 @@ impl RideCore {
         self.target_gate.reset();
         self.gate.reset();
         self.workout_finished_emitted = false;
+        self.route_exhausted_emitted = false;
+        self.output_after_action(now)
+    }
+
+    /// The ride reached the end of the route and keeps going: `None` starts the next lap of
+    /// a loop, `Some` swaps in the turned-around route. Ignored when the engine is not
+    /// waiting at the end (the caller decides which continuation applies).
+    pub fn continue_pass(&mut self, route: Option<Arc<Route>>, now: Instant) -> Output {
+        self.call(|e| e.continue_pass(route));
+        self.route_exhausted_emitted = false;
+        // the grade of the new pass's start goes out at once
+        self.gate.reset();
         self.output_after_action(now)
     }
 
@@ -389,6 +425,21 @@ impl RideCore {
         let mut finished = None;
         let mut transition = None;
 
+        // The workout ran out of steps during this tick (one-shot, like the transition).
+        let workout_finished =
+            !self.workout_finished_emitted && snapshot.workout.as_ref().is_some_and(|w| w.finished);
+        if workout_finished {
+            self.workout_finished_emitted = true;
+        }
+
+        // The ride reached the end of the route and waits for `continue_pass` (one-shot
+        // per pass; the controller decides between a lap and turning around).
+        let route_exhausted =
+            !self.route_exhausted_emitted && self.call(|e| e.at_route_end()).unwrap_or(false);
+        if route_exhausted {
+            self.route_exhausted_emitted = true;
+        }
+
         if from != to {
             self.state = to;
             transition = Some((from, to));
@@ -434,6 +485,12 @@ impl RideCore {
                 if self.gate.offer(sim, now) {
                     commands.push(SensorCommand::SetSimulation(sim));
                 }
+                // The first tick without a target leaves ERG: some trainers do not take a
+                // plain simulation write for an answer after holding a power target, so the
+                // control layer insists on it (neutral grade first, repeats afterwards).
+                if workout_finished {
+                    commands.push(SensorCommand::RelaxFromErg);
+                }
             }
         }
 
@@ -460,13 +517,6 @@ impl RideCore {
             (snapshot, transition)
         };
 
-        // The workout ran out of steps during this tick.
-        let workout_finished =
-            !self.workout_finished_emitted && snapshot.workout.as_ref().is_some_and(|w| w.finished);
-        if workout_finished {
-            self.workout_finished_emitted = true;
-        }
-
         Output {
             snapshot,
             commands,
@@ -474,6 +524,7 @@ impl RideCore {
             transition,
             finished,
             workout_finished,
+            route_exhausted,
             failure,
         }
     }
@@ -822,29 +873,48 @@ mod tests {
     }
 
     #[test]
-    fn reaching_the_end_finishes_automatically_exactly_once() {
+    fn reaching_the_end_reports_the_exhaustion_once_and_keeps_riding() {
         let (mut core, t0) = loaded(&[(300.0, 0.0)]);
         core.set_sample(SensorSample {
             power_w: Some(300.0),
             ..Default::default()
         });
         core.start(1_700_000_000.0, t0);
-        let mut finished = 0;
+        let mut exhausted = 0;
         for i in 1..=600u64 {
             let out = core.tick(
                 0.5,
                 1_700_000_000.0 + i as f64 * 0.5,
                 t0 + Duration::from_millis(500 * i),
             );
-            if out.finished.is_some() {
-                finished += 1;
-                assert_eq!(
-                    out.transition,
-                    Some((RideState::Riding, RideState::Finished))
-                );
+            if out.route_exhausted {
+                exhausted += 1;
+                assert_eq!(out.snapshot.state, RideState::Riding, "the ride holds");
+                assert_eq!(out.snapshot.remaining_dist, 0.0);
             }
+            assert!(out.finished.is_none(), "the engine no longer auto-finishes");
         }
-        assert_eq!(finished, 1);
+        assert_eq!(exhausted, 1, "one exhaustion per pass");
+        assert_eq!(core.state(), RideState::Riding);
+        // The controller answers the exhaustion with the continuation; here the caller
+        // plays that part: the loop restarts, and the event fires again at the next end.
+        let out = core.continue_pass(None, t0 + Duration::from_secs(400));
+        assert!(!out.route_exhausted);
+        assert_eq!(out.snapshot.pass, 1);
+        assert!(out.snapshot.dist < 1e-6);
+        let mut second = 0;
+        for i in 1..=600u64 {
+            let out = core.tick(
+                0.5,
+                1_700_000_000.0 + 300.0 + i as f64 * 0.5,
+                t0 + Duration::from_millis(500 * (i + 800)),
+            );
+            second += u32::from(out.route_exhausted);
+        }
+        assert_eq!(second, 1, "the second pass reports its own exhaustion");
+        // A manual finish still ends the ride from the hold.
+        let out = core.finish(t0 + Duration::from_secs(1200));
+        assert!(out.finished.is_some());
         assert_eq!(core.state(), RideState::Finished);
     }
 
@@ -1023,5 +1093,79 @@ mod tests {
         let out = core.tick(0.1, 200.0, t0 + Duration::from_secs(200));
         assert!(!out.workout_finished, "the finish is reported once");
         assert!(out.snapshot.workout.as_ref().is_some_and(|w| w.finished));
+    }
+
+    /// Leaving ERG is not left to a single simulation write (some trainers ignore it): the
+    /// tick that reports the finished workout also re-runs the explicit ERG-exit handshake,
+    /// exactly once.
+    #[test]
+    fn the_workout_end_re_runs_the_erg_exit_handshake_once() {
+        let (mut core, t0) = loaded(&[(3000.0, 4.0)]);
+        core.set_workout(Some(workout()), t0);
+        core.start(1.0, t0);
+        let mut handshakes = 0;
+        for i in 1..=1400u64 {
+            let out = core.tick(
+                0.1,
+                1.0 + i as f64 * 0.1,
+                t0 + Duration::from_millis(100 * i),
+            );
+            let tick_handshakes = out
+                .commands
+                .iter()
+                .filter(|c| matches!(c, SensorCommand::RelaxFromErg))
+                .count();
+            if tick_handshakes > 0 {
+                assert_eq!(tick_handshakes, 1, "one handshake per tick");
+                assert!(out.workout_finished, "it fires on the finishing tick");
+            }
+            handshakes += tick_handshakes;
+        }
+        assert_eq!(handshakes, 1, "exactly one handshake for one workout end");
+    }
+
+    /// The intensity the rider sets mid-effort re-arms the ERG gate: the trainer gets the
+    /// scaled watts on the very next tick, even when nothing else changed.
+    #[test]
+    fn an_intensity_change_re_sends_the_scaled_target_at_once() {
+        let (mut core, t0) = loaded(&[(10_000.0, 0.0)]);
+        core.set_workout(Some(workout()), t0);
+        core.set_sample(SensorSample {
+            power_w: Some(200.0),
+            ..Default::default()
+        });
+
+        // The start itself carries the first target of the plan: 60 % of the default 200 W FTP.
+        let out = core.start(1.0, t0);
+        assert!(
+            out.commands
+                .iter()
+                .any(|c| matches!(c, SensorCommand::SetTargetPower(w) if (w - 120.0).abs() < 1e-9)),
+            "{:?}",
+            out.commands
+        );
+
+        // Steady state: an unchanged target is not re-sent.
+        let out = core.tick(0.1, 1.2, t0 + Duration::from_millis(200));
+        assert!(!out
+            .commands
+            .iter()
+            .any(|c| matches!(c, SensorCommand::SetTargetPower(_))));
+
+        // Harder by 10 %: the next tick carries the scaled watts.
+        core.set_workout_intensity(110.0);
+        assert_eq!(core.workout_intensity(), 110.0);
+        let out = core.tick(0.1, 1.3, t0 + Duration::from_millis(300));
+        assert!(
+            out.commands
+                .iter()
+                .any(|c| matches!(c, SensorCommand::SetTargetPower(w) if (w - 132.0).abs() < 1e-9)),
+            "{:?}",
+            out.commands
+        );
+        // The HUD's progress carries the scaled target and the intensity itself.
+        let p = out.snapshot.workout.as_ref().expect("the workout runs");
+        assert_eq!(p.intensity_pct, 110.0);
+        assert!((p.target_w.unwrap() - 132.0).abs() < 1e-9);
     }
 }

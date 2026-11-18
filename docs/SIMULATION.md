@@ -38,8 +38,24 @@ m_eff     = m + 1.5 kg                      rotating mass of the wheels
 
 `Empty` (no route; the core) → `Ready` → `Riding` ⇄ `Paused` → `Finished`.
 
-- `start` only from `Ready`; `finish` from `Riding`/`Paused`; **the ride finishes by itself** when the
-  distance reaches the end of the route; `reset` returns to `Ready` at 0 m with an empty history.
+- `start` only from `Ready`; `finish` from `Riding`/`Paused` (also from the hold at the route end, below);
+  `reset` returns to `Ready` at 0 m with an empty history.
+- **Reaching the end of the route no longer finishes the ride.** The rider keeps going: the engine sits at the
+  finish line (speed 0) and reports `route_exhausted` once; the controller answers with
+  `RideEngine::continue_pass` — a route that closes into a loop (first and last point within 50 m,
+  `ride_route::build::is_loop`) starts its next lap at distance 0, anything else swaps in
+  `ride_route::build::build_reversed` (the same track mirrored through the whole build pipeline, keeping the
+  ride-log identity: id and name stay the original's) and rides it backwards; the far end then turns around
+  again, so a point-to-point route ping-pongs until the rider presses *Befejezés*. Only a route that cannot
+  be turned around ends the ride at the spot. A workout cut short by the old behaviour now simply continues.
+- **What a continuation keeps and drops.** `dist` wraps per pass (the map, the profile, the climbs and the
+  ETA describe the current pass), while the pass biases freeze what the finished passes added, so
+  `summary.dist`, the summary ascent, `ascent_done` on the screen and the recording's `odo`
+  (`RecordPoint.odo`, cumulative) stay monotone. The ghost and the per-climb comparison cannot follow a
+  wrapped or mirrored ride and are dropped at every pass; the climb tracker restarts with the new pass's
+  climbs. Segment PRs therefore stay meaningful on the first pass only (the ride log keeps every second of
+  the later ones, and `odo`-based exports stay monotone; `ride-sim`'s section/PR search still looks at
+  route-relative distances).
 - The timer excludes pauses. `seek` works only in `Ready`, before the start (click on the profile): during a
   pause the timer, the recording and the statistics belong to what was ridden, and a jump over a climb would make a
   fake segment time; after the finish the summary is what gets saved.
@@ -51,7 +67,8 @@ m_eff     = m + 1.5 kg                      rotating mass of the wheels
   while `Riding` or `Paused`.
 - In every state the live sensor values still appear in the snapshot.
 - `RideCore` (in `ride-app`) wraps the engine: it turns state transitions and the keep-alive rules into
-  `SensorCommand`s and contains engine panics.
+  `SensorCommand`s and contains engine panics. The one-shot events (`workout_finished`, `route_exhausted`)
+  fire once per cause.
 
 ### Numbers on the screen
 
@@ -81,8 +98,11 @@ m_eff     = m + 1.5 kg                      rotating mass of the wheels
    5 s of silence (the FTMS keep-alive). Start sends them at once; pause and finish send a neutral flat grade.
 
 While a workout step has a target, **ERG mode** replaces all of this: `SetTargetPower(watts)` goes out when the
-target moves by 1 W or every 5 s, and the simulation resumes in free steps and after the last step. The
-terrain still moves the rider on the map, but the trainer holds the watts.
+target moves by 1 W or every 5 s, and the simulation resumes in free steps and after the last step — the resume
+after the last step is an explicit handshake (`RelaxFromErg`: neutral grade, then the live grade re-sent
+insistently, re-runnable from the workout card's "ERG ki" button), because a single `0x11` does not always talk a
+trainer out of ERG (`docs/BLUETOOTH.md` §4). The terrain still moves the rider on the map, but the trainer holds
+the watts.
 
 ## 4. Workouts (`ride-model/src/workout.rs`, `ride-sim/src/workout.rs`, `workout_import.rs`)
 
@@ -99,6 +119,13 @@ terrain still moves the rider on the map, but the trainer holds the watts.
   watts and % FTP, time left in the step and in the workout, the next step, and the coach message. A message is
   shown for 12 s of riding time after it is due; a step's note counts as a message at the step's start unless an
   imported file already carries the same text.
+- **Live intensity:** the rider can scale the remaining workout without opening anything — ±5 % steps within
+  50–150 % (`WorkoutSession::intensity_pct`, the band lives in `ride-model` so the UI can disable its steppers at
+  the edges). The scaling applies to every target the plan produces (ramps included) identically in `target_w`
+  (what the trainer is told) and in `WorkoutProgress` (what the screen shows), so the two never diverge; a change
+  re-arms the ERG gate and the new watts go out on the next tick. Desktop: the −/+ stepper in the *Vezérlés*
+  window and the ↑/↓ keys; phone: a vertical swipe anywhere on the ride tab (the edges flash at the start of a
+  workout ride to teach it). Every ride starts at 100 %, and `reset()` puts it back.
 - **Import:** `workout_import::from_bytes` reads MyWhoosh exports in either shape, the `<workout_file>` XML
   (the Zwift `.zwo` schema: `SteadyState`, `Warmup`, `Cooldown`, `Ramp`, `IntervalsT`, `FreeRide`, power as a
   fraction of FTP, `textevent` messages with their offsets) or MyWhoosh's own JSON (`WorkoutStepsArray`,

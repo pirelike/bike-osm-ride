@@ -12,4 +12,6 @@ pub(crate) enum TrainerCmd {
     Power(f64),
     Start,
     Pause,
+    /// Run the explicit ERG-exit handshake (neutral grade, then insisted simulation writes).
+    RelaxFromErg,
 }

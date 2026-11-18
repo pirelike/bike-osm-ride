@@ -58,17 +58,26 @@ Die Schaltfläche **Geräte** in der oberen Leiste (drei Punkte daneben zeigen, 
 
 ![Das Fenster Geräte](../../screenshots/devices.png)
 
-1. `Scan starten`: Das Programm sucht ohne Filter und ordnet die Geräte nach den Diensten ein, die sie anbieten (der
-   Scan endet nach 30 Sekunden von selbst).
+1. Der **Scan startet von selbst**, sobald das Fenster öffnet, und läuft, solange es offen ist (während eines
+   Verbindungsversuchs pausiert er ein paar Sekunden und nimmt dann wieder auf). Das Programm sucht ohne Filter und
+   ordnet die Geräte nach den Diensten ein, die sie anbieten; mit der Schaltfläche kannst du ihn jederzeit stoppen
+   und neu starten.
 2. Neben jedem gefundenen Gerät stehen die Schaltflächen für die Rollen: Du verbindest es in der Rolle, die du brauchst. Ein physisches Gerät kann
    **mehrere Rollen gleichzeitig** erfüllen: Wenn dein Trainer auch Leistung, Trittfrequenz oder Puls sendet, füllt eine einzige Verbindung
    jede Karte (die Karten zeigen eine *gemeinsames Gerät*-Markierung). Bei den Sensordaten gewinnt die genauere Quelle (Leistung:
    der Leistungsmesser vor dem Trainer; Trittfrequenz: CSC, dann der Leistungsmesser, dann der Trainer; Puls: der Brustgurt
    vor dem Trainer).
-3. Was sich 3 Sekunden lang nicht aktualisiert hat, wechselt auf „—“; bei einer verlorenen Verbindung versucht das Programm es dreimal.
-4. **Verbinde den Trainer in der Rolle Trainer**: Die Rolle Leistungsmesser liest nur; die Steuerung (Anstiege, ERG) kommt aus der
+3. **Mit „Verbunden“ markierte Zeilen:** Diese Geräte sind schon mit dem Rechner oder dem Telefon verbunden —
+   typischerweise der Trainer, den das Telefon von selbst wieder verbunden hat, oder einer, den eine andere App
+   belegt. Sie senden kein Advertising, daher hätte die Suche allein sie nie gefunden. Hält **eine andere App** die
+   Verbindung (unter Android passen zwei GATT-Clients nicht auf dasselbe Gerät), sagt die Zeile, dass du sie dort
+   freigeben musst; sonst gibt die Zeile eine normale Verbindungsschaltfläche. Auch bei einem Gerät ohne Namen gibt
+   es eine Schaltfläche *Als Smart-Trainer verbinden* — die Diensterkennung nach dem Verbinden entscheidet, ob es
+   wirklich einer ist.
+4. Was sich 3 Sekunden lang nicht aktualisiert hat, wechselt auf „—“; bei einer verlorenen Verbindung versucht das Programm es dreimal.
+5. **Verbinde den Trainer in der Rolle Trainer**: Die Rolle Leistungsmesser liest nur; die Steuerung (Anstiege, ERG) kommt aus der
    Rolle Trainer.
-5. **Simulierter Fahrer**: der erste Eintrag in der Liste, immer da, auch ohne Bluetooth. Im linken Panel stellst du
+6. **Simulierter Fahrer**: der erste Eintrag in der Liste, immer da, auch ohne Bluetooth. Im linken Panel stellst du
    die Watt mit einem Schieberegler ein (oder `↑`/`↓`, ±10 W); Schnellschaltflächen: Z2 150 W, Z4 250 W, Sprint 700 W, Frei 0 W. Trittfrequenz und
    Puls folgen ihm glaubwürdig.
 
@@ -84,9 +93,16 @@ selbst begrenzt.
 
 ## Fahren
 
-`Start` (oder `Leertaste`) startet die Fahrt, `Pause` hält sie an (die Zeit stoppt mit), `Beenden` schließt sie ab. Am Ende der Route
-**endet die Fahrt von selbst**. Vor dem Start kannst du per Klick auf das Profil an jede Stelle der Route springen; während einer
-Fahrt geht das nicht. Das Programm hält den Rechner wach, während du fährst (Windows, Linux, macOS; nicht unter Android).
+`Start` (oder `Leertaste`) startet die Fahrt, `Pause` hält sie an (die Zeit stoppt mit), `Beenden` schließt sie ab. **Das
+Ende der Route beendet die Fahrt nicht**: Das Programm meldet es und es geht weiter — **auf einer Rundroute startet eine
+neue Runde am Start; auf einer Route ohne Schleife fährst du auf derselben Strecke rückwärts** (am Ende des Rückwegs
+wendet es wieder, und so weiter, bis du *Beenden* drückst). So läuft auch ein Workout, das länger ist als die Route,
+voll aus, und im freien Fahren kannst du weiterfahren, solange du willst. Distanz, verbleibende Route und ETA beziehen
+sich auf die aktuelle **Etappe** (im Tab Fahrt des Telefons zeigt oben eine „*2. Etappe*“-Anzeige, wo du bist); die
+Zusammenfassung zählt die ganze Fahrt. Der Geist und die Anstiegs-PRs sind nur auf der ersten Etappe sinnvoll
+(spätere Runden kommen mit eigenen Zeitstempeln ins Fahrtenbuch, aber die PR-Suche lässt sie aus). Vor dem Start
+kannst du per Klick auf das Profil an jede Stelle der Route springen; während einer Fahrt geht das nicht. Das
+Programm hält den Rechner wach, während du fährst (Windows, Linux, macOS; nicht unter Android).
 
 Das Tempo kommt aus den gemessenen **Watt**, mit dem an Straßenmessungen validierten Modell von Martin (Schwerkraft, Rollen,
 Lagerreibung, Luftwiderstand mit Speichen, Trägheit), aus deinem Körpergewicht, dem Gewicht des Rades, der CdA und dem Crr;
@@ -148,6 +164,19 @@ Feld `sources` von `workouts.json`).
 - Während einer Fahrt hält der Trainer die Zielwatt im **ERG-Modus**; die Karte *Workout* und die Ansicht *Workout* des Profil-Panels
   zeigen den Block, die verbleibende Zeit, den nächsten Block und die **Coach-Nachricht** (im richtigen Moment des Workouts,
   für 12 Sekunden, nur dort, nicht als Pop-up). Pause/Beenden setzt auch hier den Trainer auf neutral.
+- **Intensität während der Fahrt.** Ist das Workout zu leicht oder zu schwer, stellst du es in Schritten von
+  ±5 %, **zwischen 50 und 150 %** ein — es skaliert die Ziele der verbleibenden Blöcke (Anzeige und Trainer
+  bekommen dieselbe Zahl). *Am Desktop* der **−/+**-Stepper im Fenster *Steuerung* oder, während ERG läuft, die
+  **Pfeiltasten `↑`/`↓`** (gedrückt halten: geht Schritt für Schritt weiter). *Am Telefon* ein **Wischen nach
+  oben** (schwerer) oder **nach unten** (leichter) im Tab Fahrt. Wenn der Tab scrollbar ist, beginne die Geste
+  an der Leistungsanzeige. Zu Beginn eines Workouts blinkt der
+  Bildschirmrand (oben rot, unten grün, jeweils mit einer kurzen Beschriftung) auf, damit du die Geste bemerkst.
+  Die Einstellung wird nicht gespeichert: Jede Fahrt startet bei 100 %, und die Karte zeigt an, wenn du nicht bei
+  100 % fährst.
+- **Am Ende des Workouts.** Nach dem letzten Block schaltet der Trainer zurück auf die Geländesimulation (das
+  Programm sendet das absichtlich zweimal, weil manche Firmware das ERG bei einem einzelnen Schreibvorgang nicht
+  freigibt). Hält der Trainer trotzdem am letzten Ziel fest, sendet die Schaltfläche **„ERG aus“** auf der Karte
+  *Workout* (neben „*Workout fertig*“) den Wechsel erneut.
 - **Dein eigenes Workout:** *Workout importieren…* liest eine MyWhoosh- oder Zwift-Datei (`.xml`, `.zwo`) und auch den JSON-Export von
   MyWhoosh; es landet im Ordner `workouts/`, und von da an lässt es sich wie die anderen auswählen.
 - Während einer Fahrt lässt sich das Workout nicht wechseln.
@@ -340,7 +369,10 @@ In einem Fenster schmaler als 1000 px erscheint eine Ansicht mit Tabs: unten **F
 große Reihe `Start`/`Pause`/`Beenden`. Im Tab **Fahrt** ist alles, was du während einer Fahrt brauchst, auf einem Bildschirm: der
 Block des Workouts (verbleibende Zeit, nächster Block, die Nachricht des Coaches), die Leistung gegen das Ziel (*im Ziel / niedrig /
 hoch*), der Zonenbalken, Trittfrequenz, Puls, Tempo, Steigung, darunter das Profil (seitliches Ziehen wechselt zwischen seinen
-Ansichten). Die Dialoge sind am Telefon bildschirmfüllend.
+Ansichten). Die Dialoge sind am Telefon bildschirmfüllend. **Während eines Workouts kannst du die Intensität
+im Tab Fahrt durch vertikales Wischen ändern.** Wenn der Tab scrollbar ist, beginne an der Leistungsanzeige.
+Zu Beginn des Workouts blinkt der Bildschirmrand auf, oben rot und unten grün. Nach dem Ende der Route zeigt oben eine
+„*2. Etappe*“-Anzeige, auf welcher Etappe der Fortsetzung du bist.
 
 <p align="center">
   <img src="../../screenshots/phone-ride.png" width="280" alt="Telefon-Layout, Tab Fahrt mit einem Workout">
@@ -395,7 +427,7 @@ sagt die App das und schreibt nichts. Unter Android wurde dieser Teil noch nicht
 | `X` | Karte und Street View tauschen |
 | `W` | Workout-Auswahl |
 | `←` / `→` | virtuelle Schaltung: leichter / schwerer |
-| `↑` / `↓` | Leistung des simulierten Fahrers ±10 W |
+| `↑` / `↓` | während eines Workouts die **Workout-Intensität** ±5 %; ohne Workout die Leistung des simulierten Fahrers ±10 W |
 | `F11` | Vollbild |
 | `Esc` | Fenster schließen, Vollbild verlassen |
 | `Strg+O` | eine GPX öffnen |
@@ -415,7 +447,8 @@ kann nicht über ein natives Fenster zeichnen); das Schließen des Panels schlie
 | Symptom | Was zu tun ist |
 |---|---|
 | Der Trainer reagiert nicht auf die Anstiege / das Workout | Im Fenster **Geräte** muss er in der Rolle *Trainer* verbunden sein (die Rolle Leistungsmesser liest nur). Sieh ins BLE-Log (`ble.log`, wie in §11 von [`BLUETOOTH.md`](../../BLUETOOTH.md) beschrieben); Zwift oder eine Telefon-App sollte den Trainer nicht belegen. |
-| Das Gerät wird nicht gefunden | Schalte Bluetooth ein; unter Windows sucht der Scan ungefiltert, es erscheinen also viele Geräte: Sieh dir die Rollen des Geräts an. Unter Android erteile die Bluetooth-Berechtigungen (*Scan starten* fragt erneut); unter macOS fragt das System beim ersten Scan. |
+| **Der Trainer hält nach dem Workout weiterhin das letzte Ziel** | Die Firmware hat das ERG nicht freigegeben. Drücke die Schaltfläche **„ERG aus“** auf der Karte *Workout*; wenn das nicht hilft, verlasse den ERG-Modus über die eigene Schaltfläche/das Display des Trainers oder starte ihn neu und schick uns das `ble.log`. |
+| Das Gerät wird nicht gefunden | Schalte Bluetooth ein; unter Windows sucht der Scan ungefiltert, es erscheinen also viele Geräte: Sieh dir die Rollen des Geräts an. Hat die Liste eine mit **„Verbunden“** markierte Zeile, hält eine andere App oder die automatische Wiederverbindung des Telefons das Gerät fest: Gib es dort frei oder starte den Trainer neu und starte einen neuen Scan. Unter Android erteile die Bluetooth-Berechtigungen (*Scan starten* fragt erneut); unter macOS fragt das System beim ersten Scan. |
 | Die Karte ist leer oder grau | Es gibt kein Netz und noch keine zwischengespeicherte Kachel: Route und Zahlen funktionieren trotzdem. |
 | Die Route lädt nicht | Die Fehlermeldung sagt warum (beschädigte Datei, nicht unterstützter Link, kein Netz für BRouter). Der Link muss den Teil `lonlats=` enthalten. |
 | Das Profil ist flach | Die Datei hat keine Höhendaten, und Open-Meteo war auch nicht verfügbar. Lade eine GPX mit Höhe oder einen bikerouter-Link. |

@@ -340,6 +340,7 @@ mod tests {
                 t: f64::from(second),
                 unix_s: f64::from(second),
                 dist: f64::from(second),
+                odo: f64::from(second),
                 lat: 47.0,
                 lon: 19.0,
                 ele: 0.0,

@@ -122,11 +122,14 @@ pub fn WorkoutProfile(
     // phone: a sideways swipe over the plot turns the page (see `swipe.rs`)
     let mut swipe_from = use_signal(|| None::<(f64, f64)>);
     let mut swiped = use_signal(|| false);
+    let live_plan = use_memo(move || {
+        snapshot.read().workout.as_ref().map(|p| (p.intensity_pct, p.step_index))
+    });
     let chart = use_memo(move || {
-        workout
-            .read()
-            .as_ref()
-            .map(|w| workout_chart::chart(w, *ftp_w.read()))
+        let (intensity, step) = live_plan.read().unwrap_or((100.0, 0));
+        workout.read().as_ref().map(|w| {
+            workout_chart::chart_at_intensity(w, *ftp_w.read(), intensity, step)
+        })
     });
 
     let chart_ref = chart.read();
@@ -244,7 +247,12 @@ pub fn WorkoutProfile(
     };
     let ftp_top = y_pct(100.0);
     let now_x = x_pct(elapsed);
-    let now_y = y_pct(current.map(|c| c.pct_at(elapsed)).unwrap_or(0.0));
+    let now_y = y_pct(
+        progress
+            .and_then(|p| p.ftp_pct)
+            .or_else(|| current.map(|c| c.pct_at(elapsed)))
+            .unwrap_or(0.0),
+    );
     // where the next block starts, for its countdown flag (only when it is in the window)
     let next_flag = next
         .filter(|n| n.start_s > t0 && n.start_s < t1 && !finished)

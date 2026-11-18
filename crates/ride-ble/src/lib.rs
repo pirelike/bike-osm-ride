@@ -24,6 +24,11 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[cfg(target_os = "android")]
 pub mod android_ble;
+#[cfg(not(target_os = "android"))]
+/// The non-Android half of the module: compiled from the same file, whose platform-specific
+/// items (the JVM plumbing) are `cfg`-gated inside it.
+#[path = "android_ble.rs"]
+pub mod android_ble;
 pub mod btle;
 pub mod control;
 pub mod csc;

@@ -180,6 +180,14 @@ unknown version is ignored. A route cache written before `timeline` existed stil
 not written. New persisted fields need a test that the old shape still parses; look at the tests at the bottom of
 `ride-model/src/lib.rs` for the pattern.
 
+**The recording's two distances (0.7.0).** `RecordPoint.dist` is the distance along the *current pass* of the
+route: since rides continue past the route end (a loop restarts, a point-to-point route is ridden backwards,
+`SIMULATION.md` §2) it wraps at every pass, so route-relative maths keep working. `RecordPoint.odo` is the
+cumulative distance since the ride started — monotone across the wraps, used by the TCX/FIT export
+(`DistanceMeters`) and the ride statistics (`analysis.rs`). Records written before `odo` existed never wrapped,
+so loading fixes them up to `odo == dist` (`rides::parse_record`); `RideSnapshot.pass` (0 for the first pass)
+is `#[serde(default)]` the same way.
+
 ## 3a. Backup and restore (`ride-route/src/backup.rs`)
 
 *Settings → Biztonsági mentés*: one `.zip` of what cannot be fetched again. **A whitelist**, not "the folder minus

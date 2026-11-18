@@ -13,8 +13,8 @@ use uuid::Uuid;
 use crate::error::BleError;
 use crate::scan::{SERVICE_CSC, SERVICE_CYCLING_POWER, SERVICE_FTMS, SERVICE_HEART_RATE};
 use crate::transport::{
-    sig_uuid, AdapterEvent, Advertisement, BleAdapter, CharProps, GattChar, GattPeripheral,
-    Notification,
+    sig_uuid, AdapterEvent, Advertisement, BleAdapter, CharProps, ConnectedDevice, GattChar,
+    GattPeripheral, Notification,
 };
 use crate::zwift;
 use ride_i18n::t;
@@ -526,6 +526,8 @@ struct AdapterState {
     scan_starts: u32,
     scan_stops: u32,
     start_error: Option<BleError>,
+    /// What `connected_devices()` answers: the OS's connected-device list.
+    connected: Vec<ConnectedDevice<FakePeripheral>>,
 }
 
 #[derive(Clone)]
@@ -543,8 +545,15 @@ impl FakeAdapter {
                 scan_starts: 0,
                 scan_stops: 0,
                 start_error: None,
+                connected: Vec::new(),
             })),
         }
+    }
+
+    /// Devices the fake OS reports as connected; `peripheral: None` marks one another
+    /// app owns (Android-style, listed for information only).
+    pub fn set_connected(&self, list: Vec<ConnectedDevice<FakePeripheral>>) {
+        self.st.lock().unwrap().connected = list;
     }
 
     /// Simulate an advertisement from `p` reaching the adapter.
@@ -603,6 +612,10 @@ impl BleAdapter for FakeAdapter {
 
     async fn peripherals(&self) -> Result<Vec<FakePeripheral>, BleError> {
         Ok(self.st.lock().unwrap().peripherals.clone())
+    }
+
+    async fn connected_devices(&self) -> Result<Vec<ConnectedDevice<FakePeripheral>>, BleError> {
+        Ok(self.st.lock().unwrap().connected.clone())
     }
 
     async fn advertisement(&self, p: &FakePeripheral) -> Result<Option<Advertisement>, BleError> {

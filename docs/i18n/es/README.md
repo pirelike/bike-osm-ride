@@ -73,11 +73,18 @@ El manual completo: [`docs/USER_GUIDE.md`](../../USER_GUIDE.md) (húngaro).
   **pulsómetro** (HR): un mismo dispositivo físico puede cumplir *varios roles* en una sola conexión;
   **Zwift Click/Play** como cambio virtual; **ciclista simulado**.
 - **Cambio virtual**: transmisión 2 × 12, 23 marchas, modifica la resistencia del rodillo.
+- **El final de la ruta no es el final del recorrido**: una ruta circular comienza otra vuelta, cualquier otra se
+  recorre hacia atrás por el mismo trazado — un entrenamiento más largo que la ruta se completa entero, y el
+  pedaleo libre solo termina al pulsar *Finalizar*.
 
 **Entrenamiento y análisis**
 - 93 entrenamientos integrados en 12 categorías, con etiquetas, gráfico de bloques coloreado por zonas y
   943 mensajes del entrenador con temporización; importación de entrenamientos de MyWhoosh y Zwift
   (`.zwo`, XML, JSON).
+- **Intensidad del entrenamiento en marcha**: en pasos de 5 % dentro de 50–150 % — el stepper −/+ de la ventana
+  *Controles* o las teclas ↑/↓ en el escritorio, un deslizamiento hacia arriba (más duro) o hacia abajo (más
+  suave) en la pestaña de pedaleo en el teléfono; los bordes de la pantalla parpadean al empezar un
+  entrenamiento para que el gesto se descubra.
 - Zonas de Coggan, NP, IF, TSS, kcal; zonas de pulso; grabación segundo a segundo.
 - **Fantasma** (la última salida, la mejor, o los tiempos propios del GPX) y **segmentos locales con PR**.
 - **Revisión y comparación de entrenamientos**: las salidas hechas en la misma ruta (hasta cuatro) lado a
@@ -185,7 +192,7 @@ código entra con estas dos mismas licencias, salvo que indiques otra cosa.
 
 Usamos a propósito solo código con licencias permisivas. El origen y la licencia se conservan en los
 archivos fuente y en [`NOTICE.md`](../../../NOTICE.md). La tabla completa, con cada proyecto y su licencia
-(ftms, cycling-ble, OsmolControl, iron-heart, las fuentes Barlow con SIL OFL 1.1, virtual-cog, RustCrypto
+(ftms, cycling-ble, OsmolControl, iron-heart, el `Peripheral.java` de droidplug (btleplug) parcheado al compilar, las fuentes Barlow con SIL OFL 1.1, virtual-cog, RustCrypto
 y las dependencias de Rust), está en el [`README.md`](../../../README.md#felhasznált-nyílt-forrású-kód)
 húngaro y en [`THIRD_PARTY_LICENSES.md`](../../../THIRD_PARTY_LICENSES.md).
 

@@ -74,6 +74,13 @@ fi
 echo "btleplug java: $javasrc"
 mkdir -p "$main/java"
 cp -R "$javasrc/." "$main/java/"
+# The stale-gatt fix (docs/BLUETOOTH.md §7): without it an idle link loss leaves the
+# BluetoothGatt open, and Android serves the next connect() as a background auto-connect
+# with no timeout — the phone ends up connected to a trainer that stopped advertising
+# while the app shows a failure. Applied with python3 (the icon step already needs it);
+# the script fails loudly when the droidplug version drifted and the anchors moved.
+python3 "$here/patch_droidplug.py" \
+  "$main/java/com/nonpolynomial/btleplug/android/impl/Peripheral.java"
 cp "$here/btleplug.pro" "$module/btleplug.pro"
 
 # same build type dx chose: `assembleRelease` only when `[bundle.android]` configures signing,

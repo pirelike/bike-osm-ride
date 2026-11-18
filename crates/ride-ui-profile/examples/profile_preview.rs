@@ -205,6 +205,7 @@ fn fake_history() -> Vec<RecordPoint> {
                 t,
                 unix_s: 1_700_000_000.0 + t,
                 dist: 8.9 * t,
+                odo: 8.9 * t,
                 lat: 47.5 + 0.018 * (t / 300.0 * std::f64::consts::TAU).sin(),
                 lon: 19.0 + 0.03 * (t / 300.0 * std::f64::consts::TAU).cos(),
                 ele: 118.0 + t * 1.4,

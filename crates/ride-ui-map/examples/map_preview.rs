@@ -211,6 +211,7 @@ fn fake_snapshot(route: &Route) -> RideSnapshot {
         next_climb_in: Some((18_000.0 - dist).max(0.0)),
         trainer_grade: -2.4,
         workout: None,
+        pass: 0,
         ghost: Some(ride_model::GhostLive {
             dist: (dist + 240.0).min(route.total_dist),
             pos: route.locate((dist + 240.0).min(route.total_dist)),

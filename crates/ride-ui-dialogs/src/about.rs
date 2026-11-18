@@ -15,7 +15,7 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const PROJECT_LICENSE: &str = "MIT OR Apache-2.0";
 
 /// Third-party code we build on: `(source, licence, what we use it for)`.
-pub fn third_party_code() -> [(&'static str, &'static str, &'static str); 8] {
+pub fn third_party_code() -> [(&'static str, &'static str, &'static str); 9] {
     [
         (
             "ftms",
@@ -36,6 +36,11 @@ pub fn third_party_code() -> [(&'static str, &'static str, &'static str); 8] {
             "iron-heart",
             "MIT",
             t("ui_dialogs.about.pulzusmero_kereses_es_ujracsatlakozas_mintaja"),
+        ),
+        (
+            "droidplug Peripheral.java (btleplug)",
+            "MIT OR Apache-2.0",
+            t("ui_dialogs.about.android_ble_backend_java_fele_build_kozben_javitva"),
         ),
         (
             "virtual-cog",
@@ -230,7 +235,13 @@ mod tests {
             .iter()
             .map(|(name, _, _)| *name)
             .collect();
-        for required in ["ftms", "cycling-ble", "OsmolControl", "iron-heart"] {
+        for required in [
+            "ftms",
+            "cycling-ble",
+            "OsmolControl",
+            "iron-heart",
+            "droidplug Peripheral.java (btleplug)",
+        ] {
             assert!(names.contains(&required), "missing {required} in {names:?}");
         }
         // every row names a licence and a purpose

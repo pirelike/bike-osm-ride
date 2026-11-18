@@ -411,6 +411,18 @@ impl StepTarget {
         value.is_finite().then(|| value.clamp(0.0, 2000.0))
     }
 
+    /// The live target with the rider's intensity applied, within the trainer's watt range.
+    pub fn watts_at_intensity(
+        &self,
+        elapsed_s: f64,
+        duration_s: f64,
+        ftp_w: f64,
+        intensity_pct: f64,
+    ) -> Option<f64> {
+        self.watts_at(elapsed_s, duration_s, ftp_w)
+            .map(|w| (w * intensity_pct / 100.0).clamp(0.0, 2000.0))
+    }
+
     /// The target as a percentage of FTP, for the read-out.
     pub fn pct_at(&self, elapsed_s: f64, duration_s: f64, ftp_w: f64) -> Option<f64> {
         let w = self.watts_at(elapsed_s, duration_s, ftp_w)?;
@@ -550,6 +562,11 @@ impl Workout {
     }
 }
 
+/// The live workout intensity stays in this band; the clamps keep a slip of the finger
+/// from turning a recovery ride into a sprint.
+pub const MIN_INTENSITY_PCT: f64 = 50.0;
+pub const MAX_INTENSITY_PCT: f64 = 150.0;
+
 /// Live state of the running workout (part of [`RideSnapshot`](crate::RideSnapshot)).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkoutProgress {
@@ -575,9 +592,17 @@ pub struct WorkoutProgress {
     pub finished: bool,
     pub next_step_name: Option<String>,
     pub next_target_w: Option<f64>,
+    /// The live intensity the rider set (percent of the steps' own targets, 100 = as
+    /// written). The targets above are already scaled by it.
+    #[serde(default = "default_intensity")]
+    pub intensity_pct: f64,
     /// The coaching message of the moment (for a few seconds after it is due).
     #[serde(default)]
     pub message: Option<CoachMessage>,
+}
+
+fn default_intensity() -> f64 {
+    100.0
 }
 
 /// Entries stay raw JSON until each is parsed on its own: one malformed workout must cost that

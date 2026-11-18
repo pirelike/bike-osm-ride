@@ -669,6 +669,11 @@
   .profile-pages__dots { flex: none; }
   .profile-pages__dot { width: 44px; height: 44px; }
 }
+@media (max-width: 370px) and (orientation: portrait) {
+  .profile-head.profile-head--pages:has(.profile-pages__dot:nth-child(4)) { flex-wrap: wrap; row-gap: 0; }
+  .profile-head--pages:has(.profile-pages__dot:nth-child(4)) .profile-readout { flex-basis: 100%; }
+  .profile-pages:has(.profile-pages__dot:nth-child(4)) { flex: 1 0 100%; max-width: none; justify-content: space-between; }
+}
 @container (max-width: 500px) {
   .profile-pages__hint { display: none; }
 }

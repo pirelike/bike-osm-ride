@@ -70,6 +70,15 @@ Befejezés, gear − / +, or just "Fokozat N" with a Zwift shifter).
 - **Tekerés** is everything needed mid-effort on one screen (`ride_ui_hud::RideDash`, "head unit"): the workout
   block with time left and the next block and the coach message, the power against the target ("célban" /
   "kevés" / "sok"), the zone bar, four cells (cadence, heart rate, speed, grade), and the profile below.
+- **The ride tab supports a vertical intensity swipe during a workout** (0.7.0): up is harder, down is
+  easier, in ±5 % steps. The swipe must travel at least 48 px vertically, with a 1.5:1 ratio over
+  horizontal motion. When the stage needs to scroll, the power readout keeps the gesture and the
+  rest of the stage scrolls normally. At the start of a workout ride the screen edges flash once for 2.8 s (`.erg-hint`: top red
+  "Húzd fel: nehezebb", bottom green "Húzd le: könnyebb", the labels border-matched), driven by
+  `AppState::intensity_hint` and cleared by the controller; `prefers-reduced-motion` keeps it as a static frame.
+  The desktop gets the same control as a −/+ stepper in the *Vezérlés* window (`RideControls`, `--erg` styles)
+  and as the ↑/↓ keys; the current value rides along in `WorkoutProgress.intensity_pct`, and both cards show
+  an intensity tag when it is not 100 %.
 - **Térkép** is a slim head unit, the map and the elevation pages. **Grafikonok** the live charts, **Adatok** one
   content-height column.
 - The profile has swipe pages (`ride_ui_profile::swipe`): workout (ahead / full) and elevation (ahead / full), with
@@ -118,6 +127,13 @@ The settings sheet has a *Biztonsági mentés* group (`BackupGroup`): *Mentés f
 restore asks first (an inline two-step, like the review page's delete, because the settings of the backup replace
 the current ones); both are `#[props(default)]` `EventHandler<()>`s the shell wires to `Controller::backup_save` /
 `backup_restore` (`controller/backup.rs`). They sit in the group, not in the footer: the footer carries no actions.
+
+The devices dialog (0.7.0): opening it starts the scan and closing it stops it, and a keeper keeps the scan alive
+while it is open (a connect attempt suspends it; the manual stop wins). A device the OS reports as connected — a
+trainer holding a link does not advertise — is listed with a "Csatlakoztatva" tag; when the platform cannot hand
+over its GATT handle (Android: another app owns the link) the row explains that instead of a connect button
+(`.dlg-found__held`). A named device with no recognised service always offers "Csatlakozás trainerként"
+(`FoundRow`), verified by the service discovery after the connect.
 
 ## 5a. The review page (`ride-ui-review`, `ReviewLayer` in `shell.rs`)
 

@@ -23,7 +23,7 @@ use crate::hexlog::HexLog;
 use crate::hub::{self, sim_name, SIM_ID};
 use crate::link::HubConfig;
 use crate::merge::STALE_AFTER;
-use crate::transport::short_id;
+use crate::transport::{short_id, Advertisement, ConnectedDevice};
 use crate::zwift;
 
 const TRAINER_ID: &str = "t1";
@@ -71,6 +71,14 @@ impl Harness {
             .await
             .expect("timed out waiting for a hub event")
             .expect("the hub closed its event channel")
+    }
+
+    async fn wait_scanning(&mut self, running: bool) {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while self.next_event().await != SensorEvent::Scanning(running) {}
+        })
+        .await
+        .expect("timed out waiting for the scan status");
     }
 
     /// Wait for a `State` event of `kind` with exactly `want`.
@@ -339,12 +347,18 @@ async fn a_scan_that_cannot_start_is_reported() {
     adapter.fail_scan(Some(BleError::Unavailable(
         "nincs Bluetooth-adapter".into(),
     )));
-    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let mut hub = Harness::spawn(adapter.clone(), HubConfig::fast());
     let _ = hub.next_event().await; // Discovered
 
     hub.send(SensorCommand::StartScan);
     let notice = hub.wait_notice("A keresés nem indítható").await;
     assert!(notice.contains("Bluetooth"), "{notice}");
+    hub.wait_scanning(false).await;
+
+    adapter.fail_scan(None);
+    hub.send(SensorCommand::StartScan);
+    hub.wait_scanning(true).await;
+    assert!(adapter.is_scanning());
 }
 
 #[tokio::test]
@@ -356,6 +370,45 @@ async fn a_scan_that_hears_nothing_says_so() {
     hub.send(SensorCommand::StartScan);
     let notice = hub.wait_notice("nem lát egyetlen Bluetooth-eszközt").await;
     assert!(notice.contains("engedély"), "{notice}");
+}
+
+#[tokio::test]
+async fn a_device_the_os_reports_connected_is_listed_without_advertising() {
+    // A trainer that holds a GATT link (another app owns it) never shows up in an
+    // advertisement; the scan still has to list it so the rider knows what holds it.
+    let adapter = FakeAdapter::new(Vec::new());
+    adapter.set_connected(vec![ConnectedDevice {
+        id: "ve200".to_string(),
+        adv: Advertisement {
+            name: Some("VE200".to_string()),
+            ..Default::default()
+        },
+        peripheral: None,
+    }]);
+    let mut hub = Harness::spawn(adapter.clone(), HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered (the simulated rider)
+
+    hub.send(SensorCommand::StartScan);
+    let list = hub
+        .wait_discovered(|list| list.iter().any(|d| d.id == "ve200"))
+        .await;
+    let ve = list
+        .iter()
+        .find(|d| d.id == "ve200")
+        .expect("the connected trainer is listed");
+    assert_eq!(ve.name, "VE200");
+    assert!(ve.kinds.is_empty(), "nothing advertises its services");
+    assert!(ve.connected);
+    assert!(!ve.connectable, "the platform refuses a second client");
+    assert_eq!(list[0].id, SIM_ID, "the simulated rider stays first");
+
+    let advertised = FakePeripheral::trainer("ve200", "VE200");
+    adapter.set_connected(Vec::new());
+    adapter.announce(&advertised);
+    let _ = hub
+        .wait_discovered(|list| list.iter().any(|d| d.id == "ve200" && !d.connected && d.connectable))
+        .await;
+    assert!(adapter.is_scanning(), "the existing scan updates the row");
 }
 
 #[tokio::test]
@@ -600,6 +653,50 @@ async fn simulation_keepalive_repeats_the_target() {
     // The production contract is at most every 5 s.
     assert!(ControlConfig::default().keepalive <= Duration::from_secs(5));
     assert!(HubConfig::default().control.keepalive <= Duration::from_secs(5));
+}
+
+#[tokio::test]
+async fn relax_from_erg_leads_with_the_neutral_grade_and_repeats_the_live_one() {
+    // The trainer holds an ERG target (a workout), then the app asks for freeride: the
+    // handshake's neutral grade is the *first* simulation write, the live grade follows and
+    // repeats inside the window.
+    let trainer = FakePeripheral::trainer(TRAINER_ID, "Think X2 Max");
+    let adapter = FakeAdapter::new(vec![trainer.clone()]);
+    let mut hub = Harness::spawn(adapter, HubConfig::fast());
+    let _ = hub.next_event().await; // Discovered
+
+    hub.send(SensorCommand::Connect {
+        id: TRAINER_ID.to_string(),
+        kind: DeviceKind::Trainer,
+    });
+    hub.send(SensorCommand::SetTargetPower(150.0));
+    hub.send(SensorCommand::TrainerStart);
+    hub.wait_until("the ERG target", || !writes_of(&trainer, 0x05).is_empty())
+        .await;
+
+    hub.send(SensorCommand::SetSimulation(sim(5.0)));
+    hub.send(SensorCommand::RelaxFromErg);
+    hub.wait_until("the first simulation write", || {
+        !writes_of(&trainer, 0x11).is_empty()
+    })
+    .await;
+    assert_eq!(
+        grade_of(&writes_of(&trainer, 0x11)[0]),
+        0,
+        "the neutral grade leads the handshake"
+    );
+    hub.wait_until("the live grade", || {
+        writes_of(&trainer, 0x11).iter().any(|b| grade_of(b) == 500)
+    })
+    .await;
+    hub.wait_until("the insisted repeat", || {
+        writes_of(&trainer, 0x11)
+            .iter()
+            .filter(|b| grade_of(b) == 500)
+            .count()
+            >= 2
+    })
+    .await;
 }
 
 #[tokio::test]

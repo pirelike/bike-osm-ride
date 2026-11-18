@@ -384,6 +384,10 @@
   color: var(--text);
 }
 .hud-workout--done .hud-workout__w { color: var(--ok); }
+/* the "ERG off" re-run of the freeride handshake sits under the finished target */
+.hud-workout__erg { margin-top: var(--space-2); align-self: flex-start; }
+/* the live intensity the rider set, a small tag in the card head */
+.hud-workout__ergtag { flex: none; font-variant-numeric: tabular-nums; color: var(--accent); }
 
 /* ───────────────────────────── transport bar ───────────────────────────── */
 
@@ -405,6 +409,22 @@
 .hud-controls__btn--confirm { background: var(--crit); border-color: var(--crit); color: var(--bg-1); }
 .hud-controls__btn--confirm:hover { background: var(--crit); border-color: var(--crit); color: var(--bg-1); }
 
+/* the live workout intensity next to the transport buttons: harder / easier in 5 % steps
+   (the phone's whole ride tab is a vertical swipe for the same, the arrow keys on the desktop) */
+.hud-erg {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+.hud-erg__btn { --btn-h: 24px; width: 26px; padding: 0; justify-content: center; }
+.hud-erg__pct {
+  min-width: 3ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.hud-erg__unit { font-size: var(--t-11); color: var(--text-dim); margin-left: 1px; }
+
 /* the panels of the shell are freely resizable: the data grid follows the width of its own panel */
 .hud-metrics { container-type: inline-size; }
 .hud-grid { --cols: 2; }
@@ -422,6 +442,15 @@
   min-width: 0;
   background: var(--bg-1);
   color: var(--text);
+}
+
+/* which pass of the route the ride is on, once it continued past the end */
+.hud-dash__pass {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  font: 600 var(--t-13)/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 
 .hud-dash__wo {
@@ -450,6 +479,10 @@
   font: 600 var(--t-13)/1.2 var(--font-ui);
 }
 .hud-dash__wo--done .hud-dash__step { color: var(--ok); }
+/* the finished workout block is a row: the name and the "ERG off" re-run */
+.hud-dash__wo--done { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+/* the live intensity the rider set, next to the step name */
+.hud-dash__ergtag { flex: none; align-self: center; font-variant-numeric: tabular-nums; color: var(--accent); }
 
 /* the coach's message of the moment (MyWhoosh / Zwift text event, or the note of the step) */
 .hud-dash__coach {
@@ -537,4 +570,7 @@
 .hud-dash { container-type: inline-size; }
 @container (max-width: 560px) {
   html[data-text="large"] .hud-dash__cells { --cols: 2; }
+}
+@container (max-width: 340px) {
+  .hud-dash__cells { --cols: 2; }
 }

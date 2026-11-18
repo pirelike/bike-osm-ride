@@ -418,6 +418,7 @@ mod tests {
                 t,
                 unix_s: 1_700_000_000.0 + t,
                 dist: t * speed,
+                odo: t * speed,
                 lat: 47.5,
                 lon: 19.0 + t * speed / 75_000.0,
                 ele: 100.0 + t * speed * 0.04,

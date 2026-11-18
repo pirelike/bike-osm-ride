@@ -528,6 +528,7 @@ mod tests {
             t,
             unix_s: 1_700_000_000.0 + t,
             dist: t * 8.0,
+            odo: t * 8.0,
             lat: 47.5,
             lon: 19.0,
             ele: 100.0,

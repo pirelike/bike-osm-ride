@@ -19,7 +19,7 @@ use std::io;
 use std::path::PathBuf;
 
 use ride_model::{RideMeta, RideRecord, RideSummary, Route, RouteRides};
-use ride_sim::{power_curve, segments};
+use ride_sim::{ghost::first_pass_points, power_curve, segments};
 
 use crate::store::{self, Store};
 use ride_i18n::t;
@@ -54,6 +54,29 @@ fn stem_of(started_unix_s: f64) -> Option<String> {
 /// backup all ask this one question.
 pub(crate) fn usable_record(record: &RideRecord) -> bool {
     record.version == ride_model::RIDE_RECORD_VERSION && !record.points.is_empty()
+}
+
+/// Deserialises a stored ride, repairing what older records lack: `odo` was added with the
+/// route continuations, and a record written before it never wrapped, so `odo == dist` is
+/// the value its charts and exports always meant.
+pub(crate) fn parse_record(bytes: &[u8]) -> Option<RideRecord> {
+    let mut record: RideRecord = serde_json::from_slice(bytes).ok()?;
+    let mut previous_odo = 0.0_f64;
+    let mut previous_offset = 0.0_f64;
+    let mut correction = 0.0_f64;
+    for p in &mut record.points {
+        let raw = p.odo.max(p.dist);
+        let offset = raw - p.dist;
+        // Early multi-pass recordings lost the initial seek offset at the first wrap.
+        // The previous sample sits at the finish line; the next pass starts there.
+        if offset > previous_offset + 1e-6 {
+            correction = correction.max(previous_odo - offset);
+        }
+        p.odo = raw + correction;
+        previous_odo = p.odo;
+        previous_offset = offset;
+    }
+    Some(record)
 }
 
 pub(crate) fn valid_stem(stem: &str) -> bool {
@@ -152,9 +175,20 @@ impl Store {
         list.retain(|meta| {
             valid_stem(&meta.stem) && dir.join(format!("{}.json", meta.stem)).is_file()
         });
+        let mut migrated = false;
+        for meta in list.iter_mut().filter(|m| m.first_pass_elapsed_s.is_none()) {
+            let Some(record) = store::read_limited(&dir.join(format!("{}.json", meta.stem)))
+                .and_then(|bytes| parse_record(&bytes))
+                .filter(usable_record)
+            else {
+                continue;
+            };
+            fill_first_pass(meta, &record);
+            migrated = true;
+        }
         // A repaired index (records adopted after a damaged or failed index write) is written
         // back once, so the records are not parsed again on every listing.
-        if self.index_needs_repair(&dir) {
+        if migrated || self.index_needs_repair(&dir) {
             if let Ok(json) = serde_json::to_vec_pretty(&list) {
                 let _ = store::write_atomic(&dir.join(INDEX_FILE), &json);
             }
@@ -171,7 +205,7 @@ impl Store {
         }
         let _guard = store::lock();
         let bytes = store::read_limited(&dir.join(format!("{stem}.json")))?;
-        let record: RideRecord = serde_json::from_slice(&bytes).ok()?;
+        let record: RideRecord = parse_record(&bytes)?;
         usable_record(&record).then_some(record)
     }
 
@@ -276,7 +310,7 @@ impl Store {
         let Some(bytes) = store::read_limited(&file) else {
             return Ok(false);
         };
-        let Ok(mut record) = serde_json::from_slice::<RideRecord>(&bytes) else {
+        let Some(mut record) = parse_record(&bytes) else {
             return Ok(false);
         };
         if !usable_record(&record) {
@@ -378,7 +412,7 @@ impl Store {
             .and_then(|id| self.load_recent_unlocked(id));
         for stem in orphans {
             let Some(record) = store::read_limited(&dir.join(format!("{stem}.json")))
-                .and_then(|bytes| serde_json::from_slice::<RideRecord>(&bytes).ok())
+                .and_then(|bytes| parse_record(&bytes))
             else {
                 continue;
             };
@@ -424,15 +458,6 @@ pub(crate) fn meta_of(
 ) -> Option<RideMeta> {
     let summary = usable_summary(&record.summary)?;
     let start_dist = record.points.first().map_or(0.0, |p| p.dist).max(0.0);
-    // `summary.dist` is the distance ridden; where the ride ended on the route is the last
-    // recorded point (the engine always records the finish line).
-    let end_dist = record
-        .points
-        .last()
-        .map(|p| p.dist)
-        .filter(|d| d.is_finite())
-        .unwrap_or(start_dist + summary.dist)
-        .max(0.0);
     let total = route.map_or(0.0, |r| r.total_dist.max(0.0));
     let mut meta = RideMeta {
         stem,
@@ -440,8 +465,7 @@ pub(crate) fn meta_of(
         started_unix_s: summary.started_unix_s.round(),
         elapsed_s: summary.elapsed_s,
         start_dist,
-        end_dist,
-        complete: total > 0.0 && end_dist + COMPLETE_MARGIN_M >= total,
+        end_dist: start_dist + summary.dist,
         simulated: record.simulated,
         segments: route.map_or_else(Vec::new, |r| segments::segment_times(r, &record.points)),
         source: record.source,
@@ -451,8 +475,26 @@ pub(crate) fn meta_of(
         route_name: record.route_name.clone(),
         ..RideMeta::default()
     };
+    fill_first_pass(&mut meta, record);
+    meta.complete |= total > 0.0 && meta.end_dist + COMPLETE_MARGIN_M >= total;
     power_curve::fill_meta(&mut meta, record);
     Some(meta)
+}
+
+fn fill_first_pass(meta: &mut RideMeta, record: &RideRecord) {
+    let first = first_pass_points(&record.points);
+    let wrapped = first.len() < record.points.len();
+    if let Some(point) = first.last() {
+        if point.dist.is_finite() {
+            meta.end_dist = point.dist.max(0.0);
+        }
+    }
+    meta.first_pass_elapsed_s = Some(if wrapped {
+        first.last().map_or(meta.elapsed_s, |point| point.t)
+    } else {
+        meta.elapsed_s
+    });
+    meta.complete |= wrapped;
 }
 
 /// Record files of the folder that `index` does not list.
@@ -615,6 +657,7 @@ fn point(t: f64, dist: f64) -> ride_model::RecordPoint {
         t,
         unix_s: 1_700_000_000.0 + t,
         dist,
+        odo: dist,
         lat: 47.5,
         lon: 19.0,
         ele: 100.0,
@@ -1225,5 +1268,73 @@ mod tests {
         store.save_ride(&ride, &other).unwrap();
         assert_eq!(store.list_rides("route-2").len(), 1);
         assert!(store.list_rides("route-1").is_empty());
+    }
+
+    /// Records written before the route continuations carry no `odo`; they never wrapped,
+    /// so loading them gives `odo == dist` and the exports keep meaning what they meant.
+    #[test]
+    fn a_record_without_odo_loads_with_odo_equal_to_dist() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let ride = record(1_700_000_000.0, 200.0, 2_000.0, false);
+        let mut legacy = serde_json::to_value(&ride).unwrap();
+        // strip the field the way an old writer would have
+        for point in legacy["points"].as_array_mut().unwrap() {
+            point
+                .as_object_mut()
+                .unwrap()
+                .remove("odo")
+                .expect("the fixture carries odo");
+        }
+        std::fs::create_dir_all(tmp.path().join("rides/route-1")).unwrap();
+        std::fs::write(
+            tmp.path().join("rides/route-1/1700000000.json"),
+            serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
+        let back = store
+            .load_ride("route-1", "1700000000")
+            .expect("the old record still loads");
+        assert!(back.points.iter().all(|p| (p.odo - p.dist).abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_multi_pass_ride_is_ranked_by_its_first_arrival_in_new_and_existing_indexes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store::at(tmp.path());
+        let route = route();
+        let mut ride = record(1_700_000_000.0, 300.0, 2_500.0, false);
+        ride.points = vec![point(0.0, 0.0), point(180.0, 2_000.0), point(300.0, 500.0)];
+        ride.points[2].odo = 2_500.0;
+        let saved = store.save_ride(&ride, &route).unwrap().unwrap();
+        assert!(saved.complete);
+        assert_eq!(saved.first_pass_elapsed_s, Some(180.0));
+        assert_eq!(saved.end_dist, 2_000.0);
+        assert_eq!(saved.elapsed_s, 300.0);
+
+        let index_path = tmp.path().join("rides/route-1/index.json");
+        let mut old = saved.clone();
+        old.first_pass_elapsed_s = None;
+        old.complete = false;
+        old.end_dist = 500.0;
+        std::fs::write(&index_path, serde_json::to_vec(&[old]).unwrap()).unwrap();
+        let mut rides = store.list_rides(&route.id);
+        assert_eq!(rides[0], saved);
+        let slower = record(1_700_000_001.0, 240.0, 2_000.0, false);
+        rides.push(store.save_ride(&slower, &route).unwrap().unwrap());
+        let best = segments::choose_ghost(&rides, ride_model::GhostMode::Best).unwrap();
+        assert_eq!(best.stem, saved.stem);
+        let ghost = ride_sim::ghost::Track::from_points(&ride.points).unwrap();
+        assert_eq!(ghost.end_time(), 180.0);
+    }
+
+    #[test]
+    fn an_early_multi_pass_record_recovers_the_lost_seek_offset() {
+        let mut ride = record(1_700_000_000.0, 300.0, 1_600.0, false);
+        ride.points = vec![point(0.0, 500.0), point(250.0, 2_000.0), point(300.0, 100.0)];
+        ride.points[2].odo = 1_600.0;
+        let repaired = parse_record(&serde_json::to_vec(&ride).unwrap()).unwrap();
+        assert_eq!(repaired.points[2].odo, 2_100.0);
+        assert_eq!(first_pass_points(&repaired.points).len(), 2);
     }
 }

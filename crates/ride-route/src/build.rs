@@ -24,7 +24,7 @@ use ride_i18n::{t, tf};
 use ride_model::{Bounds, Route, RoutePoint, RouteSegment, RouteSource, Waypoint};
 
 use crate::geo;
-use crate::gpx::{GpxData, RawPoint};
+use crate::gpx::{GpxData, PointOrigin, RawPoint, RawWaypoint};
 use crate::{climbs, err, Result};
 
 /// Target spacing of the processed route, metres.
@@ -630,6 +630,85 @@ pub fn build_route(data: &GpxData, name_hint: &str, source: RouteSource) -> Resu
     })
 }
 
+/// A route whose end sits this close to its start counts as a loop: reaching the finish
+/// means the rider can keep going from the start again.
+pub const LOOP_END_M: f64 = 50.0;
+
+/// Whether the route closes into itself (its last point is within [`LOOP_END_M`] of its
+/// first). Such a route continues with a new lap when the rider reaches the end; any other
+/// continues backwards.
+pub fn is_loop(route: &Route) -> bool {
+    route
+        .points
+        .first()
+        .zip(route.points.last())
+        .is_some_and(|(a, b)| geo::haversine_m(a.lat, a.lon, b.lat, b.lon) <= LOOP_END_M)
+}
+
+/// The route turned around: a ride that reached the far end and keeps going back the same
+/// way. The pipeline runs again on the mirrored geometry (grades, climbs, ascent/descent
+/// all belong to the other direction), the waypoints travel with it (their matching to the
+/// geometry is direction-free), and the named sections are mirrored by distance. The id
+/// and the name stay the original's: the ride log keys by them, and this is the same ride
+/// on the same track, not a new route.
+pub fn build_reversed(route: &Route) -> Result<Route> {
+    // The resampled points go back through the whole pipeline. Their spacing (~10 m) is
+    // what `clean` and `resample` work with anyway, so nothing is lost; the timeline is
+    // dropped on purpose (a ghost of the file's own timestamps is not reversible).
+    let points: Vec<RawPoint> = route
+        .points
+        .iter()
+        .rev()
+        .map(|p| RawPoint {
+            lat: p.lat,
+            lon: p.lon,
+            ele: (route.has_elevation && p.ele.is_finite()).then_some(p.ele),
+            time: None,
+        })
+        .collect();
+    let data = GpxData {
+        name: Some(route.name.clone()),
+        points,
+        origin: Some(PointOrigin::Track),
+        segments: 1,
+        // The physical waypoints re-attach to the mirrored geometry on their own.
+        waypoints: route
+            .waypoints
+            .iter()
+            .map(|w| RawWaypoint {
+                name: w.name.clone(),
+                lat: w.lat,
+                lon: w.lon,
+                ele: w.ele,
+            })
+            .collect(),
+        segment_tracks: Vec::new(),
+        skipped_points: 0,
+        brouter: None,
+    };
+    let source = route.source;
+    let mut out = build_route(&data, &route.name, source)?;
+    // Named sections mirror by distance (their geometry is not kept on the route).
+    let total = out.total_dist.max(0.0);
+    out.segments = route
+        .segments
+        .iter()
+        .filter_map(|s| {
+            let end = total - s.start_dist;
+            let start = (total - s.end_dist).max(0.0);
+            (end > start).then_some(RouteSegment {
+                name: s.name.clone(),
+                start_dist: start,
+                end_dist: end,
+            })
+        })
+        .collect();
+    // The same track ridden the other way is the same route to the ride log.
+    out.id = route.id.clone();
+    out.name = route.name.clone();
+    Ok(out)
+}
+
 #[cfg(test)]
 pub(crate) mod testutil {
     use super::*;
@@ -1128,5 +1207,79 @@ mod tests {
         let route = build_route(&gpx_data(rewound), "t", RouteSource::GpxFile).unwrap();
         assert_eq!(route.timeline.len(), route.points.len());
         assert!(route.timeline.windows(2).all(|pair| pair[0] <= pair[1]));
+    }
+
+    #[test]
+    fn is_loop_detects_a_closed_track() {
+        // a straight line does not close
+        let straight = route_from_segments(&[(2_000.0, 1.0)], 100.0);
+        assert!(!is_loop(&straight));
+        // a square closes: 20 points around a ~55 m loop
+        let mut pts = Vec::new();
+        for i in 0..20 {
+            let a = i as f64 * 0.25 * std::f64::consts::TAU;
+            pts.push(rp(
+                47.5 + a.cos() * 0.00025,
+                19.0 + a.sin() * 0.00025,
+                Some(100.0),
+            ));
+        }
+        pts.push(rp(47.5 + 0.00025, 19.0, Some(100.0)));
+        let closed = build_route(&gpx_data(pts), "kör", RouteSource::GpxFile).unwrap();
+        assert!(is_loop(&closed), "the track closes into itself");
+    }
+
+    /// The route turned around for a ride that continues past the far end: the pipeline
+    /// runs again on the mirrored geometry (what went down now goes up), the waypoints
+    /// travel with it and the identity stays the ride's own.
+    #[test]
+    fn build_reversed_turns_the_route_around() {
+        // a descent: mirrored, it becomes a climb
+        let route = route_from_segments(&[(2_000.0, -5.0), (2_000.0, -1.0)], 180.0);
+        let mut route = route;
+        assert!(route.climbs.is_empty(), "the fixture only descends");
+        route.waypoints = vec![ride_model::Waypoint {
+            name: "Kilátó".into(),
+            lat: route.points.last().unwrap().lat,
+            lon: route.points.last().unwrap().lon,
+            ele: None,
+            dist_on_route: route.total_dist,
+        }];
+        route.segments = vec![ride_model::RouteSegment {
+            name: "Sprint".into(),
+            start_dist: 500.0,
+            end_dist: 1_500.0,
+        }];
+        let back = build_reversed(&route).unwrap();
+
+        assert_eq!(back.id, route.id, "the ride log identity stays");
+        assert_eq!(back.name, route.name);
+        assert!(
+            (back.total_dist - route.total_dist).abs() < 5.0,
+            "the mirrored geometry has the same length: {}",
+            back.total_dist
+        );
+        assert!(
+            (back.ascent - route.descent).abs() < 15.0,
+            "up becomes down"
+        );
+        assert!((back.descent - route.ascent).abs() < 15.0, "and down up");
+        // the start of the reversed route is the old finish
+        let first = back.points.first().unwrap();
+        let old_last = route.points.last().unwrap();
+        assert!((first.lat - old_last.lat).abs() < 1e-6);
+        assert!((first.lon - old_last.lon).abs() < 1e-6);
+        // the waypoint followed the geometry
+        assert_eq!(back.waypoints.len(), 1);
+        assert_eq!(back.waypoints[0].name, "Kilátó");
+        // the section is mirrored by distance
+        assert_eq!(back.segments.len(), 1);
+        assert!(
+            (back.segments[0].end_dist - (back.total_dist - route.segments[0].start_dist)).abs()
+                < 1.0
+        );
+        // the mirrored descent is a climb now, detected from the mirrored profile
+        assert_eq!(back.climbs.len(), 1, "the 5 % descent became a 5 % climb");
+        assert!(back.climbs[0].gain > 80.0, "gain: {}", back.climbs[0].gain);
     }
 }

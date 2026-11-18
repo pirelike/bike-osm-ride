@@ -31,6 +31,8 @@ typealias BuildConfig = hu.borbelyhuba.bikeosmride.BuildConfig
  *    run on a worker thread, the files can be tens of megabytes;
  *  * the runtime Bluetooth permissions (Android 12+ needs `BLUETOOTH_SCAN`/`_CONNECT`, older
  *    versions `ACCESS_FINE_LOCATION` for a scan). Declaring them in the manifest is not enough;
+ *  * the list of devices the phone is currently GATT-connected to (`connectedBleDevices`): a
+ *    trainer holding a link does not advertise, so the scan alone can never show it;
  *  * the keep-screen-on flag while a ride runs.
  *
  * All of it is driven from Rust through JNI (`ride-app/src/android_picker.rs`). The pickers and the
@@ -158,6 +160,29 @@ class MainActivity : WryActivity() {
             requestPermissions(blePermissions(), REQ_BLE)
         } catch (e: Exception) {
             // Nothing to ask (or the system refuses): the hub reports what it can do.
+        }
+    }
+
+    /**
+     * The BLE devices the phone is currently GATT-connected to, one `"AA:BB:CC:DD:EE:FF|Name"`
+     * line each (empty name allowed), "" when none. A device on a live link usually does not
+     * advertise, so the scan alone cannot show it — the devices dialog lists these rows so
+     * the rider knows what holds the trainer. Needs `BLUETOOTH_CONNECT` on Android 12+;
+     * a missing permission (or a disappearing Bluetooth service) answers "" instead of
+     * throwing, because this is a diagnostic lookup that must never break the scan.
+     */
+    fun connectedBleDevices(): String {
+        return try {
+            val manager = getSystemService(android.bluetooth.BluetoothManager::class.java)
+                ?: return ""
+            val out = StringBuilder()
+            for (device in manager.getConnectedDevices(android.bluetooth.BluetoothProfile.GATT)) {
+                val name = try { device.name ?: "" } catch (e: SecurityException) { "" }
+                out.append(device.address).append('|').append(name).append('\n')
+            }
+            out.toString()
+        } catch (e: Exception) {
+            ""
         }
     }
 

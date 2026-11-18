@@ -638,6 +638,7 @@ mod tests {
                 t: f64::from(t),
                 unix_s: started + f64::from(t),
                 dist: f64::from(t) * 6.0,
+                odo: f64::from(t) * 6.0,
                 lat: 47.5,
                 lon: 19.0,
                 ele: 100.0,

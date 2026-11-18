@@ -198,7 +198,8 @@ fn lap_stats(points: &[RecordPoint]) -> Option<LapStats> {
     let first = points.first()?;
     let last = points.last()?;
     let elapsed = (last.t - first.t).max(0.0);
-    let dist = (last.dist - first.dist).max(0.0);
+    // `odo`, not `dist`: a ride that continued past the route end wraps `dist` at every pass.
+    let dist = (last.odo - first.odo).max(0.0);
     let mean = |f: &dyn Fn(&RecordPoint) -> Option<f64>| {
         let (s, n) = points
             .iter()
@@ -292,7 +293,9 @@ pub fn to_fit(
                 (2, Value::U16(scaled_u16(Some(p.ele + 500.0), 5.0))),
                 (3, Value::U8(byte(p.hr_bpm))),
                 (4, Value::U8(byte(p.cadence_rpm))),
-                (5, Value::U32(scaled_u32(Some(p.dist - first.dist), 100.0))),
+                // distance from the start: `odo` stays monotone when the ride continued
+                // past the route end (`dist` wraps at every pass)
+                (5, Value::U32(scaled_u32(Some(p.odo - first.odo), 100.0))),
                 (6, Value::U16(scaled_u16(Some(p.speed_ms), 1000.0))),
                 (7, Value::U16(scaled_u16(p.power_w, 1.0))),
             ],
@@ -425,6 +428,7 @@ mod tests {
                 t: f64::from(t),
                 unix_s: 1_700_000_000.0 + f64::from(t),
                 dist: f64::from(t) * 8.0,
+                odo: f64::from(t) * 8.0,
                 lat: 47.5 + f64::from(t) * 1e-5,
                 lon: 19.0,
                 ele: 100.0 + f64::from(t) * 0.1,

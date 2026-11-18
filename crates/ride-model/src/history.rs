@@ -133,9 +133,12 @@ pub struct RideMeta {
     pub completed_calendar_id: Option<String>,
     pub started_unix_s: f64,
     pub elapsed_s: f64,
+    /// Elapsed time for the first pass, used to compare complete rides as ghosts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_pass_elapsed_s: Option<f64>,
     /// Distance of the first recorded point (metres). `> 0` when the ride started with a seek.
     pub start_dist: f64,
-    /// Distance of the last recorded point (metres).
+    /// Distance of the last recorded point on the first pass (metres).
     pub end_dist: f64,
     /// The ride reached the end of the route (`end_dist` is the route length).
     pub complete: bool,

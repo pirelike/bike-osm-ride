@@ -395,6 +395,9 @@ fn prefetch_note(h: &PrefetchHandle) -> String {
 pub fn StreetViewPanel(
     route: ReadSignal<Option<Arc<Route>>>,
     snapshot: ReadSignal<RideSnapshot>,
+    /// Live geometry, when a point-to-point ride can turn around on the loaded route.
+    #[props(default)]
+    active_route: Option<ReadSignal<Option<Arc<Route>>>>,
     settings: ReadSignal<UiSettings>,
     on_close: EventHandler<()>,
     on_toggle_size: EventHandler<()>,
@@ -430,6 +433,21 @@ pub fn StreetViewPanel(
         )
     });
     let route_id = use_memo(move || route.read().as_ref().map(|r| r.id.clone()));
+    let position = use_memo(move || {
+        let dist = snapshot.read().dist;
+        if let Some(active_route) = active_route {
+            if let (Some(original), Some(active)) =
+                (route.read().as_ref(), active_route.read().as_ref())
+            {
+                if !Arc::ptr_eq(original, active) && active.total_dist > 0.0 {
+                    // The panorama and image caches are indexed along the original direction.
+                    let fraction = (dist / active.total_dist).clamp(0.0, 1.0);
+                    return (original.total_dist * (1.0 - fraction), true);
+                }
+            }
+        }
+        (dist, false)
+    });
 
     // (Re)build the session.
     use_effect(move || {
@@ -585,7 +603,7 @@ pub fn StreetViewPanel(
 
     // Follow the ride.
     use_effect(move || {
-        let dist = snapshot.read().dist;
+        let (dist, _) = *position.read();
         let guard = session.read();
         let Some(s) = guard.as_ref() else {
             return;
@@ -648,7 +666,7 @@ pub fn StreetViewPanel(
                     let fallback = session
                         .peek()
                         .as_ref()
-                        .and_then(|s| cached_image(s, snapshot.peek().dist, true));
+                        .and_then(|s| cached_image(s, position.peek().0, true));
                     if fallback.is_some() {
                         image.set(fallback);
                         status.set(PanelStatus::Ok);
@@ -658,12 +676,16 @@ pub fn StreetViewPanel(
                 }
                 Effect::Show(shown) => {
                     let (lat, lng, _) = bucket_point(&route_arc, plan.bucket);
+                    let mut view = shown.view;
+                    if position.peek().1 {
+                        view.heading = (view.heading + 180.0).rem_euclid(360.0);
+                    }
                     let url = client.embed_url(
                         &EmbedTarget::Pano {
                             id: shown.pano,
                             fallback: Some((lat, lng)),
                         },
-                        shown.view,
+                        view,
                     );
                     let cur = *front.peek();
                     if frames.peek()[cur].as_ref() == Some(&url)
@@ -697,7 +719,7 @@ pub fn StreetViewPanel(
     // to move (this effect reads the progress signal, so it runs when the download advances).
     use_effect(move || {
         let progress = *download_progress.read();
-        let dist = snapshot.peek().dist;
+        let dist = position.peek().0;
         let guard = session.read();
         let Some(s) = guard.as_ref() else {
             return;

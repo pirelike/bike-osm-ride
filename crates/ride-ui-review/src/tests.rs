@@ -149,6 +149,7 @@ fn record(started: f64, speed: f64, estimated: bool) -> Arc<RideRecord> {
                 t,
                 unix_s: started + t,
                 dist: t * speed,
+                odo: t * speed,
                 lat: at.lat,
                 lon: at.lon,
                 ele: at.ele,

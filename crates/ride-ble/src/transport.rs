@@ -75,6 +75,17 @@ pub struct Advertisement {
     pub zwift_controller: Option<u8>,
 }
 
+/// A device the OS reports as connected right now, whether or not it advertises.
+/// `peripheral` is `None` when the platform cannot hand us a GATT handle for it
+/// (another app owns the link): the entry is then listed for information only.
+#[derive(Debug, Clone)]
+pub struct ConnectedDevice<P> {
+    pub id: String,
+    /// What the OS/adapter knows about the device (at least the name).
+    pub adv: Advertisement,
+    pub peripheral: Option<P>,
+}
+
 #[derive(Debug, Clone)]
 pub enum AdapterEvent<P> {
     /// An advertisement (new or updated) from this peripheral.
@@ -125,6 +136,14 @@ pub trait BleAdapter: Send + Sync + 'static {
         &self,
         p: &Self::Peripheral,
     ) -> impl Future<Output = Result<Option<Advertisement>, BleError>> + Send;
+    /// Devices the OS reports as GATT-connected, so a trainer that holds a link (and
+    /// therefore does not advertise) still shows up in the devices dialog. Backends
+    /// without such a source (and a scan-only backend) answer an empty list.
+    fn connected_devices(
+        &self,
+    ) -> impl Future<Output = Result<Vec<ConnectedDevice<Self::Peripheral>>, BleError>> + Send {
+        async { Ok(Vec::new()) }
+    }
 }
 
 #[cfg(test)]

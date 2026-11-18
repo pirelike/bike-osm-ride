@@ -119,10 +119,15 @@ A teljes leírás: **[Felhasználói kézikönyv](docs/USER_GUIDE.md)**.
 - **FTMS-trainer** (emelkedők és ERG), **teljesítménymérő** (CPS), **sebesség/kadencia** (CSC), **pulzusmérő** (HR), egy
   fizikai eszköz akár *több szerepet* is ellát egy kapcsolaton; **Zwift Click/Play** virtuális váltó; **szimulált tekerő**.
 - **Virtuális váltó**: 2 × 12-es hajtás, 23 fokozat, a trainer ellenállását módosítja.
+- **Az útvonal vége nem jelenti a menet végét**: körútnál új kör indul, nem körútnál visszafelé indulsz ugyanazon az
+  útvonalon — az útnál hosszabb edzés is kifut, és szabad tekerésben is mehetsz tovább, amíg nem nyomod *Befejezés*-t.
 
 **Edzés és elemzés**
 - 93 beépített edzés 12 kategóriában, címkékkel, zónaszínes blokkvázlattal és 943 időzített edzői üzenettel; MyWhoosh-
   és Zwift-edzések (`.zwo`, XML, JSON) importja.
+- **Edzés-erősség menet közben**: ±5 %-os lépésekben, 50–150 % között — desktopon a *Vezérlés* ablak −/+ léptetője vagy a
+  fel/le nyílbillentyű, telefonon a Tekerés fül felhúzása (nehezebb) vagy lehúzása (könnyebb); edzés kezdetén a képernyő
+  széle felvillan, hogy a mozdulat mindenki észrevegye.
 - **Edzésnaptár és AI-agent**: edzések ütemezése, korábbi menetek visszanézése és elemzése, helyi MCP-kapcsolat edzéstervek és menet utáni visszajelzések készítéséhez, a javaslatok jóváhagyásával.
 - Coggan-zónák, NP, IF, TSS, kcal; pulzuszónák; másodpercenkénti felvétel.
 - **Szellem** (legutóbbi, legjobb, vagy a GPX saját időbélyegei) és **helyi szegmensek PR-rel**.
@@ -265,6 +270,7 @@ Szándékosan csak megengedő (permissive) licencű kódot használunk fel. Az e
 | [`cycling-ble`](https://github.com/friedrichwilken/cycling-ble) | Apache-2.0 OR MIT | teljesítménymérő, cadence- és pulzusszenzor adatok értelmezése (beépítve, forrásfájlokban jelölve) |
 | [OsmolControl](https://github.com/Parapeth962/OsmolControl) | MIT | trainer-kapcsolat és parancs-biztonsági szűrő (átültetett részek, jelölve) |
 | [iron-heart](https://github.com/nullstalgia/iron-heart) | MIT | pulzusmérő-keresés és újracsatlakozás (minta, kód nélkül átvéve, jelölve) |
+| [btleplug](https://github.com/deviceplug/btleplug) droidplug `Peripheral.java`-ja | MIT OR Apache-2.0 (a btleplug saját fájlja) | az Android BLE-backend Java-fele az APK-ba másolva; **build közben javítva** (a tétlen kapcsolatvesztés után nyitva maradó GATT lezárása, máskülönben a következő csatlakozás időkeret nélküli háttér-auto-connect lesz): `packaging/android/patch_droidplug.py`, részletek a [`NOTICE.md`](NOTICE.md)-ben |
 | [Barlow és Barlow Condensed](https://github.com/jpt/barlow) betűtípusok | SIL OFL 1.1 | a felület szövege és számjegyei; a programba **beágyazva** (részhalmazolt WOFF2, latin + latin-ext, benne a magyar ő/ű), így hálózat nélkül is működnek; a licenc szövege: [`crates/ride-ui-kit/assets/fonts/OFL.txt`](crates/ride-ui-kit/assets/fonts/OFL.txt), a részletek a [`NOTICE.md`](NOTICE.md)-ben |
 | [virtual-cog](https://github.com/pymmog/virtual-cog) | Unlicense (közkincs) | Zwift Click/Play és Zwift Hub BLE-protokoll (átírva Rustra): a `ride-ble` `zwift` modulja, részletek a [`NOTICE.md`](NOTICE.md)-ben |
 | [`p256`](https://github.com/RustCrypto/elliptic-curves), [`hkdf`](https://github.com/RustCrypto/KDFs), [`sha2`](https://github.com/RustCrypto/hashes), [`aes`](https://github.com/RustCrypto/block-ciphers), [`ccm`](https://github.com/RustCrypto/AEADs) (RustCrypto) | MIT / Apache-2.0 | a Zwift Click kulcscseréje (ECDH P-256, HKDF-SHA256) és az AES-CCM titkosítás |

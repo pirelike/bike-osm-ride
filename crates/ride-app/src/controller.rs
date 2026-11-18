@@ -46,9 +46,16 @@ use ride_sim::ghost::GhostSet;
 pub const TICK: std::time::Duration = std::time::Duration::from_millis(100);
 /// The id under which the simulated rider is offered by the sensor hub.
 pub const SIM_DEVICE_ID: &str = "sim:rider";
-/// A BLE scan that nobody stopped ends after this long.
-const SCAN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+/// The scan keeper looks this often: while the devices dialog is open the scan stays
+/// alive (a trainer can appear late, or free the link another app held), but never
+/// during a connect attempt, which stops the scan on purpose.
+const SCAN_KEEPER_TICK: std::time::Duration = std::time::Duration::from_secs(2);
 const SAVE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(500);
+/// One step of the workout intensity control (swipe, buttons, arrow keys), percent.
+const INTENSITY_STEP_PCT: f64 = 5.0;
+/// How long the screen edges flash at the start of a workout ride, teaching the
+/// up (harder) / down (easier) gesture.
+const INTENSITY_HINT_S: std::time::Duration = std::time::Duration::from_millis(2800);
 const MAX_VIRTUAL_POWER: f64 = 2000.0;
 const WINDOW_TITLE: &str = "bike-osm-ride";
 
@@ -211,6 +218,8 @@ pub struct Inner {
     st: AppState,
     win: DesktopContext,
     core: RideCore,
+    /// Rebuilt once per loaded point-to-point route, on first use.
+    reverse_route: Option<Arc<Route>>,
     cmd_tx: Option<UnboundedSender<SensorCommand>>,
     last_tick: Instant,
     awake: bool,
@@ -225,7 +234,10 @@ pub struct Inner {
     expected_disconnect: HashSet<DeviceKind>,
     save_gen: u64,
     saved: Settings,
-    scan_gen: u64,
+    /// The devices dialog wants a scan, until the rider stops it or closes the dialog.
+    scan_enabled: bool,
+    /// A start was sent to the hub and its result has not come back yet.
+    scan_pending: bool,
     hub_lost_notified: bool,
     file_dialog_open: bool,
     /// Sticky per ride: the simulated rider took part (`RIDE_DEMO` / `RIDE_SIM` count as one).
@@ -280,6 +292,7 @@ impl Controller {
             st,
             win,
             core,
+            reverse_route: None,
             cmd_tx: None,
             last_tick: Instant::now(),
             awake: false,
@@ -292,7 +305,8 @@ impl Controller {
             expected_disconnect: HashSet::new(),
             save_gen: 0,
             saved: b.for_disk(b.settings.clone()),
-            scan_gen: 0,
+            scan_enabled: false,
+            scan_pending: false,
             hub_lost_notified: false,
             file_dialog_open: false,
             simulated: false,
@@ -465,10 +479,13 @@ impl Controller {
     async fn run(self, mut rx: Option<UnboundedReceiver<SensorEvent>>) {
         let mut ticker = tokio::time::interval(TICK);
         ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let mut scan_keeper = tokio::time::interval(SCAN_KEEPER_TICK);
+        scan_keeper.set_missed_tick_behavior(MissedTickBehavior::Skip);
         self.with(|i| i.last_tick = Instant::now());
         loop {
             tokio::select! {
                 _ = ticker.tick() => self.with(|i| i.tick(Instant::now())),
+                _ = scan_keeper.tick() => self.with(Inner::scan_keeper_tick),
                 event = next_event(&mut rx) => match event {
                     Some(event) => self.on_sensor_event(event),
                     None => {
@@ -1051,16 +1068,7 @@ impl Controller {
         if matches!(cmd, SensorCommand::StartScan) {
             crate::android_picker::request_ble_permissions();
         }
-        if let Some(scan) = self.with(|i| i.command(cmd)) {
-            spawn(async move {
-                tokio::time::sleep(SCAN_TIMEOUT).await;
-                self.with(|i| {
-                    if i.scan_gen == scan && *i.st.scanning.peek() {
-                        i.command(SensorCommand::StopScan);
-                    }
-                });
-            });
-        }
+        self.with(|i| i.command(cmd));
     }
 
     pub fn set_virtual_power(self, watts: f64) {
@@ -1130,6 +1138,20 @@ impl Controller {
         }
     }
 
+    /// The workout card's "freeride" action: re-run the ERG-exit handshake on the trainer.
+    /// Some firmware stays in ERG even after the workout-end write; this gives it (and the
+    /// rider) another chance without touching anything else.
+    pub fn exit_erg(self) {
+        self.with(|i| {
+            if i.send(SensorCommand::RelaxFromErg) {
+                i.toast(
+                    ToastKind::Success,
+                    t("app.controller.az_erg_kikapcsolast_ujrakuldunk_a_trainernek"),
+                );
+            }
+        });
+    }
+
     /// ↑ / ↓ keys: ±10 W for the simulated rider.
     pub fn adjust_virtual_power(self, delta: f64) {
         self.with(|i| {
@@ -1140,15 +1162,28 @@ impl Controller {
         });
     }
 
+    /// The swipe / the ± buttons / the arrow keys while a workout runs: the intensity
+    /// moves in [`INTENSITY_STEP_PCT`] steps (the session clamps it to 50–150 %).
+    pub fn adjust_workout_intensity(self, step: i32) {
+        self.with(|i| {
+            if !*i.st.erg.peek() {
+                return;
+            }
+            let before = i.core.workout_intensity();
+            i.core
+                .set_workout_intensity(before + f64::from(step) * INTENSITY_STEP_PCT);
+        });
+    }
+
     // ───── dialogs, window, keyboard ─────
 
     pub fn open_dialog(self, dialog: DialogKind) {
+        let current = *self.st.dialog.peek();
         if dialog == DialogKind::Route && !*self.st.busy.peek() {
             // an old failure should not greet the next attempt
             self.st.welcome_error_set(None);
         }
         if dialog == DialogKind::Agent {
-            let current = *self.st.dialog.peek();
             if current != Some(DialogKind::Agent) {
                 let mut previous = self.st.agent_return;
                 previous.set(current);
@@ -1156,17 +1191,28 @@ impl Controller {
         }
         let mut d = self.st.dialog;
         d.set(Some(dialog));
+        if dialog == DialogKind::Devices && current != Some(DialogKind::Devices) {
+            self.command(SensorCommand::StartScan);
+        } else if dialog != DialogKind::Devices && current == Some(DialogKind::Devices) {
+            self.command(SensorCommand::StopScan);
+        }
     }
 
     pub fn close_dialog(self) {
         let mut d = self.st.dialog;
-        if *d.peek() == Some(DialogKind::Agent) {
+        let closing = *d.peek();
+        if closing == Some(DialogKind::Agent) {
             let mut previous = self.st.agent_return;
             let target = previous.peek().as_ref().copied();
             previous.set(None);
             d.set(target);
         } else {
             d.set(None);
+        }
+        if closing == Some(DialogKind::Devices) {
+            self.command(SensorCommand::StopScan);
+        } else if *d.peek() == Some(DialogKind::Devices) {
+            self.command(SensorCommand::StartScan);
         }
     }
 
@@ -1206,8 +1252,23 @@ impl Controller {
             "right" => self.shift_gear(1),
             "left" => self.shift_gear(-1),
             "w" => self.open_dialog(DialogKind::Workouts),
-            "up" => self.adjust_virtual_power(10.0),
-            "down" => self.adjust_virtual_power(-10.0),
+            // While a workout holds the trainer in ERG the arrows are the intensity control
+            // (the ±10 W they otherwise give does nothing for a real trainer); without one
+            // they stay the virtual rider's watts.
+            "up" => {
+                if *self.st.erg.peek() {
+                    self.adjust_workout_intensity(1);
+                } else {
+                    self.adjust_virtual_power(10.0);
+                }
+            }
+            "down" => {
+                if *self.st.erg.peek() {
+                    self.adjust_workout_intensity(-1);
+                } else {
+                    self.adjust_virtual_power(-10.0);
+                }
+            }
             _ => {}
         }
     }
@@ -1518,6 +1579,7 @@ impl Inner {
 
     fn hub_lost(&mut self) {
         self.cmd_tx = None;
+        self.scan_pending = false;
         self.core.set_sample(ride_model::SensorSample::default());
         self.sim_kinds.clear();
         self.expected_disconnect.clear();
@@ -1542,22 +1604,21 @@ impl Inner {
         }
     }
 
-    /// A command from the UI. Returns the scan generation when a scan was started.
-    fn command(&mut self, cmd: SensorCommand) -> Option<u64> {
-        let mut started = None;
-        let mut scanning = self.st.scanning;
+    /// A command from the UI.
+    fn command(&mut self, cmd: SensorCommand) {
         match &cmd {
             SensorCommand::StartScan => {
-                self.scan_gen += 1;
-                started = Some(self.scan_gen);
-                scanning.set(true);
+                self.scan_enabled = true;
+                self.scan_keeper_tick();
+                return;
             }
-            SensorCommand::StopScan => scanning.set(false),
+            SensorCommand::StopScan => {
+                self.scan_enabled = false;
+                self.suspend_scan();
+                return;
+            }
             SensorCommand::Connect { id, kind } => {
-                if *scanning.peek() {
-                    self.send(SensorCommand::StopScan);
-                    scanning.set(false);
-                }
+                self.suspend_scan();
                 if id == SIM_DEVICE_ID {
                     self.sim_kinds.insert(*kind);
                 } else {
@@ -1572,14 +1633,42 @@ impl Inner {
             _ => {}
         }
         if !self.send(cmd) {
-            scanning.set(false);
             self.toast(
                 ToastKind::Warning,
                 t("app.controller.a_bluetooth_szolgaltatas_nem_erheto_el"),
             );
-            return None;
         }
-        started
+    }
+
+    fn suspend_scan(&mut self) {
+        if self.scan_pending || *self.st.scanning.peek() {
+            self.send(SensorCommand::StopScan);
+            self.scan_pending = false;
+            self.st.scanning.set(false);
+        }
+    }
+
+    /// Retry a failed or suspended scan while the devices dialog still wants it.
+    fn scan_keeper_tick(&mut self) {
+        if *self.st.dialog.peek() != Some(DialogKind::Devices) {
+            self.scan_enabled = false;
+            self.suspend_scan();
+            return;
+        }
+        if !self.scan_enabled || self.scan_pending || *self.st.scanning.peek() {
+            return;
+        }
+        // A connect attempt keeps the scan down on purpose (Windows connects far more
+        // reliably that way); wait until no slot is connecting any more.
+        let connecting = self
+            .st
+            .slots
+            .peek()
+            .iter()
+            .any(|s| s.state == ConnState::Connecting);
+        if !connecting {
+            self.scan_pending = self.send(SensorCommand::StartScan);
+        }
     }
 
     fn connect_simulated(&mut self, watts: f64) {
@@ -1607,6 +1696,13 @@ impl Inner {
             SensorEvent::Discovered(list) => {
                 let mut d = self.st.discovered;
                 d.set(list);
+            }
+            SensorEvent::Scanning(running) => {
+                self.scan_pending = false;
+                let show = running
+                    && self.scan_enabled
+                    && *self.st.dialog.peek() == Some(DialogKind::Devices);
+                self.st.scanning.set(show);
             }
             SensorEvent::State { kind, state, name } => self.on_device_state(kind, state, name),
             SensorEvent::Disconnecting(kinds) => self.expected_disconnect.extend(kinds),
@@ -1767,6 +1863,7 @@ impl Inner {
             transition,
             finished,
             workout_finished,
+            route_exhausted,
             failure,
         } = out;
 
@@ -1777,11 +1874,35 @@ impl Inner {
             );
             self.drop_route_signals();
         }
+        let active_route = self.core.active_route();
+        let route_changed = match (self.st.active_route.peek().as_ref(), active_route) {
+            (Some(old), Some(new)) => !Arc::ptr_eq(old, new),
+            (None, None) => false,
+            _ => true,
+        };
+        if route_changed {
+            self.st.active_route.set(active_route.cloned());
+        }
         // ERG while a selected workout is not finished: the gearbox is hidden meanwhile
-        let erg = snapshot.workout.as_ref().is_some_and(|w| !w.finished);
+        let erg = matches!(snapshot.state, RideState::Ready | RideState::Riding | RideState::Paused)
+            && snapshot.workout.as_ref().is_some_and(|w| !w.finished);
         if *self.st.erg.peek() != erg {
             let mut e = self.st.erg;
             e.set(erg);
+        }
+        // A real trainer holds the Trainer slot: the workout card's ERG-exit action (and the
+        // swipe intensity control) make sense only with one. The simulated rider takes the
+        // same slot, hence the explicit `sim_kinds` check.
+        let ble_trainer = !self.sim_kinds.contains(&DeviceKind::Trainer)
+            && self
+                .st
+                .slots
+                .peek()
+                .iter()
+                .any(|s| s.kind == DeviceKind::Trainer && s.state == ConnState::Connected);
+        if *self.st.trainer_ble.peek() != ble_trainer {
+            let mut t = self.st.trainer_ble;
+            t.set(ble_trainer);
         }
         if *self.st.snapshot.peek() != snapshot {
             let mut s = self.st.snapshot;
@@ -1794,8 +1915,12 @@ impl Inner {
         for cmd in commands {
             self.send(cmd);
         }
-        if let Some((_, to)) = transition {
+        if let Some((from, to)) = transition {
             self.set_awake(to == RideState::Riding);
+            // A workout ride beginning: teach the intensity gesture once, every time.
+            if from == RideState::Ready && to == RideState::Riding && erg {
+                self.show_intensity_hint();
+            }
         }
         if workout_finished {
             self.toast(
@@ -1803,8 +1928,75 @@ impl Inner {
                 t("app.controller.az_edzes_veget_ert_a_trainer_ismet_a_terepet_koveti"),
             );
         }
+        if route_exhausted {
+            self.continue_route();
+        }
         if let Some(finished) = finished {
             self.on_finished(finished);
+        }
+    }
+
+    /// The screen edges flash for [`INTENSITY_HINT_S`] at the start of a workout ride: the
+    /// up (harder, red) / down (easier, green) gesture is invisible without a hint.
+    fn show_intensity_hint(&mut self) {
+        let mut hint = self.st.intensity_hint;
+        hint.set(true);
+        let mut clear = hint;
+        spawn(async move {
+            tokio::time::sleep(INTENSITY_HINT_S).await;
+            clear.set(false);
+        });
+    }
+
+    /// The ride reached the end of the route and keeps going: a route that closes into a
+    /// loop starts its next lap, any other is ridden backwards on the same track. Only a
+    /// route that cannot be turned around at all ends the ride here — the rider is never
+    /// stranded at the finish line with a trainer still pushing.
+    fn continue_route(&mut self) {
+        let Some(route) = self.st.route.peek().clone() else {
+            return;
+        };
+        if ride_route::build::is_loop(&route) {
+            let out = self.core.continue_pass(None, Instant::now());
+            self.toast(
+                ToastKind::Info,
+                t("app.controller.uj_kor_indul_az_utvonal_kezdopontjarol"),
+            );
+            self.apply(out);
+            return;
+        }
+        let next = if self.st.snapshot.peek().pass % 2 == 1 {
+            Ok(route)
+        } else if let Some(reversed) = &self.reverse_route {
+            Ok(reversed.clone())
+        } else {
+            ride_route::build::build_reversed(&route).map(|reversed| {
+                let reversed = Arc::new(reversed);
+                self.reverse_route = Some(reversed.clone());
+                reversed
+            })
+        };
+        match next {
+            Ok(next) => {
+                let out = self.core.continue_pass(Some(next), Instant::now());
+                self.toast(
+                    ToastKind::Info,
+                    t("app.controller.visszafel_indulsz_ugyanazon_az_utvonalon"),
+                );
+                self.apply(out);
+            }
+            Err(reason) => {
+                // The turned-around route could not be built: end the ride the old way
+                // instead of waiting at the finish line forever.
+                let out = self.core.finish(Instant::now());
+                self.apply(out);
+                let mut text =
+                    t("app.controller.az_utvonal_veget_ert_a_visszafolytatast_nem_sikerult")
+                        .to_string();
+                text.push(' ');
+                text.push_str(&reason.to_string());
+                self.toast(ToastKind::Error, &text);
+            }
         }
     }
 
@@ -2040,6 +2232,7 @@ impl Inner {
         let rider = self.st.settings.peek().rider.clone();
         match self.core.load(route.clone(), rider, Instant::now()) {
             Ok(out) => {
+                self.reverse_route = None;
                 self.finished = None;
                 let mut summary = self.st.summary;
                 summary.set(None);
@@ -2088,6 +2281,7 @@ impl Inner {
 
     /// Clears everything that belongs to the loaded route.
     fn drop_route_signals(&mut self) {
+        self.reverse_route = None;
         self.scheduled_workout.clear();
         self.finished = None;
         self.ghost_plan = None;

@@ -417,6 +417,13 @@
   font: 400 var(--t-11)/1.35 var(--font-ui);
   color: var(--text-dim);
 }
+/* a device another app keeps connected: the row explains the situation instead of
+   offering a connect button, so the text may be several lines long */
+.dlg-found__held {
+  max-width: 24rem;
+  text-align: right;
+  color: var(--text-dim);
+}
 .dlg-found__actions {
   display: flex;
   align-items: center;

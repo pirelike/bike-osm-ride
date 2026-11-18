@@ -58,17 +58,23 @@ The **Devices** button in the top bar (three dots next to it show how many roles
 
 ![The Devices window](../../screenshots/devices.png)
 
-1. `Start a scan`: the program scans without filtering and classifies the devices by the services they advertise (the
-   scan stops on its own after 30 seconds).
+1. The **scan starts on its own** as soon as the window opens, and keeps running while it is open (it briefly stops
+   during a connect attempt). The program scans without filtering and classifies the devices by the services they
+   advertise; with the button you can stop and restart it any time.
 2. Next to each found device are the buttons for the roles: you connect it in the role you need. One physical device can
    fill **several roles at once**: if your trainer also broadcasts power, cadence or heart rate, a single connection
    fills every card (the cards show a *shared device* mark). Of the sensor data the more accurate source wins (power:
    the power meter before the trainer; cadence: CSC, then the power meter, then the trainer; heart rate: the chest strap
    before the trainer).
-3. What has not updated for 3 seconds switches to “—”; on a dropped connection the program retries three times.
-4. **Connect the trainer in the Trainer role**: the power-meter role only reads; control (climbs, ERG) comes from the
+3. **Rows marked “Connected”:** these devices are already linked to the computer or the phone — typically the trainer
+   the phone reconnected to by itself, or one held by another application. They do not advertise, so a scan alone would
+   never have found them. If **another application** holds the link (on Android two GATT clients cannot fit on one
+   device), the row tells you to release it there; otherwise the row offers a normal connect button. An unnamed device
+   also gets a *Connect as trainer* button — the service discovery after connecting decides whether it really is one.
+4. What has not updated for 3 seconds switches to “—”; on a dropped connection the program retries three times.
+5. **Connect the trainer in the Trainer role**: the power-meter role only reads; control (climbs, ERG) comes from the
    Trainer role.
-5. **Simulated rider**: the first item in the list, always there, even without Bluetooth. On the left panel you can set
+6. **Simulated rider**: the first item in the list, always there, even without Bluetooth. On the left panel you can set
    the watts with a slider (or `↑`/`↓`, ±10 W); quick buttons: Z2 150 W, Z4 250 W, Sprint 700 W, Free 0 W. Cadence and
    heart rate follow it believably.
 
@@ -84,8 +90,14 @@ own range.
 
 ## Riding
 
-`Start` (or `Space`) starts the ride, `Pause` stops it (time stops too), `Finish` closes it. At the end of the route the
-ride **ends on its own**. Before starting, you can jump to any point of the route by clicking on the profile; during a
+`Start` (or `Space`) starts the ride, `Pause` stops it (time stops too), `Finish` closes it. **Reaching the end of the
+route does not end the ride**: the program notifies you and it continues — **on a loop route a new lap starts from the
+start; on a non-loop route you ride backwards on the same track** (at the end of the way back it turns around again,
+and so on until you press *Finish*). A workout longer than the route thus runs out in full, and in free riding you can
+go on as long as you want. The distance, the remaining route and the ETA refer to the current **pass** (the phone's Ride
+tab shows a “*2. leg*” indicator at the top, so you know where you are); the summary counts the whole ride. The ghost
+and the climb PRs are meaningful on the first pass (later laps go into the log with their own timestamps, but the PR
+search leaves them out). Before starting, you can jump to any point of the route by clicking on the profile; during a
 ride this does not work. The program keeps the machine awake while you ride (Windows, Linux, macOS; not on Android).
 
 The speed comes from the measured **watts**, with the Martin model validated against road measurements (gravity, rolling,
@@ -148,6 +160,17 @@ the `sources` field of `workouts.json`).
 - During a ride the trainer holds the target watts in **ERG mode**; the *Workout* card and the profile panel's *Workout*
   view show the block, the time remaining, the next block and the **coach message** (at the right moment of the workout,
   for 12 seconds, only there, not as a pop-up). Pause/exit also sets the trainer to neutral here.
+- **Live intensity.** When the workout is too easy or too hard, you can adjust it in ±5% steps, between **50–150%** —
+  it scales the targets of the remaining blocks (the display and the trainer get the same number). *On the desktop* the
+  **−/+** stepper of the *Controls* window, or, while ERG runs, the **`↑`/`↓` arrow keys** (hold them down to repeat).
+  *On the phone*, **swipe up** (harder) or **down** (easier) on the Ride tab. If the tab scrolls, start on the power
+  readout. At the start of a workout the
+  edge of the screen flashes (red at the top, green at the bottom, with a short label each) so you notice the gesture.
+  The setting is not kept: every ride starts at 100%, and the card shows it when you are not riding at 100%.
+- **At the end of the workout.** After the last block runs out the trainer switches back to terrain simulation (the
+  program sends this twice on purpose, because some firmware does not let go of ERG on a single write). If the trainer
+  still holds the last target, the **“ERG off”** button on the *Workout* card (next to “*Workout done*”) re-sends the
+  switch.
 - **Your own workout:** *Import a workout…* reads a MyWhoosh or Zwift file (`.xml`, `.zwo`) and MyWhoosh's JSON export as
   well; it goes into the `workouts/` folder, and from then on it can be selected like the others.
 - During a ride the workout cannot be changed.
@@ -347,7 +370,10 @@ In a window narrower than 1000 px a tabbed view appears: at the bottom **Ride ·
 large `Start`/`Pause`/`Finish` button row. On the **Ride** tab everything you need during a ride is on one screen: the
 workout's block (time remaining, next block, the coach's message), power measured against the target (*on target / low /
 high*), the zone bar, cadence, heart rate, speed, gradient, below it the profile (dragging sideways switches between its
-views). The dialogs are full-screen on the phone.
+views). The dialogs are full-screen on the phone. **During a workout, swipe vertically on the Ride tab to change
+intensity.** Swipe up for a harder effort and down for an easier one. If the tab scrolls, start on the power readout.
+At the start of the workout, the screen edge flashes red at the top and green at the bottom.
+After the route's end, a “*2. leg*” indicator at the top shows which pass you are on.
 
 On a very small screen (narrower than 400 px) the top bar gets a **hamburger menu** (≡): *Workout*, *Calendar*, *Devices*
 and *Settings* stay on the bar, while *Route*, *Review* and *AI agent* open from the menu. A tap outside the menu, or
@@ -408,7 +434,7 @@ the app says so and writes nothing. On Android this part has not yet been tried 
 | `X` | swap the map and Street View |
 | `W` | workout picker |
 | `←` / `→` | virtual gearbox: easier / harder |
-| `↑` / `↓` | the simulated rider's power ±10 W |
+| `↑` / `↓` | during a workout the **workout intensity** ±5%; without one the simulated rider's power ±10 W |
 | `F11` | full screen |
 | `Esc` | close the window, leave full screen |
 | `Ctrl+O` | open a GPX |
@@ -428,7 +454,8 @@ cannot draw over a native window); closing the panel closes Firefox too; it shou
 | Symptom | What to do |
 |---|---|
 | The trainer does not react to the climbs / the workout | In the **Devices** window it should be connected in the *Trainer* role (the power-meter role only reads). Look at the BLE log (`ble.log`, as described in §11 of [`BLUETOOTH.md`](../../BLUETOOTH.md)); Zwift or a phone app should not be holding the trainer. |
-| It does not find the device | Turn on Bluetooth; on Windows the scan is unfiltered, so many devices show up: look at the device's roles. On Android grant the Bluetooth permissions (*Start a scan* asks again); on macOS the system asks for permission on the first scan. |
+| **The trainer still holds the last target after the workout** | The firmware did not let go of ERG. Press the **“ERG off”** button on the *Workout* card; if that does not help, leave ERG mode with the trainer's own button/display or restart it, and send us the `ble.log`. |
+| It does not find the device | Turn on Bluetooth; on Windows the scan is unfiltered, so many devices show up: look at the device's roles. If the list has a row marked **Connected**, another application or the phone's automatic reconnection is holding it: release it there, or restart the trainer and start a new scan. On Android grant the Bluetooth permissions (*Start a scan* asks again); on macOS the system asks for permission on the first scan. |
 | The map is empty or grey | There is no network and no cached tile yet: the route and the numbers work anyway. |
 | The route does not load | The error message says why (broken file, unsupported link, no network for BRouter). The link must contain the `lonlats=` part. |
 | The profile is flat | The file has no elevation data, and Open-Meteo was not available either. Load a GPX with elevation or a bikerouter link. |

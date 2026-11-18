@@ -146,7 +146,9 @@ badges. Shadows: none, except **hard offsets** on popovers: `--shadow-2` = `6px 
 
 Motion is functional only: hover / press 90 ms (`--dur-fast`), dialog and toast in 150 ms (`--dur`), the map
 camera glide 420 ms (`--dur-slow`, used by the map crate only), the busy dot / spinner say "working".
-`prefers-reduced-motion` collapses everything.
+`prefers-reduced-motion` collapses everything. One *pedagogical* exception: the intensity hint at the start of a
+workout ride (`erg-hint-blink`, `shell.rs`) blinks the screen edges twice over ~2.6 s — it teaches a gesture, so
+it is deliberately slower than the UI rhythms; under `prefers-reduced-motion` it stays as a static frame.
 
 ## Data colours
 

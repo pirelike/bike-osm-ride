@@ -65,18 +65,25 @@ sono cinque funzioni: **Rullo** (rullo intelligente, FTMS), **Frequenza cardiaca
 
 ![La finestra Dispositivi](../../screenshots/devices.png)
 
-1. `Avvia la ricerca`: il programma cerca senza filtri e classifica i dispositivi in base ai servizi annunciati (la
-   ricerca si ferma da sola dopo 30 secondi).
+1. La **ricerca parte da sola** appena si apre la finestra e continua finché resta aperta (durante un tentativo di
+   connessione si ferma qualche secondo e poi riprende). Il programma cerca senza filtri e classifica i dispositivi in
+   base ai servizi annunciati; con il pulsante puoi fermarla e riavviarla quando vuoi.
 2. Accanto a ogni dispositivo trovato ci sono i pulsanti delle funzioni: lo colleghi alla funzione che ti serve. Un
    dispositivo fisico può coprire **più funzioni contemporaneamente**: se il tuo rullo trasmette anche la potenza, la
    cadenza o la frequenza cardiaca, un'unica connessione riempie tutte le schede (le schede mostrano l'indicazione
    *dispositivo condiviso*). Tra i dati dei sensori vince la fonte più precisa (potenza: il misuratore di potenza prima
    del rullo; cadenza: CSC, poi il misuratore di potenza, poi il rullo; frequenza cardiaca: la fascia toracica prima del
    rullo).
-3. Ciò che non si è aggiornato da 3 secondi passa a “—”; se la connessione cade, il programma riprova tre volte.
-4. **Collega il rullo nella funzione Rullo**: la funzione misuratore di potenza legge soltanto, il controllo (salite,
+3. **Righe con la marca “Connesso”:** questi dispositivi sono già collegati al computer o al telefono — in genere
+   il rullo che il telefono ha ricollegato da solo, o uno tenuto da un'altra applicazione. Non si annunciano, quindi
+   la ricerca da sola non li avrebbe mai trovati. Se il collegamento lo tiene **un'altra applicazione** (su Android
+   due client GATT non entrano sullo stesso dispositivo), la riga dice che va rilasciato lì; altrimenti la riga
+   offre un normale pulsante di connessione. Anche per un dispositivo senza nome c'è un pulsante *Connetti come
+   rullo* — la scoperta dei servizi dopo la connessione decide se lo è davvero.
+4. Ciò che non si è aggiornato da 3 secondi passa a “—”; se la connessione cade, il programma riprova tre volte.
+5. **Collega il rullo nella funzione Rullo**: la funzione misuratore di potenza legge soltanto, il controllo (salite,
    ERG) arriva dalla funzione Rullo.
-5. **Ciclista simulato**: il primo elemento dell'elenco, sempre presente, anche senza Bluetooth. Nel pannello a sinistra
+6. **Ciclista simulato**: il primo elemento dell'elenco, sempre presente, anche senza Bluetooth. Nel pannello a sinistra
    puoi impostare i watt con un cursore (oppure `↑`/`↓`, ±10 W); pulsanti rapidi: Z2 150 W, Z4 250 W, Sprint 700 W,
    Libero 0 W. La cadenza e la frequenza cardiaca lo seguono in modo credibile.
 
@@ -93,10 +100,16 @@ all'intervallo del rullo stesso.
 
 ## La pedalata
 
-`Avvia` (o `Space`) fa partire la pedalata, `Pausa` la ferma (anche il tempo si ferma), `Termina` la chiude. Alla fine
-del percorso la pedalata **finisce da sola**. Prima di iniziare, cliccando sul profilo puoi saltare a qualsiasi punto del
-percorso; durante la pedalata non è possibile. Il programma tiene la macchina sveglia finché pedali (Windows, Linux,
-macOS; su Android no).
+`Avvia` (o `Space`) fa partire la pedalata, `Pausa` la ferma (anche il tempo si ferma), `Termina` la chiude. **Arrivare
+alla fine del percorso non chiude la pedalata**: il programma avvisa e si continua — **su un percorso ad anello parte
+un nuovo giro dalla partenza; su un percorso non ad anello pedali all'indietro sullo stesso tracciato** (alla fine del
+ritorno si gira di nuovo, e così via finché non premi *Termina*). Così un allenamento più lungo del percorso corre
+tutto intero, e in pedalata libera puoi continuare quanto vuoi. Distanza, percorso rimanente ed ETA si riferiscono
+alla **tappa** attuale (nella scheda Pedalata del telefono, in alto, un indicatore “*2. tappa*” dice dove sei); il
+riepilogo conta l'uscita intera. Il fantasma e i PR delle salite hanno senso solo sulla prima tappa (i giri
+successivi entrano nel registro con i propri timestamp, ma la ricerca dei PR non li considera). Prima di iniziare,
+cliccando sul profilo puoi saltare a qualsiasi punto del percorso; durante la pedalata non è possibile. Il programma
+tiene la macchina sveglia finché pedali (Windows, Linux, macOS; su Android no).
 
 La velocità viene dai **watt** misurati, con il modello di Martin validato con misurazioni su strada (gravità,
 rotolamento, attrito dei cuscinetti, resistenza dell'aria con i raggi, inerzia), dal tuo peso corporeo, dal peso della
@@ -159,6 +172,18 @@ nel campo `sources` di `workouts.json`).
   *Allenamento* del pannello del profilo mostrano il blocco, il tempo rimanente, il blocco successivo e il
   **messaggio del coach** (al momento giusto dell'allenamento, per 12 secondi, solo lì, non come popup). Anche qui la
   pausa e l'uscita dall'allenamento rimettono il rullo in neutro.
+- **Intensità durante l'allenamento.** Se l'allenamento risulta troppo facile o troppo duro, si regola a passi di
+  ±5%, **tra il 50% e il 150%** — scala gli obiettivi dei blocchi rimanenti (schermo e rullo ricevono lo stesso
+  numero). *Sul desktop* lo stepper **−/+** della finestra *Controlli* oppure, con l'ERG attivo, i **tasti freccia
+  `↑`/`↓`** (tienili premuti per ripetere il passo). *Sul telefono* uno **scorrimento verso l'alto** (più duro) o
+  **verso il basso** (più leggero) nella scheda Pedalata. Se la scheda scorre, inizia il gesto sul valore
+  della potenza. All'inizio dell'allenamento il bordo dello
+  schermo lampeggia (rosso in alto, verde in basso, con una breve scritta per lato) per farti notare il gesto.
+  L'impostazione non si conserva: ogni uscita parte dal 100%, e la scheda mostra quando non pedali al 100%.
+- **Alla fine dell'allenamento.** Scaduto l'ultimo blocco, il rullo torna alla simulazione del terreno (il programma
+  lo invia apposta due volte, perché qualche firmware non molla l'ERG con una sola scrittura). Se il rullo restasse
+  aggrappato all'ultimo obiettivo, il pulsante **“Spegni ERG”** della scheda *Allenamento* (accanto ad
+  “*Allenamento completato*”) reinvia il cambio.
 - **Il tuo allenamento:** *Importa un allenamento…* legge un file MyWhoosh o Zwift (`.xml`, `.zwo`) e anche l'esportazione
   JSON di MyWhoosh; finisce nella cartella `workouts/` e da lì è selezionabile come gli altri.
 - Durante una pedalata non si può cambiare allenamento.
@@ -360,7 +385,10 @@ la grande fila di pulsanti `Avvia`/`Pausa`/`Termina`. Nella scheda **Pedalata** 
 pedalata su un solo schermo: il blocco dell'allenamento (tempo rimanente, blocco successivo, il messaggio del coach), la
 potenza misurata rispetto all'obiettivo (*in target / bassa / alta*), la barra delle zone, cadenza, frequenza cardiaca,
 velocità, pendenza e, sotto, il profilo (trascinando di lato passi tra le sue viste). Sul telefono le finestre di dialogo
-sono a tutto schermo.
+sono a tutto schermo. **Durante un allenamento, scorri verticalmente nella scheda Pedalata per regolare
+l'intensità.** Se la scheda scorre, inizia il gesto sul valore della potenza. All'inizio dell'allenamento il bordo
+dello schermo lampeggia, rosso in alto e verde in basso. Dopo la fine del percorso un indicatore “*2. tappa*” in
+alto dice in quale tappa della continuazione sei.
 
 <p align="center">
   <img src="../../screenshots/phone-ride.png" width="280" alt="Layout sul telefono, scheda Pedalata con un allenamento">
@@ -416,7 +444,7 @@ Android questa parte non l'abbiamo ancora provata su un telefono.
 | `X` | scambia mappa e Street View |
 | `W` | selettore degli allenamenti |
 | `←` / `→` | cambio virtuale: più leggero / più duro |
-| `↑` / `↓` | potenza del ciclista simulato ±10 W |
+| `↑` / `↓` | durante un allenamento **l'intensità dell'allenamento** ±5%; senza allenamento, la potenza del ciclista simulato ±10 W |
 | `F11` | schermo intero |
 | `Esc` | chiude la finestra, esce dallo schermo intero |
 | `Ctrl+O` | apre un GPX |
@@ -437,7 +465,8 @@ pannello chiude anche Firefox; deve essere largo almeno 500 px circa.
 | Sintomo | Cosa fare |
 |---|---|
 | Il rullo non reagisce alle salite / all'allenamento | Nella finestra **Dispositivi** deve essere collegato nella funzione *Rullo* (la funzione misuratore di potenza legge soltanto). Guarda il log BLE (`ble.log`, come descritto nel §11 di [`BLUETOOTH.md`](../../BLUETOOTH.md)); Zwift o un'app del telefono non devono tenere occupato il rullo. |
-| Non trova il dispositivo | Accendi il Bluetooth; su Windows la ricerca è senza filtri, quindi si vedono molti dispositivi: guarda le funzioni del dispositivo. Su Android concedi i permessi Bluetooth (*Avvia la ricerca* richiede di nuovo); su macOS il sistema chiede il permesso alla prima ricerca. |
+| **Il rullo resta aggrappato all'ultimo obiettivo dopo l'allenamento** | Il firmware non ha mollato l'ERG. Premi il pulsante **“Spegni ERG”** sulla scheda *Allenamento*; se non aiuta, esci dalla modalità ERG con il pulsante/display del rullo stesso o riavvialo, e mandaci il `ble.log`. |
+| Non trova il dispositivo | Accendi il Bluetooth; su Windows la ricerca è senza filtri, quindi si vedono molti dispositivi: guarda le funzioni del dispositivo. Se nell'elenco c'è una riga con la marca **“Connesso”**, la tiene un'altra applicazione o la riconnessione automatica del telefono: rilasciala lì, oppure riavvia il rullo e avvia una nuova ricerca. Su Android concedi i permessi Bluetooth (*Avvia la ricerca* richiede di nuovo); su macOS il sistema chiede il permesso alla prima ricerca. |
 | La mappa è vuota o grigia | Non c'è rete e non c'è ancora nessuna tile in cache: il percorso e i numeri funzionano lo stesso. |
 | Il percorso non si carica | Il messaggio di errore dice il motivo (file danneggiato, link non supportato, niente rete per BRouter). Il link deve contenere la parte `lonlats=`. |
 | Il profilo è piatto | Il file non ha dati di quota e nemmeno Open-Meteo era raggiungibile. Carica un GPX con i dati di quota o un link di bikerouter. |

@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 
+#[cfg(not(target_os = "android"))]
+use btleplug::api::RetrievePeripheralsOptions;
 use btleplug::api::{
     Central, CentralEvent, CharPropFlags, Characteristic, Manager as _, Peripheral as _,
     ScanFilter, WriteType,
@@ -12,7 +14,8 @@ use futures::stream::{BoxStream, StreamExt};
 
 use crate::error::{bounded, BleError};
 use crate::transport::{
-    AdapterEvent, Advertisement, BleAdapter, CharProps, GattChar, GattPeripheral, Notification,
+    AdapterEvent, Advertisement, BleAdapter, CharProps, ConnectedDevice, GattChar, GattPeripheral,
+    Notification,
 };
 use ride_i18n::t;
 
@@ -212,6 +215,44 @@ impl BleAdapter for BtleAdapter {
                 .get(&crate::zwift::MANUFACTURER_ID)
                 .and_then(|data| crate::zwift::advertised_type(data)),
         }))
+    }
+
+    #[cfg(not(target_os = "android"))]
+    async fn connected_devices(&self) -> Result<Vec<ConnectedDevice<BtlePeripheral>>, BleError> {
+        let mut out = Vec::new();
+        // A failed refresh leaves the previous entries in place until the next snapshot.
+        let list = self
+            .inner
+            .retrieve_peripherals(RetrievePeripheralsOptions::default())
+            .await
+            .map_err(BleError::from)?;
+        for inner in list {
+            let p = BtlePeripheral { inner };
+            let adv = self
+                .advertisement(&p)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            out.push(ConnectedDevice {
+                id: p.id(),
+                adv,
+                peripheral: Some(p),
+            });
+        }
+        Ok(out)
+    }
+
+    #[cfg(target_os = "android")]
+    async fn connected_devices(&self) -> Result<Vec<ConnectedDevice<BtlePeripheral>>, BleError> {
+        Ok(crate::android_ble::connected_ble_devices()
+            .into_iter()
+            .map(|(id, name)| ConnectedDevice {
+                id,
+                adv: Advertisement { name, ..Default::default() },
+                peripheral: None,
+            })
+            .collect())
     }
 }
 

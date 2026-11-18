@@ -707,8 +707,7 @@ fn write_plan<R: Read + Seek>(
                 continue;
             }
             let bytes = read_entry(archive, *entry, limits, total)?;
-            let Some(meta) = serde_json::from_slice::<RideRecord>(&bytes)
-                .ok()
+            let Some(meta) = rides::parse_record(&bytes)
                 .and_then(|record| rides::meta_of(&record, route.as_ref(), stem.clone()))
             else {
                 report.skipped += 1;
@@ -841,6 +840,7 @@ mod tests {
             t,
             unix_s: 1_700_000_000.0 + t,
             dist,
+            odo: dist,
             lat: 47.5,
             lon: 19.0,
             ele: 100.0,

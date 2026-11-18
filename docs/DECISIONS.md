@@ -204,6 +204,40 @@ entries are history); the calendar is written in one atomic step together with t
 "committed" from "not yet" by looking at the calendar. The coach reads the rider's RPE (a number) but not the free-text ride
 note, which stays out of the agent (see `PRIVACY.md`). · `crates/ride-app/src/agent.rs`, `agent_ui.rs`, `agent/server.rs`.
 
+**V7. The route ends, the ride does not** (2026-11-18). A workout longer than the route simply stopped the ride, and
+a freeride ended at the finish line without being asked. Now every ride continues past the end: a route that
+closes into a loop (first and last point within 50 m, `build::is_loop`) starts its next lap, any other is ridden
+backwards through the mirrored geometry (`build::build_reversed`) and turns around again at the original start —
+ping-pong until the rider presses *Befejezés*. The cost is honesty about what a pass means: the HUD's distance,
+remaining and ETA describe the current pass (a "2. szakasz" chip on the phone), the ghost and the climb PR
+comparison are dropped at every pass (a wrapped clock would make the differences nonsense), and the recording
+carries two distances — route-relative `dist` that wraps, monotone `odo` for exports and statistics.
+Only a route that cannot be mirrored ends the ride at the spot. · [`SIMULATION.md`](SIMULATION.md) §2,
+`ride-model::RecordPoint`.
+
+**V8. The workout intensity is live, ±5 %, 50–150 %, and resets with every ride** (2026-11-18). The rider asked for
+a way to make a running workout harder or easier without opening anything. Zwift-style bias: the remaining targets
+are scaled, the display and the trainer agree by construction (both read `WorkoutSession::intensity_pct`), and the
+band's clamps keep a slipped gesture from doubling an effort. The band lives in `ride-model` so the UI's steppers
+can disable themselves at the edges without depending on `ride-sim`. Not persisted: a ride is a plan executed, and
+the next one starts at 100 % — a forgotten 150 % would be a trap. · `ride-sim/src/workout.rs`,
+`RideControls` (`--erg`), the phone's whole-tab swipe.
+
+**V9. Leaving ERG is an explicit handshake, re-runnable by hand** (2026-11-18). Some firmware ignores a single
+simulation write after holding power targets, and the VE200 capture never proved terrain simulation at all, so the
+workout's end sends the neutral grade the pause sequence uses, then the live grade every second for 10 s
+(`erg_unlatch_window`), and the workout card offers an "ERG ki" button to run it again — the honest state is that
+the app cannot *see* whether the trainer obeyed, so the next ride's `ble.log` decides. · `control.rs`
+(`relax_from_erg`), [`BLUETOOTH.md`](BLUETOOTH.md) §4.
+
+**V10. The devices dialog owns its scan, and lists what the OS already holds** (2026-11-18). The trainer the phone
+auto-re-connected to does not advertise, so a scan alone could never show it — the exact "the trainer connected
+itself to the phone and the app never noticed" report. Opening the dialog starts the scan and closing it stops it;
+a keeper keeps it alive (never during a connect attempt), because a trainer can appear late or free its link.
+Connected devices come from the OS (`retrieve_peripherals`, the activity's `getConnectedDevices` on Android), and
+on Android a link another app owns is listed as information only: the platform refuses a second GATT client, and a
+connect button that always fails would be worse than an explanation. · [`BLUETOOTH.md`](BLUETOOTH.md) §3, §7.
+
 **V5. The FTP suggestion and the power curve use only measured watts** (2026-11-05). The review page can show the rider's
 best 5 s to 60 min and suggest 95 % of the best 20 minutes as the FTP. A simulated rider's and an estimated ride's watts are the
 physics model run forwards or backwards, so an FTP from them would only confirm the model's own assumptions; they are left

@@ -169,7 +169,14 @@ pub fn choose_ghost(metas: &[RideMeta], mode: GhostMode) -> Option<&RideMeta> {
             let complete = usable
                 .clone()
                 .filter(|meta| meta.complete)
-                .min_by(|a, b| a.elapsed_s.total_cmp(&b.elapsed_s));
+                .min_by(|a, b| {
+                    let time = |m: &RideMeta| {
+                        m.first_pass_elapsed_s
+                            .filter(|time| time.is_finite() && *time > 0.0)
+                            .unwrap_or(m.elapsed_s)
+                    };
+                    time(a).total_cmp(&time(b))
+                });
             complete.or_else(|| {
                 usable
                     .filter(|meta| !meta.complete && meta.end_dist.is_finite())
@@ -207,6 +214,7 @@ mod tests {
             t,
             unix_s: 1_700_000_000.0 + t,
             dist,
+            odo: dist,
             lat: 47.5,
             lon: 19.0,
             ele: 100.0,

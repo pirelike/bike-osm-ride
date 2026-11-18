@@ -97,7 +97,9 @@ pub fn summarize(
         return None;
     }
     let elapsed_s = (last.t - first.t).max(0.0);
-    let ridden_m = (last.dist - first.dist).max(0.0);
+    // `odo` is the monotone distance: an import of a ride that continued past its route
+    // (laps, a turned-around route) still counts what was actually pedalled.
+    let ridden_m = (last.odo - first.odo).max(0.0);
 
     let mut ascent = 0.0;
     for pair in points.windows(2) {
@@ -191,6 +193,7 @@ mod tests {
             t,
             unix_s: 1_700_000_000.0 + t,
             dist,
+            odo: dist,
             lat: 47.5,
             lon: 19.0,
             ele: 100.0 + dist * 0.01,

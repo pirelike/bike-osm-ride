@@ -81,6 +81,8 @@ pub struct HubConfig {
     pub scan_silence_restart: Duration,
     /// `Discovered` events are sent at most this often.
     pub scan_emit_interval: Duration,
+    /// How often to refresh the OS list of already-connected peripherals.
+    pub scan_connected_interval: Duration,
     /// A device not seen for this long drops off the list.
     pub scan_forget_after: Duration,
     pub control: ControlConfig,
@@ -118,6 +120,7 @@ impl Default for HubConfig {
             rescan_burst: Duration::from_secs(2),
             scan_silence_restart: Duration::from_secs(30),
             scan_emit_interval: Duration::from_millis(500),
+            scan_connected_interval: Duration::from_secs(5),
             scan_forget_after: Duration::from_secs(60),
             control: ControlConfig::default(),
         }
@@ -157,6 +160,7 @@ impl HubConfig {
             rescan_burst: ms(5),
             scan_silence_restart: ms(100),
             scan_emit_interval: ms(10),
+            scan_connected_interval: ms(30),
             scan_forget_after: ms(500),
             control: ControlConfig {
                 response_timeout: ms(150),
@@ -170,6 +174,9 @@ impl HubConfig {
                 status_storm_window: ms(400),
                 grant_grace: ms(100),
                 restart_interval: ms(150),
+                // The ERG-exit insist window also runs fast in tests.
+                erg_unlatch_window: ms(400),
+                erg_unlatch_every: ms(40),
             },
         }
     }
@@ -213,7 +220,9 @@ pub(crate) enum Internal {
         generation: u64,
     },
     /// Current scan results (without the simulated rider).
-    Discovered(Vec<DeviceInfo>),
+    Discovered(u64, Vec<DeviceInfo>),
+    ScanStarted(u64),
+    ScanFinished(u64),
 }
 
 pub(crate) type Rescan = Arc<dyn Fn() -> BoxFuture<'static, ()> + Send + Sync>;

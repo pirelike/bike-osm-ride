@@ -850,9 +850,19 @@ pub fn ClimbCard(
 // ───────────────────────────── WorkoutCard ─────────────────────────────
 
 /// The running workout: current block, ERG target, the two countdowns and overall progress.
-/// Hidden when no workout is selected. After the last block it turns into a "done" state.
+/// Hidden when no workout is selected. After the last block it turns into a "done" state
+/// that offers re-running the ERG-exit handshake (`Freeride`): some trainers stay in ERG.
 #[component]
-pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
+pub fn WorkoutCard(
+    snapshot: ReadSignal<RideSnapshot>,
+    /// A real (BLE) trainer holds the Trainer slot: only then can the ERG-exit action reach
+    /// anything. The shell knows; the card only shows.
+    #[props(default = false)]
+    trainer_connected: bool,
+    /// Re-run the ERG-exit handshake on the trainer ("Freeride", once it stayed in ERG).
+    #[props(default)]
+    on_exit_erg: EventHandler<()>,
+) -> Element {
     let snapshot = snapshot.read().clone();
     let Some(w) = snapshot.workout.clone() else {
         return rsx! {
@@ -908,6 +918,12 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
                 span { class: "hud-label", {t("ui_hud.edzes")} }
                 span { class: "hud-workout__name", "{w.workout_name}" }
                 span { class: "hud-workout__count", "{step_number}" }
+                if (w.intensity_pct - 100.0).abs() > 1e-9 {
+                    // the live intensity the rider set (swipe / buttons / arrow keys)
+                    span { class: "tag hud-workout__ergtag", title: t("ui_hud.edzes_erossege").to_string(),
+                        "{w.intensity_pct:.0} %"
+                    }
+                }
             }
             div { class: "hud-workout__body",
                 div { class: "hud-workout__step",
@@ -926,6 +942,16 @@ pub fn WorkoutCard(snapshot: ReadSignal<RideSnapshot>) -> Element {
                         if let Some(c) = cadence_text {
                             span { "· {c}" }
                         }
+                    }
+                }
+                if finished && trainer_connected {
+                    // The trainer may still hold the last ERG target (firmware-dependent):
+                    // this re-runs the handshake that hands it back to the terrain.
+                    button {
+                        class: "btn btn--sm hud-workout__erg",
+                        r#type: "button",
+                        onclick: move |_| on_exit_erg.call(()),
+                        {t("ui_hud.erg_ki")}
                     }
                 }
                 div { class: "cells cells--3 cells--flush hud-workout__cells",
@@ -1033,7 +1059,8 @@ fn FinishButton(
 
 /// Start / pause / resume / finish / restart depending on `snapshot.state`, as a ruled button
 /// group with the keyboard hint of the app (Space = start / pause / resume). A 32 px bar that
-/// the shell docks at the top-left corner of the profile panel.
+/// the shell docks at the top-left corner of the profile panel. While a workout holds the
+/// trainer in ERG it also carries the live intensity stepper (the arrow keys do the same).
 #[component]
 pub fn RideControls(
     snapshot: ReadSignal<RideSnapshot>,
@@ -1045,10 +1072,19 @@ pub fn RideControls(
     /// Ask once more before the ride is finished (the phone's transport bar).
     #[props(default = false)]
     confirm_finish: bool,
+    /// One step of the live workout intensity (`+1` harder, `-1` easier).
+    #[props(default)]
+    on_intensity: EventHandler<i32>,
 ) -> Element {
     let state = snapshot.read().state;
     let armed = use_signal(|| None::<RideState>);
     let toolbar_label = tf("ui_hud.menet_vezerlese", &[("state", state_label(state))]);
+    let intensity = snapshot
+        .read()
+        .workout
+        .as_ref()
+        .filter(|w| !w.finished && matches!(state, RideState::Ready | RideState::Riding | RideState::Paused))
+        .map(|w| w.intensity_pct);
 
     rsx! {
         div { class: "hud-controls", role: "toolbar", aria_label: "{toolbar_label}",
@@ -1100,6 +1136,33 @@ pub fn RideControls(
                             on_click: move |_| on_reset.call(()),
                         }
                     },
+                }
+            }
+            if let Some(pct) = intensity {
+                div { class: "hud-erg", role: "group",
+                    aria_label: t("ui_hud.edzes_erossege").to_string(),
+                    button {
+                        class: "btn btn--ghost btn--sm hud-erg__btn",
+                        r#type: "button",
+                        title: t("ui_hud.konnyebb_le").to_string(),
+                        disabled: pct <= ride_model::MIN_INTENSITY_PCT,
+                        onclick: move |_| on_intensity.call(-1),
+                        Icon { name: IconName::Minus, size: 14 }
+                    }
+                    span { class: "hud-erg__pct num", role: "status",
+                        aria_label: tf("app.controller.az_edzes_erossege_pct", &[("pct", &format!("{pct:.0}"))]),
+                        title: t("ui_hud.edzes_erossege_lepteto").to_string(),
+                        "{pct:.0}"
+                        span { class: "hud-erg__unit", "%" }
+                    }
+                    button {
+                        class: "btn btn--ghost btn--sm hud-erg__btn",
+                        r#type: "button",
+                        title: t("ui_hud.nehezebb_fel").to_string(),
+                        disabled: pct >= ride_model::MAX_INTENSITY_PCT,
+                        onclick: move |_| on_intensity.call(1),
+                        Icon { name: IconName::Plus, size: 14 }
+                    }
                 }
             }
             if matches!(state, RideState::Ready | RideState::Riding | RideState::Paused) {
@@ -1166,6 +1229,7 @@ mod tests {
             next_climb_in: Some(0.0),
             trainer_grade: 6.6,
             workout: None,
+            pass: 0,
             ghost: None,
             segment: None,
         }
@@ -1935,6 +1999,7 @@ mod tests {
             finished: false,
             next_step_name: Some("Pihenő".into()),
             next_target_w: Some(120.0),
+            intensity_pct: 100.0,
             message: None,
         }
     }

@@ -62,17 +62,24 @@ A felső sáv **Eszközök** gombja (mellette három pont mutatja, hány szerep 
 
 ![Az Eszközök ablak](screenshots/devices.png)
 
-1. `Keresés indítása`: a program szűrés nélkül keres, és a hirdetett szolgáltatások alapján sorolja be az eszközöket
-   (a keresés 30 másodperc után magától leáll).
+1. A **keresés magától elindul**, amint az ablak megnyílik, és addig fut, amíg nyitva van (csatlakozási kísérlet közben
+   pár másodpercre eláll, aztán visszaáll). A program szűrés nélkül keres, és a hirdetett szolgáltatások alapján sorolja
+   be az eszközöket; a gombbal bármikor leállíthatod és újraindíthatod.
 2. A talált eszköz mellett a szerepek gombjai: arra a szerepre csatlakoztatod, amelyre kell. Egy fizikai eszköz
    **egyszerre több szerepet** is elláthat: ha a trainered a teljesítményt, kadenciát vagy pulzust is sugározza, egyetlen
    kapcsolat tölti ki az összes kártyát (a kártyákon *közös eszköz* jelzés látszik). A szenzorok adatai közül a
    pontosabb forrás nyer (teljesítmény: teljesítménymérő a trainer előtt; kadencia: CSC, majd a teljesítménymérő, majd
    a trainer; pulzus: mellkasöv a trainer előtt).
-3. Ami 3 másodperce nem frissült, az „—”-ra vált; megszakadt kapcsolatnál a program háromszor újrapróbálja.
-4. **A trainert a Trainer szerepben csatlakoztasd**: a teljesítménymérő szerep csak olvas, a vezérlést (emelkedők,
+3. **„Csatlakoztatva” jelölésű sorok:** ezek az eszközök már kapcsolatban állnak a géppel vagy a telefonnal — tipikusan
+   a trainer, amit a telefon magától visszakapcsolt, vagy amit egy másik alkalmazás tart. Nem hirdetik magukat, ezért a
+   keresés önmagában sosem találta volna őket. Ha a kapcsolatot **másik alkalmazás** tartja (Androidon két GATT-kliens
+   nem fér ugyanarra az eszközre), a sor elmondja, hogy ott kell elengedni; máskülönben a sor normál csatlakozó gombot ad.
+   Névtelen eszköznél is van *Csatlakozás trainerként* gomb — a szolgáltatás-felderítés csatlakozás után eldönti, hogy
+   tényleg trainer-e.
+4. Ami 3 másodperce nem frissült, az „—”-ra vált; megszakadt kapcsolatnál a program háromszor újrapróbálja.
+5. **A trainert a Trainer szerepben csatlakoztasd**: a teljesítménymérő szerep csak olvas, a vezérlést (emelkedők,
    ERG) a Trainer szerep adja.
-5. **Szimulált tekerő**: a lista első eleme, mindig ott van, Bluetooth nélkül is. A bal oldali panelen egy csúszkával
+6. **Szimulált tekerő**: a lista első eleme, mindig ott van, Bluetooth nélkül is. A bal oldali panelen egy csúszkával
    (vagy `↑`/`↓`, ±10 W) adhatod meg a wattot, gyorsgombok: Z2 150 W, Z4 250 W, Sprint 700 W, Szabad 0 W. A kadencia és
    a pulzus hihetően követi.
 
@@ -87,8 +94,14 @@ a parancsokat: csak a szükséges műveletek mennek ki, a célok a trainer sajá
 
 ## Tekerés
 
-`Kezdés` (vagy `Szóköz`) indítja a tekerést, `Szünet` megállítja (az idő is áll), `Befejezés` lezárja. Az útvonal végén a
-tekerés **magától véget ér**. Kezdés előtt a profilra kattintva az útvonal bármely pontjára ugorhatsz; tekerés közben ez
+`Kezdés` (vagy `Szóköz`) indítja a tekerést, `Szünet` megállítja (az idő is áll), `Befejezés` lezárja. **Az útvonal
+végét elérve a tekerés nem ér véget**: a program értesít, és folytatódik — **körútnál új kör indul a rajtról, nem
+körútnál visszafelé indulsz ugyanazon az útvonalon** (a visszaút végén megint megfordul, és így tovább, amíg a
+*Befejezés*-t meg nem nyomod). Így egy az útvonalnál hosszabb edzés is kifut, és szabad tekerésben is mehetsz, ameddig
+akarsz. A táv, a hátralévő út és az ETA az aktuális **szakaszra** értendő (a telefon Tekerés fülén felül egy
+„*2. szakasz*” jelzés mutatja, hol tartasz); az összegzés a teljes menetet számolja. A szellem és az emelkedő-PR az
+első szakaszon értelmes (a későbbi körök saját időbélyeggel bekerülnek a naplóba, de a PR-keresés nem viszi őket).
+Kezdés előtt a profilra kattintva az útvonal bármely pontjára ugorhatsz; tekerés közben ez
 nem megy. A program ébren tartja a gépet, amíg tekersz (Windows, Linux, macOS; Androidon nem).
 
 A sebesség a mért **wattból** jön, a közúti mérésekkel validált Martin-féle modellel (gravitáció, gördülés,
@@ -149,6 +162,16 @@ Billat 30/30, Gibala sprintintervallum és mások; a források edzésenként a `
 - Tekerés közben a trainer **ERG-módban** tartja a célwattot, az *Edzés* kártya és a profil-panel *Edzés* nézete
   mutatja a blokkot, a hátralévő időt, a következő blokkot, és az **edzői üzenetet** (az edzés megfelelő pillanatában,
   12 másodpercig, csak ott, nem felugró üzenetként). A szünet/kilépés itt is semlegesre állítja a trainert.
+- **Erősség menet közben.** Ha az edzés túl könnyű vagy túl nehéz, ±5 %-os lépésekben, **50–150 %** között állíthatod
+  — a hátralévő blokkok céljait skálázza (a kijelzés és a trainer ugyanazt a számot kapja). *Desktopon* a *Vezérlés*
+  ablak **−/+** léptetője, vagy ERG alatt a **`↑`/`↓` nyílbillentyű** (tartsd nyomva: lépénként megy). *Telefonon* a
+  **Tekerés fülön** indított **felhúzás** (nehezebb) vagy **lehúzás** (könnyebb) állít az erősségen. Ha a fül görgethető,
+  a gesztust a teljesítményértéknél kezdd, vagy használd a **−/+** gombokat. Az edzés kezdetén a képernyő
+  széle felvillan (fent piros, lent zöld, egy-egy rövid felirattal), hogy a mozdulatra figyelj. A beállítás nem
+  marad meg: minden menet 100 %-on indul, a kártyán pedig ott látszik, ha nem 100 %-on tekersz.
+- **Az edzés végén.** Az utolsó blokk lejárta után a trainer a terep-szimulációra vált vissza (a program ezt kifejezetten
+  kétszer is elküldi, mert némelyik firmware nem engedi el az ERG-et egyetlen írásra). Ha a trainer mégis tartaná az
+  utolsó célwattnak, az *Edzés* kártyán (a „*Edzés kész*” mellett) lévő **„ERG ki”** gombbal újraküldheted a váltást.
 - **Saját edzés:** az *Edzés importálása…* a MyWhoosh- vagy Zwift-fájlt (`.xml`, `.zwo`) és a MyWhoosh JSON-exportját is
   beolvassa; a `workouts/` mappába kerül, és onnantól ugyanúgy választható.
 - Tekerés közben az edzés nem cserélhető.
@@ -370,7 +393,9 @@ szabályai: [`STREETVIEW.md`](STREETVIEW.md).
 nagy `Kezdés`/`Szünet`/`Befejezés` gombsor. A **Tekerés** fülön egy képernyőn van minden, ami tekerés közben kell: az
 edzés blokkja (hátralévő idő, következő blokk, az edző üzenete), a teljesítmény a célhoz mérve (*célban / kevés / sok*), a
 zónasáv, kadencia, pulzus, sebesség, meredekség, alatta a profil (oldalra húzva váltasz a nézetei között). A
-párbeszédablakok telefonon teljes képernyősek.
+párbeszédablakok telefonon teljes képernyősek. **Edzés alatt a Tekerés fülön fel-le húzással állíthatod az
+erősséget**. Görgethető nézetben a teljesítményértéknél kezdd a gesztust. Az edzés kezdetén a képernyő széle felvillan.
+Az útvonal vége után felül egy „*2. szakasz*” jelzés mutatja, hogy a folytatás melyik szakaszán jársz.
 
 Nagyon kis kijelzőn (400 px-nél keskenyebben) a felső sáv **hamburger menüt** (≡) kap: az *Edzés*, a *Naptár*, az
 *Eszközök* és a *Beállítások* a sávon marad, az *Útvonal*, az *Áttekintés* és az *AI-agent* a menüből nyílik. A menüt a
@@ -435,7 +460,7 @@ egyszerűen állítsd vissza a fájlt. Tekerés közben nem lehet mentést kész
 | `X` | térkép és Street View cseréje |
 | `W` | edzésválasztó |
 | `←` / `→` | virtuális váltó: könnyebb / nehezebb |
-| `↑` / `↓` | a szimulált tekerő teljesítménye ±10 W |
+| `↑` / `↓` | edzés alatt az **edzés erőssége** ±5 %; nélküle a szimulált tekerő teljesítménye ±10 W |
 | `F11` | teljes képernyő |
 | `Esc` | ablak bezárása, kilépés a teljes képernyőből |
 | `Ctrl+O` | GPX megnyitása |
@@ -455,7 +480,8 @@ ablak fölé a felület nem tud rajzolni); a panel bezárása a Firefoxot is bez
 | Tünet | Mit tegyél |
 |---|---|
 | A trainer nem reagál az emelkedőkre / az edzésre | Az **Eszközök** ablakban *Trainer* szerepben legyen csatlakoztatva (a teljesítménymérő szerep csak olvas). Nézd meg a BLE-naplót (`ble.log`, a [`BLUETOOTH.md`](BLUETOOTH.md) §11 szerint); Zwift vagy telefonos app ne tartsa a trainert. |
-| Nem találja az eszközt | Kapcsold be a Bluetooth-t; Windowson a keresés szűrés nélküli, így sok eszköz látszik: nézd az eszköz szerepeit. Androidon engedd a Bluetooth-engedélyeket (a *Keresés indítása* újra kérdez); macOS-en a rendszer az első kereséskor kér engedélyt. |
+| **Az edzés után a trainer tartja az utolsó célwattnak** | A firmware nem engedte el az ERG-et. Nyomd meg az *Edzés* kártyán az **„ERG ki”** gombot; ha nem segít, a trainer saját gombján/kijelzőjén lépj ki az ERG-módból vagy indítsd újra a trainert, és küldd el nekünk a `ble.log`-ot. |
+| Nem találja az eszközt | Kapcsold be a Bluetooth-t; Windowson a keresés szűrés nélküli, így sok eszköz látszik: nézd az eszköz szerepeit. Ha a listában **„Csatlakoztatva”** jelölésű sor van, azt másik alkalmazás vagy a telefon automatikus visszakapcsolása tartja: engedd el ott, vagy indítsd újra a trainert, és indíts új keresést. Androidon engedd a Bluetooth-engedélyeket (a *Keresés indítása* újra kérdez); macOS-en a rendszer az első kereséskor kér engedélyt. |
 | A térkép üres vagy szürke | Nincs hálózat és még nincs gyorsítótárazott csempe: az útvonal és a számok így is működnek. |
 | Az útvonal nem töltődik be | A hibaüzenet megmondja az okot (hibás fájl, nem támogatott link, nincs hálózat a BRouterhez). A linknek tartalmaznia kell a `lonlats=` részt. |
 | A profil lapos | A fájlban nincs magasságadat, és az Open-Meteo sem volt elérhető. Tölts be magassággal ellátott GPX-et vagy bikerouter-linket. |

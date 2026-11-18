@@ -10,6 +10,7 @@ fn point(t: f64, w: f64) -> RecordPoint {
         t,
         unix_s: 1_700_000_000.0 + t,
         dist: 10.0 * t,
+        odo: 10.0 * t,
         lat: 47.5,
         lon: 19.0,
         ele: 100.0,

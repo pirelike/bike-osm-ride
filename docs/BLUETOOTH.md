@@ -56,10 +56,24 @@ GPL project opencycling, idea only). Devices are classified from the services th
 the advertisement is silent, from the name (`scan.rs` lists the prefixes: Kickr, Tacx, Zwift Hub, Elite
 Direto/Suito/Zumo, Saris, Polar H/OH, Tickr, Assioma, Favero, Stages, ...). A named device with no recognised
 service still shows up when it is closer than -65 dBm, so someone sitting on a trainer with a silent
-advertisement can pick it. After connecting, the real services are checked; a wrong guess becomes a clear
-error. A scan that saw no event for 30 s is restarted (WinRT goes quiet), a device unseen for 60 s drops off
-the list, and `Discovered` is sent at most every 500 ms. A running scan stops on its own after 30 s
-(`SCAN_TIMEOUT` in the controller) and always before connecting.
+advertisement can pick it — and even without a guess about its kind, the row offers "Csatlakozás
+trainerként" (the service discovery after the connect says whether the guess was right). After connecting,
+the real services are checked; a wrong guess becomes a clear error. A scan that saw no event for 30 s is
+restarted (WinRT goes quiet), a device unseen for 60 s drops off the list, and `Discovered` is sent at most
+every 500 ms.
+
+**A device that holds a GATT link does not advertise** — typically the trainer the phone re-connected to on
+its own, or one a companion app keeps. The scan therefore also asks the OS for its connected devices
+(`BleAdapter::connected_devices`): `retrieve_peripherals` on Windows (and Linux/macOS, where btleplug has
+them), and on Android the activity's `connectedBleDevices()` over JNI (droidplug has no such source). Such a
+row carries a "Csatlakoztatva" tag; when the platform cannot hand us a GATT handle (Android, another app owns
+the link), the row explains that instead of a connect button. A real advertisement for the same device
+re-enables connecting.
+
+**The scan belongs to the devices dialog**: opening it starts the scan, closing it stops it. While the dialog
+is open a small keeper (the controller's `scan_keeper_tick`, every 2 s) keeps the scan alive — a connect
+attempt still stops it on purpose (Windows connects far more reliably that way), and it comes back once no
+slot is `Connecting`; a scan stopped by hand stays off. The old 30 s hard timeout is gone.
 
 ## 4. FTMS control (`control.rs`)
 
@@ -84,11 +98,19 @@ The session is a pure state machine (time is passed in), driven by `MultiSession
    computed at send time, so a slow trainer always receives the latest value.
 4. **Pause** queues a neutral simulation (0 % grade) and then Stop/Pause; **shutdown** does the same with Stop.
    The simulation parameters are replayed after a reconnect.
-5. Request Control is tried 3 times, 1 s apart. After three unanswered requests control is **assumed** and
+5. **Leaving ERG is a handshake, not a write.** When a workout runs out of steps the control session re-runs
+   an explicit exit: the neutral grade the pause sequence uses, then the live simulation, re-sent every
+   second for 10 s (`erg_unlatch_window`) even though nothing changed — some firmware ignores a single
+   `0x11` after holding ERG targets. The trainer sees `0x05 … ` then `0x11 00 00 …` twice, then the grade
+   with repeats. The same handshake can be re-run by hand (the workout card's "ERG ki" button once the
+   workout shows *Edzés kész*): a trainer that stayed in ERG gets another chance. A new power target cancels
+   the insist window. *Not confirmed on hardware: whether the captured trainer obeys is exactly what the
+   next ride's `ble.log` will show.*
+6. Request Control is tried 3 times, 1 s apart. After three unanswered requests control is **assumed** and
    writes are no longer waited for ("silent" mode), because some trainers accept commands but never
    confirm; an explicit refusal still refuses. A write that fails at the transport level (ATT `0x11`
    "insufficient resources" from a busy trainer) is retried after the write gap, up to 40 times in a row.
-6. If the trainer takes the control permission away, the app asks again, but only 3 times
+7. If the trainer takes the control permission away, the app asks again, but only 3 times
    (`reclaim_limit`) so it never fights another app for the trainer; the counter resets when a Start or a
    target is accepted.
 
@@ -179,13 +201,24 @@ the version in `Cargo.lock`):
 - `disconnect()` does nothing when its `connected` flag is already false, and `Callback.onConnectionStateChange` closes
   the `BluetoothGatt` on a drop only when a command is in flight. A link lost while idle (the usual case: the session
   only subscribes and, now and then, writes) therefore leaves a stale `gatt`, and the next `connect()` takes the
-  `gatt.connect()` branch, which Android runs as a background *auto-connect* with no timeout of its own. **That cannot
-  be repaired from Rust** (btleplug offers no way to close a gatt, and `clear_peripherals` is global): it needs a
-  patch of `Peripheral.java` (close the gatt on a drop with no command in flight, and in `disconnect()` when not
-  connected), applied by `packaging/android/resoverlay.sh` and built into an APK to be tested. Not done yet; if
-  reconnects stay unreliable after the changes above, this is the next suspect, and the hex log (`<files>/ble.log`,
+  `gatt.connect()` branch, which Android runs as a background *auto-connect* with no timeout of its own — it may
+  complete minutes later, after the app already gave up: the phone ends up GATT-connected to a trainer that stopped
+  advertising while the app shows the connect as failed (the "the trainer connected itself to the phone and the app
+  never noticed" report of 2026-11). **That cannot be repaired from Rust** (btleplug offers no way to close a gatt, and
+  `clear_peripherals` is global): `packaging/android/patch_droidplug.py` now patches `Peripheral.java` inside the
+  Gradle project (`resoverlay.sh` runs it right after copying droidplug's sources): disconnect() closes a stale gatt
+  when the link is already down, and an idle link loss (or a mid-command disconnect nothing handled) closes it too.
+  The patch fails the build loudly when the droidplug version drifts and its anchors move, and `NOTICE.md` lists it.
+  **Not confirmed on a phone yet** — the hex log (`<files>/ble.log`,
   `adb shell run-as hu.borbelyhuba.bikeosmride cat files/ble.log` on a debuggable build) shows whether the retries
   end in `Timeout`, `NotConnected` or `NotFound`.
+
+The connected devices the phone already holds (a trainer it auto-re-connected to, one a companion app keeps) are
+listed through the activity: `MainActivity.connectedBleDevices()` enumerates `BluetoothManager.getConnectedDevices
+(GATT)` as `"address|name"` lines, and `android_ble::connected_ble_devices` reads it over JNI during every scan
+start. Droidplug itself has no connected-device source (peripherals exist only after a scan callback), and Android
+refuses a second GATT client while another app owns the link, so such a row is information ("Csatlakoztatva" tag and
+a hint to free the device), not a connect target.
 
 A scan can start without any error and still deliver nothing: on Android 12+ that is what `BLUETOOTH_SCAN` without
 `usesPermissionFlags="neverForLocation"` does when no location permission is held (the pinned manifest now sets the

@@ -50,6 +50,7 @@ impl RideSnapshot {
             next_climb_in: None,
             trainer_grade: 0.0,
             workout: None,
+            pass: 0,
             ghost: None,
             segment: None,
         }

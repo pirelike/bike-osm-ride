@@ -59,19 +59,26 @@ conectado). Hay cinco papeles: **Rodillo** (rodillo inteligente, FTMS), **Pulso*
 
 ![El diálogo Dispositivos](../../screenshots/devices.png)
 
-1. `Iniciar búsqueda`: el programa busca sin filtrar y clasifica los dispositivos según los servicios que
-   anuncian (la búsqueda se detiene sola a los 30 segundos).
+1. La **búsqueda arranca sola** en cuanto se abre la ventana, y sigue mientras esté abierta (durante un intento de
+   conexión se pausa unos segundos y luego se reanuda). El programa busca sin filtrar y clasifica los dispositivos
+   según los servicios que anuncian; con el botón puedes detenerla y volver a arrancarla cuando quieras.
 2. Junto a cada dispositivo encontrado están los botones de los papeles: te conectas al papel que
    necesites. Un mismo dispositivo físico puede hacer **varios papeles a la vez**: si tu rodillo emite
    también potencia, cadencia o pulso, una sola conexión rellena todas las tarjetas (en las tarjetas se ve
    la marca *dispositivo compartido*). De los datos de los sensores gana la fuente más precisa (potencia:
    el potenciómetro antes que el rodillo; cadencia: CSC, luego el potenciómetro, luego el rodillo; pulso: la
    banda de pecho antes que el rodillo).
-3. Lo que no se ha actualizado en 3 segundos pasa a «—»; si la conexión se corta, el programa lo reintenta
+3. **Filas con la marca «Conectado»:** estos dispositivos ya están enlazados al equipo o al teléfono — normalmente
+   el rodillo que el teléfono ha reconectado por su cuenta, o uno que mantiene ocupado otra aplicación. No se
+   anuncian, así que la búsqueda por sí sola jamás los habría encontrado. Si la conexión la mantiene **otra
+   aplicación** (en Android dos clientes GATT no caben en el mismo dispositivo), la fila te dice que hay que
+   soltarlo allí; si no, la fila ofrece un botón de conexión normal. En un dispositivo sin nombre también hay un
+   botón *Conectar como rodillo* — la detección de servicios tras conectar decide si de verdad lo es.
+4. Lo que no se ha actualizado en 3 segundos pasa a «—»; si la conexión se corta, el programa lo reintenta
    tres veces.
-4. **Conecta el rodillo en el papel Rodillo**: el papel de potenciómetro solo lee, el control (subidas,
+5. **Conecta el rodillo en el papel Rodillo**: el papel de potenciómetro solo lee, el control (subidas,
    ERG) lo da el papel Rodillo.
-5. **Ciclista simulado**: el primer elemento de la lista, siempre está ahí, incluso sin Bluetooth. En el
+6. **Ciclista simulado**: el primer elemento de la lista, siempre está ahí, incluso sin Bluetooth. En el
    panel de la izquierda puedes fijar los vatios con un deslizador (o con `↑`/`↓`, ±10 W); botones rápidos:
    Z2 150 W, Z4 250 W, Sprint 700 W, Libre 0 W. La cadencia y el pulso le siguen de forma creíble.
 
@@ -89,9 +96,16 @@ seguridad*: solo salen las operaciones necesarias y los objetivos se recortan al
 ## Pedalear
 
 `Inicio` (o `Espacio`) arranca la salida, `Pausa` la detiene (el tiempo también se detiene) y `Finalizar`
-la cierra. Al final de la ruta la salida **termina sola**. Antes de empezar puedes saltar a cualquier punto
-de la ruta haciendo clic en el perfil; durante la salida eso no funciona. El programa mantiene el equipo
-despierto mientras pedaleas (Windows, Linux, macOS; en Android no).
+la cierra. **Llegar al final de la ruta no termina la salida**: el programa avisa y sigue — **en un circuito
+arranca una vuelta nueva desde la línea de salida; en una ruta que no lo es pedaleas hacia atrás por el mismo
+trazado** (al final del camino de vuelta gira otra vez, y así hasta que pulses *Finalizar*). Así, un
+entrenamiento más largo que la ruta se completa entero, y pedaleando libre puedes seguir todo lo que quieras.
+La distancia, la ruta restante y la ETA se refieren al **tramo** actual (en la pestaña En marcha del teléfono,
+arriba, un indicador «*2. tramo*» te dice por dónde vas); el resumen cuenta la salida entera. El fantasma y los
+PR de subida solo tienen sentido en el primer tramo (las vueltas posteriores entran en el registro con sus
+propias marcas de tiempo, pero la búsqueda de PR no las tiene en cuenta). Antes de empezar puedes saltar a
+cualquier punto de la ruta haciendo clic en el perfil; durante la salida eso no funciona. El programa mantiene
+el equipo despierto mientras pedaleas (Windows, Linux, macOS; en Android no).
 
 La velocidad sale de los **vatios** medidos, con el modelo de Martin validado con mediciones en carretera
 (gravedad, rodadura, fricción de rodamientos, resistencia del aire con radios, inercia), a partir de tu peso,
@@ -154,6 +168,19 @@ en el campo `sources` de `workouts.json`).
   vista *Entrenamiento* del panel del perfil muestran el bloque, el tiempo restante, el bloque siguiente y
   el **mensaje del entrenador** (en el momento adecuado del entrenamiento, durante 12 segundos, solo ahí y
   no como aviso emergente). La pausa y la salida también aquí ponen el rodillo en neutro.
+- **Intensidad sobre la marcha.** Si el entrenamiento resulta demasiado fácil o demasiado duro, lo ajustas en
+  pasos de ±5 %, entre el **50 y el 150 %** — escala los objetivos de los bloques que quedan (la pantalla y el
+  rodillo reciben el mismo número). *En el escritorio*, el stepper **−/+** del panel *Control*, o bajo ERG las
+  **teclas de flecha `↑`/`↓`** (mantenlas pulsadas: avanza paso a paso). *En el teléfono*, un **deslizamiento
+  hacia arriba** (más duro) o **hacia abajo** (más suave) en la pestaña En marcha. Si la pestaña se puede
+  desplazar, inicia el gesto sobre el indicador de potencia. Al
+  empezar el entrenamiento el borde de la pantalla destella (arriba en rojo, abajo en verde, con una etiqueta
+  breve a cada lado) para que te fijes en el gesto. El ajuste no se conserva: cada salida arranca al 100 %, y en
+  la tarjeta se ve si no pedaleas al 100 %.
+- **Al terminar el entrenamiento.** Cuando se agota el último bloque, el rodillo vuelve a la simulación del
+  terreno (el programa lo envía dos veces a propósito, porque algún firmware no suelta el ERG con una sola
+  escritura). Si el rodillo se quedara clavado en el último objetivo, el botón **«Apagar ERG»** de la tarjeta
+  *Entrenamiento* (junto a «*Entrenamiento terminado*») reenvía el cambio.
 - **Entrenamiento propio:** *Importar entrenamiento…* lee también un archivo de MyWhoosh o de Zwift
   (`.xml`, `.zwo`) y la exportación JSON de MyWhoosh; se guarda en la carpeta `workouts/` y desde entonces se
   puede elegir como los demás.
@@ -361,7 +388,11 @@ Datos** y, encima, la fila grande de botones `Inicio`/`Pausa`/`Finalizar`. En la
 en una sola pantalla todo lo que hace falta mientras pedaleas: el bloque del entrenamiento (tiempo restante,
 bloque siguiente, el mensaje del entrenador), la potencia medida contra el objetivo (*en el objetivo / corto
 / largo*), la franja de zonas, cadencia, pulso, velocidad y pendiente, y debajo el perfil (deslizando el dedo
-cambias entre sus vistas). Los diálogos ocupan toda la pantalla en el teléfono.
+cambias entre sus vistas). Los diálogos ocupan toda la pantalla en el teléfono. **Durante un entrenamiento,
+desliza el dedo verticalmente en la pestaña En marcha para ajustar la intensidad.** Si la pestaña se puede
+desplazar, inicia el gesto sobre el indicador de potencia. Al empezar el entrenamiento, el borde de la pantalla
+destella en rojo arriba y en verde abajo. Además,
+tras el final de la ruta, un indicador «*2. tramo*» arriba muestra en qué tramo de la continuación estás.
 
 <p align="center">
   <img src="../../screenshots/phone-ride.png" width="280" alt="Diseño de teléfono, pestaña En marcha con entrenamiento">
@@ -419,7 +450,7 @@ todavía no se ha probado en el teléfono.
 | `X` | intercambiar mapa y Street View |
 | `W` | selector de entrenamientos |
 | `←` / `→` | cambio virtual: más fácil / más duro |
-| `↑` / `↓` | potencia del ciclista simulado ±10 W |
+| `↑` / `↓` | durante un entrenamiento, la **intensidad del entrenamiento** ±5 %; sin entrenamiento, la potencia del ciclista simulado ±10 W |
 | `F11` | pantalla completa |
 | `Esc` | cerrar la ventana, salir de pantalla completa |
 | `Ctrl+O` | abrir un GPX |
@@ -440,7 +471,8 @@ panel cierra también Firefox; conviene que tenga al menos unos 500 px de ancho.
 | Síntoma | Qué hacer |
 |---|---|
 | El rodillo no reacciona a las subidas ni al entrenamiento | En el diálogo **Dispositivos** debe estar conectado en el papel *Rodillo* (el papel de potenciómetro solo lee). Mira el registro BLE (`ble.log`, según el §11 de [`BLUETOOTH.md`](../../BLUETOOTH.md)); que Zwift o una aplicación del teléfono no estén ocupando el rodillo. |
-| No encuentra el dispositivo | Enciende el Bluetooth; en Windows la búsqueda no filtra, así que se ven muchos dispositivos: mira los papeles de cada uno. En Android concede los permisos de Bluetooth (*Iniciar búsqueda* vuelve a preguntar); en macOS el sistema pide permiso en la primera búsqueda. |
+| **El rodillo sigue clavado en el último objetivo después del entrenamiento** | El firmware no soltó el ERG. Pulsa el botón **«Apagar ERG»** de la tarjeta *Entrenamiento*; si no ayuda, sal del modo ERG con el botón o la pantalla del propio rodillo o reinícialo, y envíanos el `ble.log`. |
+| No encuentra el dispositivo | Enciende el Bluetooth; en Windows la búsqueda no filtra, así que se ven muchos dispositivos: mira los papeles de cada uno. Si en la lista hay una fila con la marca **«Conectado»**, la tiene otra aplicación o la reconexión automática del teléfono: suéltalo allí, o reinicia el rodillo y arranca una búsqueda nueva. En Android concede los permisos de Bluetooth (*Iniciar búsqueda* vuelve a preguntar); en macOS el sistema pide permiso en la primera búsqueda. |
 | El mapa está vacío o gris | No hay red y todavía no hay teselas en la caché: la ruta y los números funcionan igual. |
 | La ruta no se carga | El mensaje de error dice el motivo (archivo dañado, enlace no admitido, sin red para BRouter). El enlace debe contener la parte `lonlats=`. |
 | El perfil está plano | El archivo no trae datos de altitud y Open-Meteo tampoco estaba disponible. Carga un GPX con altitud o un enlace de bikerouter. |

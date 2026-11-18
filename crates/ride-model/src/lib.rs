@@ -547,6 +547,19 @@ pub struct DeviceInfo {
     /// Which service(s) it advertises, so the UI can offer sensible kinds.
     pub kinds: Vec<DeviceKind>,
     pub rssi: Option<i16>,
+    /// The OS reports the device as connected to this machine. Such a device usually
+    /// does not advertise, so the scan alone would never show it.
+    #[serde(default)]
+    pub connected: bool,
+    /// The hub can open a GATT link to it. `false` only when another app owns the
+    /// connection and the platform (Android) refuses a second one: the row is then
+    /// information for the rider, not something to connect to.
+    #[serde(default = "default_true")]
+    pub connectable: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Latest known values from all connected sensors (merged). `None` = not
@@ -589,6 +602,10 @@ pub enum SensorCommand {
     Disconnect(DeviceKind),
     SetSimulation(TrainerSim),
     SetTargetPower(f64),
+    /// Run the explicit ERG-exit handshake on the trainer: neutral grade, then the live
+    /// simulation re-sent insistently for a while (sent on the tick a workout runs out of
+    /// steps, and by the workout card's "freeride" action).
+    RelaxFromErg,
     /// Tell the trainer a session starts / pauses (FTMS Start/Stop control points).
     TrainerStart,
     TrainerPause,
@@ -600,6 +617,8 @@ pub enum SensorCommand {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SensorEvent {
     Discovered(Vec<DeviceInfo>),
+    /// Whether the adapter has successfully started and is still scanning.
+    Scanning(bool),
     /// All sibling roles affected by a deliberate disconnect (before their State events).
     Disconnecting(Vec<DeviceKind>),
     State {
@@ -669,6 +688,10 @@ pub struct RideSnapshot {
     pub trainer_grade: f64,
     /// The running workout (ERG target, current step, remaining time), if one is selected.
     pub workout: Option<WorkoutProgress>,
+    /// Which pass of the route the ride is on: 0 for the first, 1+ once a ride continued
+    /// past the end (a loop restarted, or the route turned around).
+    #[serde(default)]
+    pub pass: u32,
     /// The ghost of an earlier ride on the same route, if one is being replayed.
     #[serde(default)]
     pub ghost: Option<GhostLive>,
@@ -684,7 +707,14 @@ pub struct RecordPoint {
     pub t: f64,
     /// Wall clock, seconds since the Unix epoch.
     pub unix_s: f64,
+    /// Distance along the current route pass, metres: wraps at every continuation (a loop
+    /// restarted, the route turned around), so route-relative maths keep working.
     pub dist: f64,
+    /// Cumulative distance since the ride started, metres: monotone even across the
+    /// wrap, so exports and charts make sense on rides longer than the route. Older
+    /// records have none and load with `odo == dist`.
+    #[serde(default)]
+    pub odo: f64,
     pub lat: f64,
     pub lon: f64,
     pub ele: f64,

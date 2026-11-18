@@ -18,8 +18,9 @@ use ride_model::{DeviceInfo, DeviceKind};
 use tokio::sync::{mpsc, watch};
 use uuid::Uuid;
 
+use crate::error::bounded;
 use crate::link::{stopped, HubConfig, Internal};
-use crate::transport::{sig_uuid, AdapterEvent, Advertisement, BleAdapter, GattPeripheral};
+use crate::transport::{sig_uuid, AdapterEvent, Advertisement, BleAdapter, ConnectedDevice, GattPeripheral};
 use crate::zwift::ControllerKind;
 use ride_i18n::{t, tf};
 
@@ -133,7 +134,26 @@ struct Entry {
     rssi: Option<i16>,
     /// Zwift controller type byte from the manufacturer data, once seen.
     zwift: Option<u8>,
-    last_seen: Instant,
+    /// The OS reports the device as connected (seeded by `seed_connected`).
+    connected: bool,
+    /// The hub has a GATT handle for the device (`seed_connected` decides; any real
+    /// advertisement re-enables it). `false`: another app owns the link, Android refuses
+    /// a second client — the row is information, not a connect target.
+    connectable: bool,
+    last_seen: Option<Instant>,
+}
+
+/// What the list shows of a device: its name, its roles (the set, not just how many: a
+/// Zwift Hub first classified as a Shifter turns into a Trainer), whether it is heard,
+/// and the connected/connectable marks the row renders. The signature of the *visible*
+/// list: any change in it must re-emit the list.
+#[derive(Debug, Clone, PartialEq)]
+struct Visible {
+    name: Option<String>,
+    kinds: Vec<DeviceKind>,
+    heard: bool,
+    connected: bool,
+    connectable: bool,
 }
 
 /// What the scan has seen so far, aged and classified.
@@ -161,9 +181,13 @@ impl DiscoveryTable {
             services: HashSet::new(),
             rssi: None,
             zwift: None,
-            last_seen: now,
+            connected: false,
+            connectable: true,
+            last_seen: None,
         });
-        e.last_seen = now;
+        e.last_seen = Some(now);
+        // A real advertisement means the adapter has the device: it can be connected to.
+        e.connectable = true;
         if let Some(n) = adv.name.as_ref().filter(|n| !n.trim().is_empty()) {
             e.name = Some(n.clone());
         }
@@ -182,33 +206,95 @@ impl DiscoveryTable {
         before != self.visible_signature(&id) || rssi_moved
     }
 
-    /// What the list shows of a device: its name, its roles (the set, not just how many: a
-    /// Zwift Hub first classified as a Shifter turns into a Trainer) and whether it is heard.
-    fn visible_signature(&self, id: &str) -> Option<(Option<String>, Vec<DeviceKind>, bool)> {
+    /// Merge what the OS knows about a **connected** device (it usually does not advertise,
+    /// so `update` would never hear of it). `connectable` says whether the hub can open a
+    /// GATT link to it; while another app owns the link it cannot. Returns whether the
+    /// *visible list* may have changed.
+    pub fn seed_connected(
+        &mut self,
+        id: String,
+        adv: &Advertisement,
+        connectable: bool,
+    ) -> bool {
+        let before = self.visible_signature(&id);
+        let e = self.entries.entry(id.clone()).or_insert_with(|| Entry {
+            name: None,
+            services: HashSet::new(),
+            rssi: None,
+            zwift: None,
+            connected: false,
+            connectable: true,
+            last_seen: None,
+        });
+        e.connected = true;
+        // The owner of the link can change between scans, so the fresh value wins. A real
+        // advertisement arriving later re-enables connecting (see `update`).
+        e.connectable = connectable;
+        if let Some(n) = adv.name.as_ref().filter(|n| !n.trim().is_empty()) {
+            e.name = Some(n.clone());
+        }
+        e.services.extend(adv.services.iter().copied());
+        before != self.visible_signature(&id)
+    }
+
+    /// Replace the OS connection snapshot while keeping independently heard advertisements.
+    fn refresh_connected<P>(&mut self, devices: Vec<ConnectedDevice<P>>) -> bool {
+        let present: HashSet<_> = devices.iter().map(|d| d.id.as_str()).collect();
+        let mut dirty = false;
+        self.entries.retain(|id, entry| {
+            if entry.connected && !present.contains(id.as_str()) {
+                dirty = true;
+                entry.connected = false;
+                entry.connectable = true;
+                return entry.last_seen.is_some();
+            }
+            true
+        });
+        for device in devices {
+            dirty |= self.seed_connected(device.id, &device.adv, device.peripheral.is_some());
+        }
+        dirty
+    }
+
+    fn visible_signature(&self, id: &str) -> Option<Visible> {
         let e = self.entries.get(id)?;
         let services: Vec<Uuid> = e.services.iter().copied().collect();
         let mut kinds = classify_with(e.name.as_deref(), &services, e.zwift);
         let visible = Self::is_visible(e, &kinds);
         kinds.sort_by_key(|k| *k as u8);
-        visible.then(|| (e.name.clone(), kinds, e.rssi.is_some()))
+        visible.then(|| Visible {
+            name: e.name.clone(),
+            kinds,
+            heard: e.rssi.is_some(),
+            connected: e.connected,
+            connectable: e.connectable,
+        })
     }
 
     fn is_visible(e: &Entry, kinds: &[DeviceKind]) -> bool {
-        !kinds.is_empty() || (e.name.is_some() && e.rssi.is_some_and(|r| r >= NEARBY_RSSI_DBM))
+        // A connected device is always worth showing: it is usually the trainer itself,
+        // sitting on a link the scan cannot see.
+        e.connected
+            || !kinds.is_empty()
+            || (e.name.is_some() && e.rssi.is_some_and(|r| r >= NEARBY_RSSI_DBM))
     }
 
     /// Drop devices not heard from for `forget_after`. Returns whether anything went.
+    /// Devices still connected at the OS level are kept between connection snapshots.
     pub fn prune(&mut self, now: Instant) -> bool {
         let before = self.entries.len();
         let keep = self.forget_after;
         self.entries
-            .retain(|_, e| now.saturating_duration_since(e.last_seen) < keep);
+            .retain(|_, e| {
+                e.connected || e.last_seen.is_some_and(|seen| now.saturating_duration_since(seen) < keep)
+            });
         self.entries.len() != before
     }
 
-    /// The list for the UI: recognised devices first, then by signal strength, then by name.
+    /// The list for the UI: recognised devices first, connected ones next (a trainer on a
+    /// live link is what the rider is usually looking for), then by signal strength and name.
     pub fn snapshot(&self) -> Vec<DeviceInfo> {
-        let mut out: Vec<(bool, DeviceInfo)> = self
+        let mut out: Vec<(bool, bool, DeviceInfo)> = self
             .entries
             .iter()
             .filter_map(|(id, e)| {
@@ -233,26 +319,30 @@ impl DiscoveryTable {
                 });
                 Some((
                     !kinds.is_empty(),
+                    e.connected,
                     DeviceInfo {
                         id: id.clone(),
                         name,
                         kinds,
                         rssi: e.rssi,
+                        connected: e.connected,
+                        connectable: e.connectable,
                     },
                 ))
             })
             .collect();
         out.sort_by(|a, b| {
             b.0.cmp(&a.0)
+                .then_with(|| b.1.cmp(&a.1))
                 .then_with(|| {
-                    b.1.rssi
+                    b.2.rssi
                         .unwrap_or(i16::MIN)
-                        .cmp(&a.1.rssi.unwrap_or(i16::MIN))
+                        .cmp(&a.2.rssi.unwrap_or(i16::MIN))
                 })
-                .then_with(|| a.1.name.cmp(&b.1.name))
-                .then_with(|| a.1.id.cmp(&b.1.id))
+                .then_with(|| a.2.name.cmp(&b.2.name))
+                .then_with(|| a.2.id.cmp(&b.2.id))
         });
-        out.into_iter().map(|(_, d)| d).collect()
+        out.into_iter().map(|(_, _, d)| d).collect()
     }
 
     pub fn len(&self) -> usize {
@@ -274,11 +364,14 @@ pub(crate) async fn run_scan<A: BleAdapter>(
     tx: mpsc::UnboundedSender<Internal>,
     cfg: Arc<HubConfig>,
     mut stop: watch::Receiver<bool>,
+    generation: u64,
 ) {
     let notice = |text: String| {
         let _ = tx.send(Internal::Notice(text));
     };
-    let mut events = match adapter.events().await {
+    let events = || bounded(t("ble.hub.eszkozlista"), cfg.io_timeout, adapter.events());
+    let start = || bounded(t("ble.hub.eszkozlista"), cfg.io_timeout, adapter.start_scan());
+    let mut events_stream = match events().await {
         Ok(e) => e,
         Err(e) => {
             notice(tf(
@@ -288,24 +381,41 @@ pub(crate) async fn run_scan<A: BleAdapter>(
             return;
         }
     };
-    if let Err(e) = adapter.start_scan().await {
+    if let Err(e) = start().await {
         notice(tf(
             "ble.scan.a_kereses_nem_indithato_e_ellenorizd_hogy_be_van_e_k",
             &[("e", &e.to_string())],
         ));
         return;
     }
+    let _ = tx.send(Internal::ScanStarted(generation));
 
     let mut table = DiscoveryTable::new(cfg.scan_forget_after);
     let mut dirty = true;
     // devices the OS already knows about show up immediately
-    if let Ok(known) = adapter.peripherals().await {
-        for p in known {
-            if let Ok(Some(adv)) = adapter.advertisement(&p).await {
-                dirty |= table.update(p.id(), &adv, Instant::now());
+    let known = async {
+        let mut known = Vec::new();
+        if let Ok(peripherals) = adapter.peripherals().await {
+            for p in peripherals {
+                if let Ok(Some(adv)) = adapter.advertisement(&p).await {
+                    known.push((p.id(), adv));
+                }
             }
         }
-    }
+        known
+    };
+    let mut known_pending = true;
+    let known = tokio::time::timeout(cfg.io_timeout, known);
+    tokio::pin!(known);
+    // Refresh even if advertisements are arriving, and poll concurrently with them.
+    let adapter_ref = adapter.as_ref();
+    let io_timeout = cfg.io_timeout;
+    let connected = |delay| async move {
+        tokio::time::sleep(delay).await;
+        tokio::time::timeout(io_timeout, adapter_ref.connected_devices()).await
+    };
+    let refresh = connected(Duration::ZERO);
+    tokio::pin!(refresh);
 
     let mut last_event = Instant::now();
     // The system can start a scan without error and still hand over nothing (Android without the
@@ -316,9 +426,20 @@ pub(crate) async fn run_scan<A: BleAdapter>(
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
-            biased;
             _ = stopped(&mut stop) => break,
-            ev = events.next() => match ev {
+            result = &mut known, if known_pending => {
+                known_pending = false;
+                for (id, adv) in result.unwrap_or_default() {
+                    dirty |= table.update(id, &adv, Instant::now());
+                }
+            }
+            result = &mut refresh => {
+                if let Ok(Ok(devices)) = result {
+                    dirty |= table.refresh_connected(devices);
+                }
+                refresh.set(connected(cfg.scan_connected_interval));
+            }
+            ev = events_stream.next() => match ev {
                 Some(AdapterEvent::Seen(p)) => {
                     heard_anything = true;
                     last_event = Instant::now();
@@ -327,8 +448,8 @@ pub(crate) async fn run_scan<A: BleAdapter>(
                     }
                 }
                 Some(AdapterEvent::Lost(_)) => {}
-                None => match adapter.events().await {
-                    Ok(e) => events = e,
+                None => match events().await {
+                    Ok(e) => events_stream = e,
                     Err(e) => {
                         notice(tf(
                             "ble.scan.a_kereses_megszakadt_e",
@@ -343,7 +464,7 @@ pub(crate) async fn run_scan<A: BleAdapter>(
                 dirty |= table.prune(now);
                 if dirty {
                     dirty = false;
-                    if tx.send(Internal::Discovered(table.snapshot())).is_err() {
+                    if tx.send(Internal::Discovered(generation, table.snapshot())).is_err() {
                         break;
                     }
                 }
@@ -353,8 +474,8 @@ pub(crate) async fn run_scan<A: BleAdapter>(
                         notice(silent_scan_hint().to_string());
                     }
                     // a scan that heard nothing for a long time is probably stuck: restart it
-                    let _ = adapter.stop_scan().await;
-                    if let Err(e) = adapter.start_scan().await {
+                    let _ = tokio::time::timeout(cfg.io_timeout, adapter.stop_scan()).await;
+                    if let Err(e) = start().await {
                         notice(tf(
                             "ble.scan.a_kereses_ujrainditasa_nem_sikerult_e",
                             &[("e", &e.to_string())],
@@ -366,7 +487,7 @@ pub(crate) async fn run_scan<A: BleAdapter>(
             }
         }
     }
-    let _ = adapter.stop_scan().await;
+    let _ = tokio::time::timeout(cfg.io_timeout, adapter.stop_scan()).await;
 }
 
 #[cfg(test)]
@@ -627,5 +748,76 @@ mod tests {
         assert_eq!(t.snapshot()[0].id, "B");
         assert!(t.prune(t0 + Duration::from_secs(200)));
         assert!(t.is_empty());
+    }
+
+    fn named_adv(name: &str) -> Advertisement {
+        Advertisement {
+            name: Some(name.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_connected_device_is_listed_without_any_advertisement() {
+        let mut t = DiscoveryTable::new(Duration::from_secs(60));
+        // a trainer holding a link: no services, no RSSI, only what the OS says
+        assert!(t.seed_connected("VE:1".into(), &named_adv("VE200"), false));
+        let s = t.snapshot();
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0].id, "VE:1");
+        assert_eq!(s[0].name, "VE200");
+        assert!(s[0].kinds.is_empty(), "the name says nothing here");
+        assert!(s[0].connected);
+        assert!(!s[0].connectable, "another app owns the link");
+        // seeding again with a GATT handle makes it connectable
+        assert!(t.seed_connected("VE:1".into(), &named_adv("VE200"), true));
+        assert!(t.snapshot()[0].connectable);
+    }
+
+    #[test]
+    fn a_connected_device_survives_pruning() {
+        let t0 = Instant::now();
+        let mut t = DiscoveryTable::new(Duration::from_secs(60));
+        t.update(
+            "A".into(),
+            &adv(Some("HR"), &[SERVICE_HEART_RATE], Some(-60)),
+            t0,
+        );
+        t.seed_connected("VE:1".into(), &named_adv("VE200"), false);
+        assert!(t.prune(t0 + Duration::from_secs(120)));
+        assert_eq!(t.len(), 1, "only the connected device stays");
+        assert_eq!(t.snapshot()[0].id, "VE:1");
+    }
+
+    #[test]
+    fn a_real_advertisement_makes_a_connected_device_connectable() {
+        let t0 = Instant::now();
+        let mut t = DiscoveryTable::new(Duration::from_secs(60));
+        t.seed_connected("VE:1".into(), &named_adv("VE200"), false);
+        // the other app let go of it and the trainer advertises again
+        t.update(
+            "VE:1".into(),
+            &adv(Some("VE200"), &[SERVICE_FTMS], Some(-50)),
+            t0,
+        );
+        let s = t.snapshot();
+        assert_eq!(s[0].kinds, vec![DeviceKind::Trainer]);
+        assert!(s[0].connectable);
+        assert!(s[0].connected, "the OS still reports the link");
+    }
+
+    #[test]
+    fn connected_devices_rank_above_plain_named_ones() {
+        let t0 = Instant::now();
+        let mut t = DiscoveryTable::new(Duration::from_secs(60));
+        t.update(
+            "A".into(),
+            &adv(Some("HR"), &[SERVICE_HEART_RATE], Some(-60)),
+            t0,
+        );
+        t.seed_connected("C:9".into(), &named_adv("VE200"), false);
+        t.update("N".into(), &adv(Some("Neighbour TV"), &[], Some(-30)), t0);
+        let ids: Vec<String> = t.snapshot().into_iter().map(|d| d.id).collect();
+        assert_eq!(ids, vec!["A", "C:9", "N"]);
     }
 }

@@ -87,10 +87,16 @@ The full description: **[User guide](USER_GUIDE.md)**.
 - **FTMS trainer** (climbs and ERG), **power meter** (CPS), **speed/cadence** (CSC), **heart-rate monitor** (HR); one
   physical device can fill *several roles* on a single connection; **Zwift Click/Play** virtual gearbox; **simulated rider**.
 - **Virtual gearbox**: 2 × 12 drivetrain, 23 gears, modifies the trainer's resistance.
+- **The end of the route is not the end of the ride**: a loop starts its next lap, any other route is ridden
+  backwards on the same track — a workout longer than the route runs out in full, and a freeride only ends when
+  you press *Finish*.
 
 **Workouts and analysis**
 - 93 built-in workouts in 12 categories, with tags, a zone-coloured block chart and 943 timed coach messages; import of
   MyWhoosh and Zwift workouts (`.zwo`, XML, JSON).
+- **Live workout intensity**: in 5 % steps within 50–150 % — the −/+ stepper in the *Controls* window or the
+  ↑/↓ keys on the desktop, a swipe up (harder) or down (easier) on the ride tab on the phone; the screen's edges
+  flash at the start of a workout so the gesture is discovered.
 - Coggan zones, NP, IF, TSS, kcal; heart-rate zones; per-second recording.
 - **Ghost** (last ride, best, or the GPX's own timestamps) and **local segments with PR**.
 - **Review and comparison of rides**: the rides made on the same route (at most four) side by side by power, heart
@@ -231,6 +237,7 @@ We deliberately use only permissively licensed code. The origin and the licence 
 | [`cycling-ble`](https://github.com/friedrichwilken/cycling-ble) | Apache-2.0 OR MIT | interpreting power-meter, cadence and heart-rate sensor data (built in, marked in the source files) |
 | [OsmolControl](https://github.com/Parapeth962/OsmolControl) | MIT | trainer connection and command safety filter (ported parts, marked) |
 | [iron-heart](https://github.com/nullstalgia/iron-heart) | MIT | heart-rate monitor scanning and reconnecting (pattern taken, no code, marked) |
+| [btleplug](https://github.com/deviceplug/btleplug) droidplug `Peripheral.java` | MIT OR Apache-2.0 (btleplug’s own file) | the Java half of the Android BLE backend, copied into the APK and **patched at build time** (closing a GATT left open after an idle link loss, otherwise the next connect becomes an untimed background auto-connect): `packaging/android/patch_droidplug.py`, details in [`NOTICE.md`](../../NOTICE.md) |
 | [Barlow and Barlow Condensed](https://github.com/jpt/barlow) fonts | SIL OFL 1.1 | the interface's text and numerals; **embedded** in the program (subsetted WOFF2, Latin + Latin Extended, covering Hungarian), so they work without a network; the licence text: [`crates/ride-ui-kit/assets/fonts/OFL.txt`](../../../crates/ride-ui-kit/assets/fonts/OFL.txt), details in [`NOTICE.md`](../../../NOTICE.md) |
 | [virtual-cog](https://github.com/pymmog/virtual-cog) | Unlicense (public domain) | the Zwift Click/Play and Zwift Hub BLE protocol (rewritten in Rust): the `zwift` module of `ride-ble`, details in [`NOTICE.md`](../../../NOTICE.md) |
 | [`p256`](https://github.com/RustCrypto/elliptic-curves), [`hkdf`](https://github.com/RustCrypto/KDFs), [`sha2`](https://github.com/RustCrypto/hashes), [`aes`](https://github.com/RustCrypto/block-ciphers), [`ccm`](https://github.com/RustCrypto/AEADs) (RustCrypto) | MIT / Apache-2.0 | the Zwift Click key exchange (ECDH P-256, HKDF-SHA256) and AES-CCM encryption |

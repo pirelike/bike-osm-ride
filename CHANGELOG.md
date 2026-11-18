@@ -8,6 +8,41 @@ a dátumok a commitok dátumai.
 A **v0.2.0** és a **v0.2.2** címke megvan a tárolóban, de nincs hozzá kiadás: a kiadási futásuk elbukott, a tartalmuk a
 következő verzióban jelent meg (0.2.1, illetve 0.2.3). Egy már kitett címkét nem mozgatunk; a javítás új patch-verzió.
 
+## [0.7.0] – 2026-11-19
+
+### Új
+- **Az útvonal vége nem jelenti a menet végét.** Ha a célt eléri, a tekerés folytatódik: **körút esetén új kör indul a
+  rajtról, nem körútnál pedig visszafelé indulsz ugyanazon az útvonalon** (oda-vissza, ahányszor csak akarod; minden
+  szakasz elején egy értesítés jelzi). Így egy az útvonalnál hosszabb edzés sem marad félbe, és szabad tekerésben is
+  mehetsz tovább — a menetet a *Befejezés* gomb zárja, ahogy eddig. A táv- és szintmutatók az aktuális szakaszra
+  értendők (a telefon Tekerés fülén egy „2. szakasz” jelzés mutatja, hol tartasz), az összegzés a teljes menetet
+  számolja. A szellem és az emelkedő-PR az első szakaszra értelmes (a további körök saját időbélyegűk a
+  tekerésnaplóban, de a PR-keresés nem viszi őket).
+- **Edzés-erősség menet közben.** Ha az edzés túl könnyű vagy túl nehéz, **±5 %-os lépésekben, 50–150 % között**
+  állítható az erősség — a maradék lépések célwattjait skálázza (a kijelzett cél és a traineré azonos). Desktopon a
+  *Vezérlés* ablak −/+ léptetője, ERG alatt a fel/le nyílbillentyű, telefonon pedig a Tekerés fülön
+  **felhúzás (nehezebb) vagy lehúzás (könnyebb)**. Ha a nézet görgethető, a teljesítménykártyán indítható a gesztus.
+  Edzés kezdetén a képernyő széle felvillan. Minden menet 100 %-on indul.
+- **„ERG ki” gomb az edzés végén.** Néhány trainer firmwareje nem engedi el az ERG-módot, ha az edzés kifutott, és
+  tartja az utolsó célwattot. Az app mostantól az edzés végén **újra elküldi a terepszimulációt**
+  (semleges pálya, majd az élő meredekség másodpercenkénti újraküldése), és az edzés kártyán egy *ERG ki* gombbal
+  kézzel is újrapróbálható. Az érintett trainereknél (VE200) a `ble.log` mutatja, hogy a firmware engedett-e.
+- **Az Eszközök ablak észreveszi a már kapcsolódó eszközöket.** A telefonhoz (vagy a géphez) már GATT-kapcsolatban
+  álló eszköz — tipikusan a trainer, amit a telefon automatikusan visszakapcsol, vagy amit egy másik alkalmazás tart —
+  nem hirdeti magát, ezért a keresés sosem találta. Mostantól listázódnak, a „Csatlakoztatva” jelöléssel; ha a
+  kapcsolatot másik app tartja, a sor elmondja, hogy ott kell elengedni (Androidon két GATT-kliens nem fér ugyanarra az
+  eszközre). Névtelen eszköznél is van *Csatlakozás trainerként* gomb. **A keresés magától elindul az Eszközök ablak
+  megnyitásakor**, és életben marad, amíg nyitva van (csatlakozási kísérlet közben szünetel).
+
+### Javítva
+- **Android: a leválasztás utáni újracsatlakozás zombi-kapcsolata.** Az Android a tétlen kapcsolatvesztés után nyitva
+  hagyta a GATT-kapcsolatot, és a következő csatlakozást háttéren keresztül, időkeret nélkül intézte — akár percekkel
+  később is, amikor az app már feladta: a telefon kapcsolódva maradt a trainerhez, ami ezért nem hirdette magát, az
+  app pedig sikertelennek mutatta a csatlakozást. A droidplug (a btleplug Android-backendje) Java-felének javítása
+  (a `packaging/android/patch_droidplug.py` az APK-ba építi) most zárja a hátramaradt kapcsolatot, az újracsatlakozás
+  pedig minden esetben közvetlen, időkeretes. *(A javítás a CI-vel épített APK-ban jelenik meg; valódi telefonon még
+  nem próbáltuk.)*
+
 ## [0.6.0] – 2026-11-15
 
 ### Új

@@ -335,6 +335,7 @@ fn resample(frames: &[Frame<'_>], timeline: &[f64], route: &Route) -> Vec<Record
                 t: s as f64,
                 unix_s: unix[s],
                 dist: dists[s],
+                odo: dists[s],
                 lat: at.lat,
                 lon: at.lon,
                 ele: at.ele,

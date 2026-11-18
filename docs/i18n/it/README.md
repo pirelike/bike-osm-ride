@@ -89,10 +89,17 @@ La descrizione completa: **[Guida utente](USER_GUIDE.md)**.
   singolo dispositivo fisico può svolgere *più ruoli* su una sola connessione; **Zwift Click/Play** come cambio virtuale;
   **ciclista simulato**.
 - **Cambio virtuale**: trasmissione 2 × 12, 23 marce, modifica la resistenza del rullo.
+- **La fine del percorso non è la fine della corsa**: un percorso ad anello inizia il giro successivo, qualsiasi
+  altro si percorre al contrario sulla stessa traccia — un allenamento più lungo del percorso si completa per
+  intero, e il pedalare libero finisce solo premendo *Termina*.
 
 **Allenamento e analisi**
 - 93 allenamenti inclusi in 12 categorie, con etichette, un grafico a blocchi colorato per zona e 943 messaggi del coach
   cronometrati; importazione di allenamenti MyWhoosh e Zwift (`.zwo`, XML, JSON).
+- **Intensità dell'allenamento in corsa**: a passi di 5 % dentro 50–150 % — lo stepper −/+ della finestra
+  *Controlli* o i tasti ↑/↓ sul desktop, sul telefono uno scorrimento verso l'alto (più duro) o verso il basso
+  (più leggero) nella scheda di pedalata; all'inizio di un allenamento i bordi dello schermo lampeggiano perché
+  il gesto venga scoperto.
 - Zone di Coggan, NP, IF, TSS, kcal; zone di frequenza cardiaca; registrazione ogni secondo.
 - **Fantasma** (l'ultima uscita, la migliore, oppure i timestamp del GPX) e **segmenti locali con PR**.
 - **Analisi e confronto delle uscite**: le uscite fatte sullo stesso percorso (al massimo quattro) affiancate per potenza,
@@ -236,6 +243,7 @@ Usiamo di proposito solo codice con licenze permissive. L'origine e la licenza s
 | [`cycling-ble`](https://github.com/friedrichwilken/cycling-ble) | Apache-2.0 OR MIT | interpretazione dei dati del misuratore di potenza, del sensore di cadenza e del cardiofrequenzimetro (integrato, segnalato nei file di origine) |
 | [OsmolControl](https://github.com/Parapeth962/OsmolControl) | MIT | connessione al rullo e filtro di sicurezza dei comandi (parti portate, segnalate) |
 | [iron-heart](https://github.com/nullstalgia/iron-heart) | MIT | ricerca e riconnessione del cardiofrequenzimetro (schema ripreso, senza codice, segnalato) |
+| [btleplug](https://github.com/deviceplug/btleplug) droidplug `Peripheral.java` | MIT OR Apache-2.0 (file di btleplug stesso) | la metà Java del backend Bluetooth di Android, copiata nell’APK e **corretta in fase di build** (chiude un GATT rimasto aperto dopo la perdita di un collegamento inattivo; altrimenti il collegamento successivo diventa un auto-connect in background senza limite di tempo): `packaging/android/patch_droidplug.py`, dettagli nel [`NOTICE.md`](../../NOTICE.md) |
 | Font [Barlow e Barlow Condensed](https://github.com/jpt/barlow) | SIL OFL 1.1 | testo e cifre dell'interfaccia; **incorporati** nel programma (WOFF2 con sottoinsieme, latino + latino esteso, compresi i caratteri ungheresi accentati), così funzionano anche senza rete; il testo della licenza: [`crates/ride-ui-kit/assets/fonts/OFL.txt`](../../../crates/ride-ui-kit/assets/fonts/OFL.txt), i dettagli in [`NOTICE.md`](../../../NOTICE.md) |
 | [virtual-cog](https://github.com/pymmog/virtual-cog) | Unlicense (pubblico dominio) | il protocollo BLE di Zwift Click/Play e Zwift Hub (riscritto in Rust): il modulo `zwift` di `ride-ble`, dettagli in [`NOTICE.md`](../../../NOTICE.md) |
 | [`p256`](https://github.com/RustCrypto/elliptic-curves), [`hkdf`](https://github.com/RustCrypto/KDFs), [`sha2`](https://github.com/RustCrypto/hashes), [`aes`](https://github.com/RustCrypto/block-ciphers), [`ccm`](https://github.com/RustCrypto/AEADs) (RustCrypto) | MIT / Apache-2.0 | lo scambio di chiavi dello Zwift Click (ECDH P-256, HKDF-SHA256) e la cifratura AES-CCM |

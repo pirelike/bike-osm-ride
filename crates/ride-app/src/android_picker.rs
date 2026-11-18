@@ -358,5 +358,15 @@ mod tests {
                 "MainActivity.kt must declare {declared}"
             );
         }
+        // The connected-device enumeration: ride-ble calls it by name through JNI.
+        const RIDE_BLE: &str = include_str!("../../../ride-ble/src/android_ble.rs");
+        assert!(
+            KOTLIN.contains("fun connectedBleDevices(): String"),
+            "MainActivity.kt must declare connectedBleDevices"
+        );
+        assert!(
+            RIDE_BLE.contains("connectedBleDevices"),
+            "ride-ble's android glue must call connectedBleDevices by that name"
+        );
     }
 }

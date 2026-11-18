@@ -38,7 +38,16 @@ pub fn target_state(power_w: Option<f64>, target_w: Option<f64>) -> Option<(&'st
 
 /// The workout block at the top of the card.
 #[component]
-fn DashWorkout(w: WorkoutProgress) -> Element {
+fn DashWorkout(
+    w: WorkoutProgress,
+    /// A real (BLE) trainer holds the Trainer slot: only then can the ERG-exit action reach
+    /// anything. The shell knows; the card only shows.
+    #[props(default = false)]
+    trainer_connected: bool,
+    /// Re-run the ERG-exit handshake on the trainer ("Freeride", once it stayed in ERG).
+    #[props(default)]
+    on_exit_erg: EventHandler<()>,
+) -> Element {
     let zone = w
         .ftp_pct
         .map(ride_model::power_zone_of_pct)
@@ -55,6 +64,16 @@ fn DashWorkout(w: WorkoutProgress) -> Element {
             div { class: "hud-dash__wo hud-dash__wo--done",
                 span { class: "hud-dash__step", {t("ui_hud.dash.edzes_kesz")} }
                 span { class: "hud-label", "{w.workout_name}" }
+                if trainer_connected {
+                    // The trainer may still hold the last ERG target (firmware-dependent):
+                    // this re-runs the handshake that hands it back to the terrain.
+                    button {
+                        class: "btn btn--sm hud-dash__erg",
+                        r#type: "button",
+                        onclick: move |_| on_exit_erg.call(()),
+                        {t("ui_hud.erg_ki")}
+                    }
+                }
             }
         };
     }
@@ -63,6 +82,9 @@ fn DashWorkout(w: WorkoutProgress) -> Element {
             div { class: "hud-dash__wohead",
                 div { class: "hud-dash__wotext",
                     span { class: "hud-dash__step", "{w.step_name}" }
+                    if (w.intensity_pct - 100.0).abs() > 1e-9 {
+                        span { class: "tag hud-dash__ergtag", "{w.intensity_pct:.0} %" }
+                    }
                     span { class: "hud-label",
                         {tf(
                             "ui_hud.dash.w_step_index_1_w_step_count_edzes_vege_fmt_hm_text_w",
@@ -122,6 +144,12 @@ pub fn RideDash(
     /// The map tab's version: one line for the workout instead of its block.
     #[props(default)]
     slim: bool,
+    /// A real (BLE) trainer holds the Trainer slot (for the "Freeride" action).
+    #[props(default = false)]
+    trainer_connected: bool,
+    /// Re-run the ERG-exit handshake on the trainer ("Freeride", once it stayed in ERG).
+    #[props(default)]
+    on_exit_erg: EventHandler<()>,
 ) -> Element {
     let snap = snapshot.read();
     let rider_v = rider.read();
@@ -144,6 +172,13 @@ pub fn RideDash(
 
     rsx! {
         section { class: "hud-dash", aria_label: t("ui_hud.dash.tekeres_kozben").to_string(),
+            if snap.pass > 0 {
+                // The ride continued past the route end (a loop restarted, the route turned
+                // around) and the position wrapped with it: say which pass this is.
+                div { class: "hud-dash__pass", role: "status",
+                    {tf("ui_hud.n_szakasz", &[("n", &(snap.pass + 1).to_string())])}
+                }
+            }
             if let Some(w) = workout.clone() {
                 if slim {
                     if !w.finished {
@@ -156,7 +191,7 @@ pub fn RideDash(
                         }
                     }
                 } else {
-                    DashWorkout { w }
+                    DashWorkout { w, trainer_connected, on_exit_erg }
                 }
             }
             div { class: "hud-dash__power",

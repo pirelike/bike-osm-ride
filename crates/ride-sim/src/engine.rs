@@ -88,6 +88,7 @@ fn scale_to(raw: &mut [f64], target: f64) {
 
 /// The ride state machine + physics + statistics + recorder.
 pub struct RideEngine {
+    original_route: Arc<Route>,
     route: Arc<Route>,
     rider: RiderSettings,
     params: PhysicsParams,
@@ -98,6 +99,8 @@ pub struct RideEngine {
     /// Where the ride started (a ride may start with a seek): the ridden distance is
     /// `dist - start_dist`.
     start_dist: f64,
+    /// The initial seek position, kept across passes for the ride's accumulated distance.
+    initial_dist: f64,
     speed: f64,
     /// Timer time (excludes pauses), s.
     elapsed: f64,
@@ -105,6 +108,15 @@ pub struct RideEngine {
     clock: f64,
     started_unix: f64,
     last_unix: f64,
+
+    // Route passes: at the end of the route the ride continues (a loop starts over, a
+    // point-to-point route is ridden backwards) instead of ending. The biases freeze what
+    // the finished passes added, so `ridden`, the ascent totals and the recording's `odo`
+    // stay monotone across the wrap of `dist`.
+    pass_no: u32,
+    dist_bias: f64,
+    ascent_bias: f64,
+    descent_bias: f64,
 
     // Route profile, pre-scaled so the HUD can show done/left ascent.
     cum_up: Vec<f64>,
@@ -159,17 +171,23 @@ impl RideEngine {
         scale_to(&mut up, finite_or(route.ascent, 0.0));
         scale_to(&mut down, finite_or(route.descent, 0.0));
         let mut engine = Self {
+            original_route: Arc::clone(&route),
             route,
             rider,
             params,
             state: RideState::Ready,
             dist: 0.0,
             start_dist: 0.0,
+            initial_dist: 0.0,
             speed: 0.0,
             elapsed: 0.0,
             clock: 0.0,
             started_unix: 0.0,
             last_unix: 0.0,
+            pass_no: 0,
+            dist_bias: 0.0,
+            ascent_bias: 0.0,
+            descent_bias: 0.0,
             cum_up: up,
             cum_down: down,
             live: SensorSample::default(),
@@ -215,6 +233,19 @@ impl RideEngine {
             return;
         }
         self.workout = workout.map(WorkoutSession::new);
+    }
+
+    /// The live intensity of the running workout (100 without one).
+    pub fn workout_intensity(&self) -> f64 {
+        self.workout.as_ref().map_or(100.0, |w| w.intensity_pct())
+    }
+
+    /// Sets the live intensity the rider asked for (swipe / buttons / arrow keys): the
+    /// remaining targets are scaled by it. Without a workout there is nothing to scale.
+    pub fn set_workout_intensity(&mut self, pct: f64) {
+        if let Some(w) = &mut self.workout {
+            w.set_intensity_pct(pct);
+        }
     }
 
     pub fn workout(&self) -> Option<&WorkoutSession> {
@@ -291,6 +322,10 @@ impl RideEngine {
         self.state
     }
 
+    pub fn route(&self) -> &Arc<Route> {
+        &self.route
+    }
+
     /// Ready → Riding. `unix_s` = wall clock (for the recording timestamps).
     pub fn start(&mut self, unix_s: f64) {
         if self.state != RideState::Ready {
@@ -300,6 +335,7 @@ impl RideEngine {
         self.started_unix = if unix_s.is_finite() { unix_s } else { 0.0 };
         self.elapsed = 0.0;
         self.start_dist = self.dist;
+        self.initial_dist = self.dist;
         self.next_record_t = 0.0;
         if let Some(w) = &mut self.workout {
             w.reset();
@@ -357,13 +393,19 @@ impl RideEngine {
 
     /// Back to Ready at distance 0, history cleared.
     pub fn reset(&mut self) {
+        self.set_active_route(self.original_route.clone());
         self.state = RideState::Ready;
         self.dist = 0.0;
         self.start_dist = 0.0;
+        self.initial_dist = 0.0;
         self.speed = 0.0;
         self.elapsed = 0.0;
         self.started_unix = 0.0;
         self.last_unix = 0.0;
+        self.pass_no = 0;
+        self.dist_bias = 0.0;
+        self.ascent_bias = 0.0;
+        self.descent_bias = 0.0;
         self.work_j = 0.0;
         self.power_time = 0.0;
         self.power_integral = 0.0;
@@ -407,6 +449,60 @@ impl RideEngine {
             .clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
         // A ride that has not started yet replays from wherever it will start.
         self.align_ghost();
+    }
+
+    /// The ride is running and sits at the end of the route, waiting for
+    /// [`continue_pass`](Self::continue_pass).
+    pub fn at_route_end(&self) -> bool {
+        let total = finite_or(self.route.total_dist, 0.0).max(0.0);
+        total > 0.0 && self.state == RideState::Riding && self.dist >= total - 1e-9
+    }
+
+    /// The next pass begins: `dist` wraps to the start. `None` restarts the same route (it
+    /// closes into a loop); `Some` swaps in a route built from the mirrored geometry (the
+    /// far-endpoint case, ridden backwards). What the finished passes added is frozen into
+    /// the biases so the totals stay monotone; the ghost and the climb tracker cannot
+    /// follow a wrapped or mirrored ride and are dropped.
+    pub fn continue_pass(&mut self, route: Option<Arc<Route>>) {
+        if !self.at_route_end() {
+            return;
+        }
+        self.dist_bias += self.dist;
+        self.ascent_bias +=
+            self.cum_at(&self.cum_up, self.dist) - self.cum_at(&self.cum_up, self.start_dist);
+        self.descent_bias +=
+            self.cum_at(&self.cum_down, self.dist) - self.cum_at(&self.cum_down, self.start_dist);
+        self.pass_no += 1;
+        if let Some(route) = route {
+            self.set_active_route(route);
+        }
+        self.dist = 0.0;
+        self.start_dist = 0.0;
+        self.speed = 0.0;
+        // The ghost compares times at the same distance; on a new pass the elapsed clock
+        // keeps running but the ghost's does not — the difference would be nonsense. The
+        // climb tracker restarts with the new pass's climbs.
+        self.ghost = None;
+        self.segment_entry = None;
+        self.sim_grade = self
+            .target_grade(0.0)
+            .clamp(-MAX_TRAINER_GRADE, MAX_TRAINER_GRADE);
+    }
+
+    fn set_active_route(&mut self, route: Arc<Route>) {
+        if !Arc::ptr_eq(&route, &self.route) {
+            let (mut up, mut down) = cumulative(&route.points);
+            scale_to(&mut up, finite_or(route.ascent, 0.0));
+            scale_to(&mut down, finite_or(route.descent, 0.0));
+            self.route = route;
+            self.cum_up = up;
+            self.cum_down = down;
+        }
+    }
+
+    /// Which pass of the route the ride is on: 0 for the first.
+    pub fn pass_no(&self) -> u32 {
+        self.pass_no
     }
 
     /// Advance by `dt` seconds with the latest sensor values; returns the new snapshot.
@@ -464,8 +560,12 @@ impl RideEngine {
             }
             self.record(self.last_unix, arrived);
             if arrived {
+                // The ride does not end here any more: the rider keeps going (a workout
+                // longer than the route, or simply more pedalling), so the engine sits at
+                // the finish line and waits for `continue_pass` — a loop starts over, a
+                // point-to-point route turns around. `speed = 0` because there is no
+                // distance left to move over.
                 self.speed = 0.0;
-                self.state = RideState::Finished;
             }
         }
 
@@ -477,7 +577,10 @@ impl RideEngine {
         let pos = self.route.locate(self.dist);
         let total = finite_or(self.route.total_dist, 0.0).max(0.0);
         let remaining = (total - self.dist).max(0.0);
-        let ascent_done = self.cum_at(&self.cum_up, self.dist);
+        // The raw values belong to the current pass; the biases carry the finished ones, so
+        // "done" keeps growing across the wrap while "left" describes this pass only.
+        let ascent_done_raw = self.cum_at(&self.cum_up, self.dist);
+        let ascent_done = ascent_done_raw + self.ascent_bias;
         let climb = self.route.climb_ahead(self.dist);
         let next_climb_in = climb.map(|i| {
             self.route
@@ -500,8 +603,8 @@ impl RideEngine {
             remaining_dist: remaining,
             eta_s: self.eta(),
             ascent_done,
-            descent_done: self.cum_at(&self.cum_down, self.dist),
-            ascent_left: (finite_or(self.route.ascent, 0.0) - ascent_done).max(0.0),
+            descent_done: self.cum_at(&self.cum_down, self.dist) + self.descent_bias,
+            ascent_left: (finite_or(self.route.ascent, 0.0) - ascent_done_raw).max(0.0),
             avg_speed_ms: self.avg_speed(),
             max_speed_ms: self.max_speed,
             avg_power_w: self.avg_power(),
@@ -530,6 +633,7 @@ impl RideEngine {
             workout: self.workout.as_ref().map(|w| w.progress(&self.rider)),
             ghost: self.ghost_live(),
             segment: self.segment_live(),
+            pass: self.pass_no,
         }
     }
 
@@ -575,9 +679,10 @@ impl RideEngine {
             route_id: self.route.id.clone(),
             started_unix_s: self.started_unix,
             elapsed_s: self.elapsed,
-            // What was ridden, not the route position: a ride may start with a seek.
+            // What was ridden, not the route position: a ride may start with a seek, and the
+            // biases carry the finished passes.
             dist: self.ridden(),
-            ascent: (self.cum_at(&self.cum_up, self.dist)
+            ascent: (self.ascent_bias + self.cum_at(&self.cum_up, self.dist)
                 - self.cum_at(&self.cum_up, self.start_dist))
             .max(0.0),
             avg_speed_ms: self.avg_speed(),
@@ -643,9 +748,10 @@ impl RideEngine {
         let _ = power;
     }
 
-    /// Metres ridden since the start (the route position minus where the ride started).
+    /// Metres ridden since the start (the route position minus where the ride started, plus
+    /// what the finished passes added).
     fn ridden(&self) -> f64 {
-        (self.dist - self.start_dist).max(0.0)
+        (self.dist_bias + self.dist - self.initial_dist).max(0.0)
     }
 
     fn avg_speed(&self) -> f64 {
@@ -750,6 +856,7 @@ impl RideEngine {
             t: self.elapsed,
             unix_s: if unix_s.is_finite() { unix_s } else { 0.0 },
             dist: self.dist,
+            odo: self.dist_bias + self.dist,
             lat: pos.lat,
             lon: pos.lon,
             ele: pos.ele,
@@ -987,6 +1094,11 @@ mod tests {
         )
     }
 
+    /// A second route, for the `continue_pass` swap.
+    fn route_of(segments: &[(f64, f64)]) -> Arc<Route> {
+        Arc::new(straight_route(segments, 100.0))
+    }
+
     fn sample(power: f64) -> SensorSample {
         SensorSample {
             power_w: Some(power),
@@ -1047,21 +1159,105 @@ mod tests {
     }
 
     #[test]
-    fn auto_finishes_at_the_end_of_the_route() {
+    fn the_route_end_holds_the_ride_for_the_continuation() {
         let mut e = engine(&[(300.0, 0.0)]);
         e.start(0.0);
-        let mut last = e.snapshot();
-        for _ in 0..2000 {
-            last = e.step(0.1, &sample(400.0), 0.0);
-            if last.state == RideState::Finished {
+        let mut last = e.step(0.1, &sample(400.0), 0.0);
+        for _ in 1..2000 {
+            if last.remaining_dist == 0.0 {
                 break;
             }
+            last = e.step(0.1, &sample(400.0), 0.0);
         }
-        assert_eq!(last.state, RideState::Finished);
+        // The ride does not end at the finish line any more: it sits there and waits for
+        // `continue_pass` (a loop starts over, a point-to-point route turns around).
+        assert_eq!(last.state, RideState::Riding);
+        assert!(e.at_route_end());
         assert!((last.dist - 300.0).abs() < 1e-6);
         assert_eq!(last.remaining_dist, 0.0);
         assert_eq!(last.eta_s, Some(0.0));
         assert_eq!(last.speed_ms, 0.0);
+        // A manual finish still works from the hold.
+        e.finish();
+        assert_eq!(e.snapshot().state, RideState::Finished);
+    }
+
+    /// The continuation of a loop: the position wraps to the start, the pass counter moves,
+    /// and what the first pass added stays in the totals.
+    #[test]
+    fn a_loop_continuation_wraps_the_position_and_keeps_the_totals() {
+        let mut e = engine(&[(300.0, 0.0)]);
+        e.start(0.0);
+        let mut last = e.step(0.1, &sample(400.0), 0.0);
+        for _ in 1..2000 {
+            if last.remaining_dist == 0.0 {
+                break;
+            }
+            last = e.step(0.1, &sample(400.0), 0.0);
+        }
+        assert_eq!(last.pass, 0);
+        let ridden_first = e.summary().dist;
+        assert!(ridden_first > 295.0, "reached the end: {ridden_first}");
+        assert!(
+            e.history().iter().all(|p| p.odo >= p.dist),
+            "odo is never behind the route position"
+        );
+
+        e.continue_pass(None);
+        let snap = e.snapshot();
+        assert_eq!(snap.pass, 1);
+        assert!(snap.dist < 1e-6, "the lap restarts at the start");
+        assert!(!e.at_route_end());
+        let odo_at_wrap = e.history().last().map(|p| p.odo).unwrap_or(0.0);
+        // The recording's odo stays monotone across the wrap.
+        for _ in 0..40 {
+            e.step(0.1, &sample(400.0), 0.0);
+        }
+        let after = e.history().last().expect("the recording continues");
+        assert!(after.odo >= odo_at_wrap, "odo never goes back");
+        assert!(after.dist < 300.0, "dist is per-pass again");
+        // The summary keeps everything the first lap put in.
+        assert!(e.summary().dist > 295.0);
+    }
+
+    /// A route that does not close into a loop is ridden backwards: the engine swaps to the
+    /// turned-around route (built by the controller) and the ascent continues to add up.
+    #[test]
+    fn a_reversed_continuation_swaps_the_route() {
+        let mut e = engine(&[(300.0, 0.0)]);
+        let original = e.route().clone();
+        e.seek(100.0);
+        e.start(0.0);
+        let mut last = e.step(0.1, &sample(400.0), 0.0);
+        for _ in 1..2000 {
+            if last.remaining_dist == 0.0 {
+                break;
+            }
+            last = e.step(0.1, &sample(400.0), 0.0);
+        }
+        let first_total = e.summary().dist;
+        let backwards = route_of(&[(300.0, -2.0)]);
+        e.continue_pass(Some(backwards.clone()));
+        let snap = e.snapshot();
+        assert_eq!(snap.pass, 1);
+        assert!(snap.dist < 1e-6);
+        assert!(
+            (e.summary().dist - first_total).abs() < 1e-6,
+            "the totals carry over"
+        );
+        assert!(!e.at_route_end());
+        assert!(Arc::ptr_eq(e.route(), &backwards));
+        for _ in 0..40 {
+            e.step(0.1, &sample(400.0), 0.0);
+        }
+        assert!(e.history().windows(2).all(|pair| pair[1].odo >= pair[0].odo));
+        e.finish();
+        let first = e.history().first().unwrap();
+        let last = e.history().last().unwrap();
+        assert!((last.odo - first.odo - e.summary().dist).abs() < 1e-6);
+        e.reset();
+        assert!(Arc::ptr_eq(e.route(), &original));
+        assert_eq!(e.snapshot().pass, 0);
     }
 
     #[test]
@@ -1141,20 +1337,21 @@ mod tests {
             let mut e = engine(&[(1234.5, 0.0)]);
             e.start(1_700_000_000.0);
             for _ in 0..10_000 {
-                if e.state() == RideState::Finished {
+                if e.at_route_end() {
                     break;
                 }
                 e.step(0.1, &sample(speed_w), 1_700_000_000.0);
             }
             let total = e.snapshot().dist;
-            assert_eq!(e.state(), RideState::Finished);
+            assert!(e.at_route_end(), "the ride reached the finish line");
             let last = e.history().last().unwrap();
             assert!(
                 (last.dist - total).abs() < 1e-6,
                 "last point at {}",
                 last.dist
             );
-            assert!((last.t - e.summary().elapsed_s).abs() < 1e-9);
+            // the hold at the end is not a finish: the last point belongs to the timer
+            assert!((last.t - e.summary().elapsed_s).abs() < 1.0);
         }
         // a manual finish also writes where the ride stopped
         let mut e = engine(&[(5000.0, 0.0)]);
@@ -1291,6 +1488,7 @@ mod tests {
             t,
             unix_s: 1_700_000_000.0 + t,
             dist,
+            odo: dist,
             lat: 47.5,
             lon: 19.0,
             ele: 100.0,

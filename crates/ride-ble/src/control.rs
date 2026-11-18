@@ -275,6 +275,11 @@ pub struct ControlConfig {
     /// A trainer that reports itself stopped while the ride runs is started again at most
     /// this often.
     pub restart_interval: Duration,
+    /// How long the ERG-exit handshake keeps insisting on simulation writes after the last
+    /// power target: a plain single write may be ignored by firmware that just held ERG.
+    pub erg_unlatch_window: Duration,
+    /// ... and how often it repeats the simulation write within that window.
+    pub erg_unlatch_every: Duration,
 }
 
 impl Default for ControlConfig {
@@ -290,6 +295,8 @@ impl Default for ControlConfig {
             status_storm_window: STATUS_STORM_WINDOW,
             grant_grace: GRANT_GRACE,
             restart_interval: RESTART_INTERVAL,
+            erg_unlatch_window: Duration::from_secs(10),
+            erg_unlatch_every: Duration::from_secs(1),
         }
     }
 }
@@ -468,6 +475,8 @@ pub struct ControlSession {
     failed_streak: u32,
     /// Shutting down: never ask for control any more.
     closing: bool,
+    /// The ERG-exit handshake insists until this instant (see [`Self::relax_from_erg`]).
+    unlatch_until: Option<Instant>,
     /// Last time each (static) warning text was shown, for the cooldown.
     warned: Vec<(&'static str, Instant)>,
 }
@@ -503,6 +512,7 @@ impl ControlSession {
             pending_relax: None,
             failed_streak: 0,
             closing: false,
+            unlatch_until: None,
             warned: Vec::new(),
         }
     }
@@ -554,10 +564,16 @@ impl ControlSession {
 
     // ── commands from the app ──
 
-    pub fn set_simulation(&mut self, sim: TrainerSim, _now: Instant) {
+    pub fn set_simulation(&mut self, sim: TrainerSim, now: Instant) {
+        // Leaving ERG (a power target was active) is the moment a trainer has to be talked
+        // out of it: a plain simulation write is not always enough.
+        let leaving_erg = self.mode == Mode::Power;
         self.sim = Some(sim);
         self.mode = Mode::Sim;
         self.failed_streak = 0;
+        if leaving_erg {
+            self.begin_unlatch(now);
+        }
         self.after_target_change();
     }
 
@@ -565,10 +581,39 @@ impl ControlSession {
         if !watts.is_finite() {
             return;
         }
+        // A new power target cancels any ERG-exit insist window still running.
+        self.unlatch_until = None;
         self.target_power = Some(watts);
         self.mode = Mode::Power;
         self.failed_streak = 0;
         self.after_target_change();
+    }
+
+    /// `RelaxFromErg`: run the explicit ERG-exit handshake on demand (the workout card's
+    /// "freeride" action, or the tick a workout ran out of steps). Leads with the neutral
+    /// grade the pause sequence already proved the trainer accepts, then insists on the
+    /// live simulation for a while: some firmwares ignore a single write after ERG targets.
+    pub fn relax_from_erg(&mut self, now: Instant) {
+        if self.sim.is_none() || self.mode != Mode::Sim {
+            // Nothing to insist on: no simulation was ever asked for, or ERG is still
+            // the active mode (a workout step still holds a target).
+            return;
+        }
+        self.begin_unlatch(now);
+        self.after_target_change();
+    }
+
+    /// The insisting part of the ERG exit: a neutral write first, then repeated live
+    /// simulation writes within the window.
+    fn begin_unlatch(&mut self, now: Instant) {
+        self.unlatch_until = Some(now + self.cfg.erg_unlatch_window);
+        self.push_unique(Intent::Neutral);
+    }
+
+    /// The insist window is open: repeated identical simulation writes are the point, not
+    /// noise.
+    fn unlatch_insisting(&self, now: Instant) -> bool {
+        self.unlatch_until.is_some_and(|until| now < until)
     }
 
     /// `TrainerStart`: begin / resume the session on the trainer.
@@ -858,7 +903,7 @@ impl ControlSession {
             self.queue.push_front(Intent::RequestControl);
         }
 
-        if self.keepalive_due(now) {
+        if self.keepalive_due(now) || self.unlatch_due(now) {
             self.ensure_target_intent();
         }
 
@@ -910,6 +955,12 @@ impl ControlSession {
                     .map_or(now, |t| t + self.cfg.keepalive);
                 consider(due.max(gap_end).max(now));
             }
+            if self.unlatch_insisting(now) && self.keepalive_armed() {
+                let due = self
+                    .last_target_sent
+                    .map_or(now, |t| t + self.cfg.erg_unlatch_every);
+                consider(due.max(gap_end).max(now));
+            }
         }
         best
     }
@@ -939,6 +990,17 @@ impl ControlSession {
             && self
                 .last_target_sent
                 .is_none_or(|t| now.saturating_duration_since(t) >= self.cfg.keepalive)
+    }
+
+    /// During the ERG-exit window the simulation write is repeated this often even without
+    /// a change: a trainer that ignored the first write after ERG targets still gets the
+    /// point.
+    fn unlatch_due(&self, now: Instant) -> bool {
+        self.unlatch_insisting(now)
+            && self.keepalive_armed()
+            && self
+                .last_target_sent
+                .is_none_or(|t| now.saturating_duration_since(t) >= self.cfg.erg_unlatch_every)
     }
 
     fn push_unique(&mut self, intent: Intent) {
@@ -1020,7 +1082,9 @@ impl ControlSession {
                     return None;
                 }
                 let bytes = encode_simulation(quantise_sim(&sim, self.limits.grade_pct));
-                if self.is_redundant(&bytes, now) {
+                // Insisting on the simulation is the point of the ERG exit: the write must
+                // not be swallowed as a redundant repeat of the last one.
+                if !self.unlatch_insisting(now) && self.is_redundant(&bytes, now) {
                     return None;
                 }
                 bytes
@@ -2204,6 +2268,96 @@ mod tests {
         );
         // NaN is ignored
         s.set_target_power(f64::NAN, at);
+    }
+
+    /// The reverse of the test above: leaving ERG (a workout ran out of steps) is not left
+    /// to a single simulation write — some firmware ignores that. The neutral grade the
+    /// pause sequence uses goes out first, then the live grade, and it is repeated within
+    /// the window even though nothing changed.
+    #[test]
+    fn leaving_erg_leads_with_the_neutral_grade_and_insists() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+        // ERG mode: a target is being held
+        let at = now + Duration::from_millis(500);
+        s.set_target_power(180.0, at);
+        assert_eq!(writes(&s.poll(at)), vec![vec![0x05, 0xB4, 0x00]]);
+        s.on_indication(&ok(0x05), at);
+
+        // The workout ends: the simulation takes over. The handshake begins with the
+        // neutral grade, the write the pause sequence has always used.
+        let leave = at + Duration::from_millis(500);
+        s.set_simulation(sim(5.0), leave);
+        assert_eq!(
+            writes(&s.poll(leave)),
+            vec![vec![0x11, 0x00, 0x00, 0x00, 0x00, 0x28, 0x33]],
+            "the neutral grade leads"
+        );
+        s.on_indication(&ok(0x11), leave);
+        let live = leave + Duration::from_millis(300);
+        assert_eq!(
+            writes(&s.poll(live)),
+            vec![vec![0x11, 0x00, 0x00, 0xF4, 0x01, 0x28, 0x33]],
+            "then the live grade"
+        );
+        s.on_indication(&ok(0x11), live);
+
+        // The insist window: identical bytes, re-sent every second anyway.
+        for i in 1..=9u64 {
+            let at = live + Duration::from_secs(i);
+            let w = writes(&s.poll(at));
+            assert_eq!(
+                w,
+                vec![vec![0x11, 0x00, 0x00, 0xF4, 0x01, 0x28, 0x33]],
+                "repeat {i} inside the window"
+            );
+            s.on_indication(&ok(0x11), at);
+        }
+
+        // The window is over (10 s after the exit): an unchanged grade is redundant again,
+        // a changed one still goes out.
+        let after = live + Duration::from_secs(10);
+        assert!(writes(&s.poll(after)).is_empty(), "no more insisting");
+        s.set_simulation(sim(7.0), after);
+        assert_eq!(
+            writes(&s.poll(after)),
+            vec![vec![0x11, 0x00, 0x00, 0xBC, 0x02, 0x28, 0x33]],
+            "a fresh grade is written normally"
+        );
+    }
+
+    /// The workout card's manual action: the handshake can be re-run while the simulation
+    /// is active, and does nothing while a workout still holds ERG.
+    #[test]
+    fn relax_from_erg_can_be_re_run_by_hand() {
+        let t = Instant::now();
+        let (mut s, now) = running(t);
+
+        let at = now + Duration::from_millis(500);
+        s.relax_from_erg(at);
+        assert_eq!(
+            writes(&s.poll(at)),
+            vec![vec![0x11, 0x00, 0x00, 0x00, 0x00, 0x28, 0x33]],
+            "the neutral grade leads"
+        );
+        s.on_indication(&ok(0x11), at);
+        assert_eq!(
+            writes(&s.poll(at + Duration::from_millis(300))),
+            vec![vec![0x11, 0x00, 0x00, 0xF4, 0x01, 0x28, 0x33]],
+            "then the live grade again"
+        );
+
+        // While ERG is the active mode (a workout step holds a target) the button has
+        // nothing to do.
+        let (mut erg, erg_now) = running(t);
+        let at = erg_now + Duration::from_millis(500);
+        erg.set_target_power(180.0, at);
+        erg.relax_from_erg(at);
+        let w = writes(&erg.poll(at + Duration::from_secs(2)));
+        assert!(
+            w.iter().all(|b| b.first() != Some(&op::SET_SIMULATION)),
+            "no simulation write while ERG is active: {w:?}"
+        );
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! The same shape a workout builder shows, and the same zones the ride screen uses. The picker
 //! draws the whole workout; the ride screen draws a time window of it around the rider.
 
-use ride_model::{power_zone_of_pct, StepTarget, Workout};
+use ride_model::{power_zone_of_pct, Workout};
 
 /// Room above the hardest block: the axis tops out at this multiple of it (rounded up to ten),
 /// so even a 120 % interval reaches only about two thirds of the height and the chart does not
@@ -83,6 +83,16 @@ impl Chart {
 /// Geometry of `workout` for a rider with `ftp_w` (watt targets are drawn relative to it); an
 /// empty workout yields an empty chart with a 100 % ceiling.
 pub fn chart(workout: &Workout, ftp_w: f64) -> Chart {
+    chart_at_intensity(workout, ftp_w, 100.0, 0)
+}
+
+/// Geometry of the live plan, with the active and upcoming blocks scaled.
+pub fn chart_at_intensity(
+    workout: &Workout,
+    ftp_w: f64,
+    intensity_pct: f64,
+    from_step: usize,
+) -> Chart {
     let ftp = if ftp_w.is_finite() && ftp_w > 0.0 {
         ftp_w
     } else {
@@ -105,13 +115,13 @@ pub fn chart(workout: &Workout, ftp_w: f64) -> Chart {
     let mut top: f64 = 100.0;
     for (index, step) in workout.steps.iter().enumerate() {
         let duration = step.duration_s as f64;
-        let (from, to) = match step.target {
-            StepTarget::Free => (FREE_PCT, FREE_PCT),
-            target => (
-                target.pct_at(0.0, duration, ftp).unwrap_or(FREE_PCT),
-                target.pct_at(duration, duration, ftp).unwrap_or(FREE_PCT),
-            ),
+        let intensity = if index >= from_step { intensity_pct } else { 100.0 };
+        let target_pct = |at| {
+            step.target
+                .watts_at_intensity(at, duration, ftp, intensity)
+                .map_or(FREE_PCT, |w| w / ftp * 100.0)
         };
+        let (from, to) = (target_pct(0.0), target_pct(duration));
         top = top.max(from).max(to);
         let zone = if step.target.is_free() {
             0
@@ -190,7 +200,7 @@ pub fn gets_gap(width_pct: f64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ride_model::{StepKind, WorkoutCategory, WorkoutStep};
+    use ride_model::{StepKind, StepTarget, WorkoutCategory, WorkoutStep};
 
     fn workout(steps: Vec<WorkoutStep>) -> Workout {
         Workout {
@@ -321,6 +331,21 @@ mod tests {
         assert!(empty.blocks.is_empty());
         assert_eq!(empty.ceiling, 100.0);
         assert!(empty.block_at(0.0).is_none());
+    }
+
+    #[test]
+    fn live_chart_scales_remaining_targets_and_zones() {
+        let plan = workout(vec![
+            step(60, StepTarget::PctFtp { value: 97.0 }),
+            step(60, StepTarget::PctFtp { value: 97.0 }),
+            step(60, StepTarget::Free),
+        ]);
+        let live = chart_at_intensity(&plan, 200.0, 120.0, 1);
+        assert_eq!(live.blocks[0].from, 97.0);
+        assert!((live.blocks[1].from - 116.4).abs() < 1e-9);
+        assert!(live.blocks[1].zone > live.blocks[0].zone);
+        assert_eq!(live.blocks[2].from, FREE_PCT);
+        assert_eq!(live.blocks[2].zone, 0);
     }
 
     #[test]

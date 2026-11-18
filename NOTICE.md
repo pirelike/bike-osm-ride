@@ -107,3 +107,24 @@ file right before editing; do not reformat other sections).
   (the AES-CCM check uses the NIST SP 800-38C vectors instead).
 - This is unofficial interoperability work. It is not affiliated with, endorsed by or
   supported by Zwift, Inc.
+
+## btleplug / droidplug `Peripheral.java` — patched at build time (Android APK)
+
+- Origin: <https://github.com/deviceplug/btleplug>, version 0.13.5 (pinned by `Cargo.lock`),
+  file `src/droidplug/java/src/main/java/com/nonpolynomial/btleplug/android/impl/Peripheral.java`.
+  Licence: MIT OR Apache-2.0 (btleplug's own file; the full licence texts are part of the
+  crate distribution and listed in `THIRD_PARTY_LICENSES.md`).
+- The Java half of droidplug is not compiled from Cargo but copied into the Gradle project
+  by `packaging/android/resoverlay.sh` (otherwise the APK has no such class at all). The same
+  step now applies `packaging/android/patch_droidplug.py` to that copy; the patched file
+  keeps an upstream-licensing header comment, and every changed line is marked
+  "bike-osm-ride" inline.
+- Changes (why: `docs/BLUETOOTH.md` §7 — an idle link loss left the `BluetoothGatt` open, and
+  Android then served the next `connect()` as a background auto-connect with no timeout,
+  which can complete after the app had given up: the phone ends up connected to a trainer
+  that stopped advertising while the app shows a failure):
+  1. `disconnect()` closes a stale `gatt` when the link is already down;
+  2. an idle link loss (no command in flight), and a mid-command disconnect no command
+     handled, close the `gatt`.
+- The patch fails the build loudly when the droidplug version drifts and the anchors move,
+  so an upstream update cannot silently ship the unfixed source.

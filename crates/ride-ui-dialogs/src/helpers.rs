@@ -239,12 +239,15 @@ pub fn suggested_kind(dev: &DeviceInfo) -> Option<DeviceKind> {
         .find(|kind| dev.kinds.contains(kind))
 }
 
-/// Discovered devices: the simulated rider first, then strongest signal first, then name.
+/// Discovered devices: the simulated rider first, connected ones next (a trainer on a
+/// live link is what the rider is usually looking for), then strongest signal first,
+/// then name.
 pub fn sorted_discovered(list: &[DeviceInfo]) -> Vec<DeviceInfo> {
     let mut out = list.to_vec();
     out.sort_by(|a, b| {
         is_simulated(b)
             .cmp(&is_simulated(a))
+            .then_with(|| b.connected.cmp(&a.connected))
             .then_with(|| rssi_rank(b).cmp(&rssi_rank(a)))
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
             .then_with(|| a.id.cmp(&b.id))
@@ -788,6 +791,8 @@ mod tests {
             name: name.into(),
             kinds: kinds.to_vec(),
             rssi,
+            connected: false,
+            connectable: true,
         }
     }
 

@@ -15,12 +15,18 @@ use ride_model::{CoachMessage, RiderSettings, StepKind, Workout, WorkoutProgress
 /// How long a coaching message stays on screen after it is due, seconds of riding time.
 pub const MESSAGE_SHOW_S: f64 = 12.0;
 
+// The intensity band is the contract's (ride-model); re-exported for the engine callers.
+pub use ride_model::{MAX_INTENSITY_PCT, MIN_INTENSITY_PCT};
+
 /// The running workout of one ride.
 #[derive(Debug, Clone)]
 pub struct WorkoutSession {
     workout: Arc<Workout>,
     /// Riding time since the workout started, seconds.
     elapsed_s: f64,
+    /// Live intensity the rider set for the remainder (Zwift-style bias): the targets are
+    /// scaled by this fraction. Starts at 100 % every ride and resets with the session.
+    intensity_pct: f64,
 }
 
 impl WorkoutSession {
@@ -28,6 +34,7 @@ impl WorkoutSession {
         Self {
             workout,
             elapsed_s: 0.0,
+            intensity_pct: 100.0,
         }
     }
 
@@ -47,6 +54,19 @@ impl WorkoutSession {
         self.elapsed_s >= self.total_s() - 1e-9
     }
 
+    /// The live intensity, percent of the steps' own targets (100 = as written).
+    pub fn intensity_pct(&self) -> f64 {
+        self.intensity_pct
+    }
+
+    /// Sets the live intensity (clamped to [`MIN_INTENSITY_PCT`]..[`MAX_INTENSITY_PCT`]).
+    /// The next target computation picks it up on its own.
+    pub fn set_intensity_pct(&mut self, pct: f64) {
+        if pct.is_finite() {
+            self.intensity_pct = pct.clamp(MIN_INTENSITY_PCT, MAX_INTENSITY_PCT);
+        }
+    }
+
     /// Advances the workout by riding time (pauses never reach this).
     pub fn advance(&mut self, dt_s: f64) {
         if dt_s.is_finite() && dt_s > 0.0 {
@@ -56,6 +76,7 @@ impl WorkoutSession {
 
     pub fn reset(&mut self) {
         self.elapsed_s = 0.0;
+        self.intensity_pct = 100.0;
     }
 
     /// `(index, start_s, step)` of the step containing the current time. At the end the last
@@ -120,14 +141,19 @@ impl WorkoutSession {
         }
         let (_, start, step) = self.current()?;
         let elapsed_in_step = (self.elapsed_s - start).clamp(0.0, f64::from(step.duration_s));
-        step.target
-            .watts_at(elapsed_in_step, f64::from(step.duration_s), rider.ftp_w)
+        step.target.watts_at_intensity(
+            elapsed_in_step,
+            f64::from(step.duration_s),
+            rider.ftp_w,
+            self.intensity_pct,
+        )
     }
 
     /// Everything the HUD needs.
     pub fn progress(&self, rider: &RiderSettings) -> WorkoutProgress {
         let total = self.total_s().max(1.0);
         let finished = self.is_finished();
+        let intensity = self.intensity_pct;
         let Some((index, start, step)) = self.current() else {
             // a workout without steps (the loaders reject it, but the session must not panic)
             return WorkoutProgress {
@@ -150,6 +176,7 @@ impl WorkoutSession {
                 next_step_name: None,
                 next_target_w: None,
                 message: None,
+                intensity_pct: intensity,
             };
         };
         let step_len = f64::from(step.duration_s).max(1.0);
@@ -161,7 +188,9 @@ impl WorkoutSession {
         let target_w = if finished {
             None
         } else {
-            step.target.watts_at(elapsed_in_step, step_len, rider.ftp_w)
+            // the displayed target is the one the trainer is told to hold, intensity included
+            step.target
+                .watts_at_intensity(elapsed_in_step, step_len, rider.ftp_w, intensity)
         };
         let ftp_pct = target_w.and_then(|w| {
             (rider.ftp_w.is_finite() && rider.ftp_w > 0.0).then_some(w / rider.ftp_w * 100.0)
@@ -185,9 +214,16 @@ impl WorkoutSession {
             progress: (self.elapsed_s / total).clamp(0.0, 1.0),
             finished,
             next_step_name: next.map(|s| s.name.clone()),
-            next_target_w: next
-                .and_then(|s| s.target.watts_at(0.0, f64::from(s.duration_s), rider.ftp_w)),
+            next_target_w: next.and_then(|s| {
+                s.target.watts_at_intensity(
+                    0.0,
+                    f64::from(s.duration_s),
+                    rider.ftp_w,
+                    intensity,
+                )
+            }),
             message: self.coach_message(),
+            intensity_pct: intensity,
         }
     }
 }
@@ -298,6 +334,55 @@ mod tests {
         // advancing past the end is harmless
         s.advance(1000.0);
         assert_eq!(s.elapsed_s(), 120.0);
+    }
+
+    /// The live intensity the rider set (swipe, buttons, arrow keys) scales what the
+    /// trainer is told and what the HUD shows, identically — ramps included — and the
+    /// band is clamped. A reset (a new ride) always starts from 100 %.
+    #[test]
+    fn the_live_intensity_scales_the_target_and_the_display_together() {
+        let mut s = WorkoutSession::new(workout());
+        let r = rider(250.0);
+        assert_eq!(s.intensity_pct(), 100.0);
+        assert_eq!(s.progress(&r).target_w, Some(125.0));
+
+        // harder by 10 %: the warm-up and the ramp both scale, `target_w` agrees with
+        // the progress the HUD renders
+        s.set_intensity_pct(110.0);
+        assert_eq!(s.intensity_pct(), 110.0);
+        assert_eq!(s.target_w(&r), Some(137.5));
+        let p = s.progress(&r);
+        assert_eq!(p.target_w, Some(137.5), "display and command agree");
+        assert_eq!(p.intensity_pct, 110.0);
+        assert!((p.ftp_pct.unwrap() - 55.0).abs() < 1e-9);
+        s.advance(60.0);
+        let mid_ramp = s.progress(&r).target_w.unwrap();
+        assert!(
+            (mid_ramp - 225.0 * 1.1).abs() < 1e-9,
+            "the ramp scales too: {mid_ramp}"
+        );
+
+        // easier by half: the scaling is of the step's own target, not of the last scaled one
+        s.set_intensity_pct(50.0);
+        assert_eq!(s.target_w(&r).unwrap(), 112.5);
+
+        // the band is clamped, and a nonsense value changes nothing
+        s.set_intensity_pct(999.0);
+        assert_eq!(s.intensity_pct(), MAX_INTENSITY_PCT);
+        s.set_intensity_pct(-1.0);
+        assert_eq!(s.intensity_pct(), MIN_INTENSITY_PCT);
+        let before = s.intensity_pct();
+        s.set_intensity_pct(f64::NAN);
+        assert_eq!(s.intensity_pct(), before);
+
+        // a new ride starts from the plan as written
+        s.reset();
+        assert_eq!(s.intensity_pct(), 100.0);
+        assert_eq!(
+            s.target_w(&r),
+            Some(125.0),
+            "the reset rewinds the clock too"
+        );
     }
 
     #[test]

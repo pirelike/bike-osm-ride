@@ -595,6 +595,7 @@ mod tests {
                 t: i as f64,
                 unix_s: 1_700_000_000.0 + i as f64,
                 dist: i as f64 * 8.0,
+                odo: i as f64 * 8.0,
                 lat: 47.5 + i as f64 * 0.0001,
                 lon: 19.0,
                 ele: 120.0 + i as f64 * 0.3,

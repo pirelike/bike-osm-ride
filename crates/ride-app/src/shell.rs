@@ -425,7 +425,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 /* ── compact layout (phone, portrait tablet): tabs instead of the tiling ── */
 .compact {
   grid-row: 2;
-  display: grid; grid-template-rows: minmax(0, 1fr) auto auto;
+  display: grid; grid-template: minmax(0, 1fr) auto auto / minmax(0, 1fr);
   min-width: 0; min-height: 0; overflow: hidden; background: var(--bg);
 }
 .compact-stage {
@@ -443,6 +443,32 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
    row below the content when the screen was short, and the profile was drawn over the four
    cells. A row that cannot shrink makes the stage scroll instead.) */
 .compact[data-tab="ride"] .compact-stage { grid-template-rows: max-content minmax(200px, 1fr); align-content: stretch; }
+/* Keep vertical scrolling available when the ride content is taller than the stage.
+   The power readout still handles intensity swipes in that case. */
+.compact[data-tab="ride"][data-erg="true"] .compact-stage[data-swipe-full],
+.compact[data-tab="ride"][data-erg="true"] .compact-stage .hud-dash__power { touch-action: pan-x; }
+/* the intensity hint: the edges flash at the start of a workout ride — up is harder (red),
+   down is easier (green) — so the gesture is discovered without a manual */
+.erg-hint { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+.erg-hint__edge { position: absolute; left: 0; right: 0; height: 6px; opacity: 0; }
+.erg-hint__edge--top { top: 0; background: var(--crit); animation: erg-hint-blink 1.3s var(--ease) 2; }
+.erg-hint__edge--bottom { bottom: 0; background: var(--ok); animation: erg-hint-blink 1.3s var(--ease) 2; }
+.erg-hint__label {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-1); border: 1px solid var(--rule-strong); border-radius: 0;
+  font: 600 var(--t-11)/1 var(--font-ui); white-space: nowrap; opacity: 0;
+  animation: erg-hint-blink 1.3s var(--ease) 2;
+}
+.erg-hint__label--top { top: 14px; color: var(--crit); border-color: var(--crit); }
+.erg-hint__label--bottom { bottom: 14px; color: var(--ok); border-color: var(--ok); }
+@keyframes erg-hint-blink {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  45% { opacity: 1; }
+  62% { opacity: 0; }
+  100% { opacity: 0; }
+}
 .compact-panel {
   display: flex; flex-direction: column; min-width: 0;
   background: var(--bg-1); border: 1px solid var(--rule-strong); overflow: hidden;
@@ -493,12 +519,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   border-top: 1px solid var(--rule-strong); background: var(--bg-1); padding: 8px;
 }
 .compact-controls .hud-controls { flex: 1 1 auto; height: auto; padding: 0; min-width: 0; }
-.compact-controls .btn-group { display: flex; gap: 8px; width: 100%; background: transparent; }
+.compact-controls .btn-group { display: flex; flex: 1 1 auto; min-width: 0; gap: 8px; background: transparent; }
 .compact-controls .hud-controls__btn {
   --btn-h: 48px; flex: 1 1 0; min-width: 0; padding: 0 12px;
   border-radius: var(--radius-md); font: 600 var(--t-15)/1 var(--font-ui);
 }
 .compact-controls .hud-controls__btn.btn--primary { flex-grow: 2; }
+.compact-controls .hud-erg__btn { --btn-h: 44px; width: 44px; }
+@media (max-width: 370px) and (orientation: portrait) {
+  .compact-controls .hud-controls:has(.hud-erg) { flex-wrap: wrap; }
+  .compact-controls .hud-controls:has(.hud-erg) .btn-group { flex-basis: 100%; }
+  .compact-controls .hud-erg { margin-inline: auto; }
+}
 .compact-gears { flex: none; display: flex; align-items: center; gap: 4px; }
 .compact-gears__btn { --btn-h: 48px; width: 44px; padding: 0; }
 .compact-gears__num { min-width: 2ch; text-align: center; font: 600 var(--t-20)/1 var(--font-num); }
@@ -606,6 +638,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
   .compact .hud-dash__power { padding: var(--space-2) var(--space-3) var(--space-1); }
   .compact .hud-dash__cell { padding: var(--space-1) var(--space-2); }
 }
+@media (max-width: 370px) and (max-height: 700px) and (orientation: portrait) {
+  /* The profile's readout and page controls can occupy two rows here. */
+  .compact[data-tab="ride"] .compact-stage { grid-template-rows: max-content minmax(176px, 1fr); }
+  .compact[data-tab="ride"] .compact-panel[data-panel="profile"] { min-height: 176px; }
+}
 
 /* a phone on its side: a bar on top, a transport bar and a tab bar under the content would leave
    under 230 px for it. The transport buttons and the tabs move into a rail on the right, the ride
@@ -654,6 +691,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
 
 @media (prefers-reduced-motion: reduce) {
   .shell-dot, .shell-drop { animation: none; transition: none; }
+  /* the intensity hint stays as a static frame, no blinking */
+  .erg-hint__edge, .erg-hint__label { animation: none; opacity: 1; }
 }
 "##;
 
@@ -1692,6 +1731,56 @@ fn divider_style(divider: dock::Divider) -> String {
 /// Below this window width the panels are shown in tabs instead of the tiling.
 pub const COMPACT_BELOW_PX: f64 = 1000.0;
 
+/// Binds touch gestures to the compact stage for the lifetime of that element.
+const INTENSITY_SWIPE_JS: &str = r#"
+const stage = document.querySelector('#shell-stage.compact .compact-stage');
+if (!stage) return;
+const root = stage.parentElement;
+const measure = () => stage.toggleAttribute('data-swipe-full', stage.scrollHeight <= stage.clientHeight + 1);
+const sizes = new ResizeObserver(measure);
+const observePanels = () => {
+  sizes.disconnect();
+  sizes.observe(stage);
+  for (const panel of stage.children) sizes.observe(panel);
+  measure();
+};
+observePanels();
+const live = () => root.dataset.tab === 'ride' && root.dataset.erg === 'true';
+let start;
+stage.addEventListener('pointerdown', (e) => {
+  if (!live() || e.pointerType !== 'touch' || !e.isPrimary ||
+      e.target.closest('button, a, input')) return;
+  if (stage.hasAttribute('data-swipe-full') || e.target.closest('.hud-dash__power')) {
+    start = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  }
+});
+stage.addEventListener('pointercancel', (e) => {
+  if (start?.id === e.pointerId) start = undefined;
+});
+stage.addEventListener('pointerup', (e) => {
+  if (start?.id !== e.pointerId) return;
+  const dx = e.clientX - start.x;
+  const dy = e.clientY - start.y;
+  start = undefined;
+  if (live() && Math.abs(dy) >= 48 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+    dioxus.send(dy < 0 ? 1 : -1);
+  }
+});
+await new Promise((resolve) => {
+  const changes = new MutationObserver(() => {
+    if (stage.isConnected) {
+      observePanels();
+    } else {
+      sizes.disconnect();
+      changes.disconnect();
+      resolve();
+    }
+  });
+  changes.observe(stage, { childList: true });
+  changes.observe(root.parentElement, { childList: true });
+});
+"#;
+
 /// `true` for a phone or a portrait tablet (an unmeasured window, width 0, is a desktop).
 pub fn is_compact(width: f64) -> bool {
     width > 0.0 && width < COMPACT_BELOW_PX
@@ -1796,6 +1885,7 @@ fn compact_panel_body(id: PanelId) -> Element {
 #[component]
 fn CompactArea() -> Element {
     let st = use_context::<AppState>();
+    let ctl = use_context::<Controller>();
     let av = st.availability_live();
     let mut tab = use_signal(|| CompactTab::Ride);
     let active = *tab.read();
@@ -1806,13 +1896,25 @@ fn CompactArea() -> Element {
         .collect();
     panels.sort_by_key(|(id, _)| compact_rank(*id));
 
+    let hint_on = *st.intensity_hint.read();
+    let erg_live = *st.erg.read();
+
     rsx! {
         main {
             id: "shell-stage",
             class: "compact",
             "data-tab": active.key(),
+            "data-erg": if erg_live { "true" } else { "false" },
             aria_label: t("app.shell.munkaterulet").to_string(),
             div { class: "compact-stage",
+                onmounted: move |_| async move {
+                    let Some(mut bridge) = eval_js(INTENSITY_SWIPE_JS) else {
+                        return;
+                    };
+                    while let Ok(step) = bridge.recv::<i32>().await {
+                        ctl.adjust_workout_intensity(step);
+                    }
+                },
                 for (id, t) in panels {
                     section {
                         key: "{id.key()}",
@@ -1835,6 +1937,14 @@ fn CompactArea() -> Element {
                     class: if active == CompactTab::Map { "compact-panel compact-extra compact-extra--profile" } else { "compact-panel compact-extra compact-extra--profile is-hidden" },
                     aria_label: t("app.dock.magassagi_profil").to_string(),
                     div { class: "compact-panel__body", MapProfile {} }
+                }
+            }
+            if hint_on && active == CompactTab::Ride && erg_live {
+                div { class: "erg-hint", aria_hidden: "true",
+                    span { class: "erg-hint__edge erg-hint__edge--top" }
+                    span { class: "erg-hint__edge erg-hint__edge--bottom" }
+                    span { class: "erg-hint__label erg-hint__label--top", {t("ui_hud.huzd_fel_nehezebb")} }
+                    span { class: "erg-hint__label erg-hint__label--bottom", {t("ui_hud.huzd_le_konnyebb")} }
                 }
             }
             div { class: "compact-controls",
@@ -1989,7 +2099,7 @@ fn MapPanel() -> Element {
                 }
                 div { class: "tile-view__body",
                     MapView {
-                        route: st.route,
+                        route: st.active_route,
                         snapshot: st.snapshot,
                         style: map_style,
                         follow,
@@ -2004,6 +2114,7 @@ fn MapPanel() -> Element {
                     StreetViewPanel {
                         route: st.route,
                         snapshot: st.snapshot,
+                        active_route: Some(st.active_route.into()),
                         settings: ui,
                         embedded: true,
                         on_close: move |_| ctl.set_streetview(false),
@@ -2074,7 +2185,7 @@ fn ProfilePanel(#[props(default)] phone: bool) -> Element {
     }
     rsx! {
         ElevationProfile {
-            route: st.route,
+            route: st.active_route,
             snapshot: st.snapshot,
             mode,
             lookahead_m: lookahead,
@@ -2100,6 +2211,7 @@ fn ControlsPanel(#[props(default)] confirm_finish: bool) -> Element {
             on_resume: move |_| ctl.start(),
             on_finish: move |_| ctl.finish(),
             on_reset: move |_| ctl.reset(),
+            on_intensity: move |step: i32| ctl.adjust_workout_intensity(step),
         }
     }
 }
@@ -2118,7 +2230,14 @@ fn ClimbPanel() -> Element {
     let st = use_context::<AppState>();
     let settings = st.settings;
     let theme = use_memo(move || settings.read().ui.theme);
-    rsx! { ClimbCard { route: st.route, snapshot: st.snapshot, theme, prs: st.segment_prs } }
+    let prs = use_memo(move || {
+        if st.snapshot.read().pass == 0 {
+            st.segment_prs.read().clone()
+        } else {
+            Vec::new()
+        }
+    });
+    rsx! { ClimbCard { route: st.active_route, snapshot: st.snapshot, theme, prs } }
 }
 
 #[component]
@@ -2141,7 +2260,7 @@ fn ChartsPanel() -> Element {
 }
 
 /// The head unit above the phone's map: the same numbers as on the ride tab, the workout in one
-/// line.
+/// line. The map tab has no room for the ERG-exit button: it stays on the ride tab's card.
 #[component]
 fn StripPanel() -> Element {
     let st = use_context::<AppState>();
@@ -2225,7 +2344,7 @@ fn MapProfile() -> Element {
     let pages = phone_pages(st, ctl, false);
     rsx! {
         ElevationProfile {
-            route: st.route,
+            route: st.active_route,
             snapshot: st.snapshot,
             mode,
             lookahead_m: lookahead,
@@ -2242,10 +2361,12 @@ fn MapProfile() -> Element {
 #[component]
 fn DashPanel() -> Element {
     let st = use_context::<AppState>();
+    let ctl = use_context::<Controller>();
     let settings = st.settings;
     let theme = use_memo(move || settings.read().ui.theme);
     let rider = use_memo(move || settings.read().rider.clone());
-    rsx! { RideDash { snapshot: st.snapshot, rider, theme } }
+    let trainer_connected = *st.trainer_ble.read();
+    rsx! { RideDash { snapshot: st.snapshot, rider, theme, trainer_connected, on_exit_erg: move |_| ctl.exit_erg() } }
 }
 
 /// The virtual gear next to the transport buttons of the phone layout. Shown only when the rider
@@ -2295,7 +2416,9 @@ fn CompactGears() -> Element {
 #[component]
 fn WorkoutPanel() -> Element {
     let st = use_context::<AppState>();
-    rsx! { WorkoutCard { snapshot: st.snapshot } }
+    let ctl = use_context::<Controller>();
+    let trainer_connected = *st.trainer_ble.read();
+    rsx! { WorkoutCard { snapshot: st.snapshot, trainer_connected, on_exit_erg: move |_| ctl.exit_erg() } }
 }
 
 #[component]

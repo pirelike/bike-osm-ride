@@ -59,16 +59,23 @@ O botão **Dispositivos** na barra superior (os três pontos ao lado mostram qua
 
 ![A janela Dispositivos](../../screenshots/devices.png)
 
-1. `Iniciar uma procura`: o programa procura sem filtrar e classifica os dispositivos pelos serviços que anunciam (a
-   procura pára por si após 30 segundos).
+1. A **procura arranca sozinha** mal a janela abre e continua enquanto estiver aberta (durante uma tentativa de
+   ligação para uns segundos e depois retoma). O programa procura sem filtrar e classifica os dispositivos pelos
+   serviços que anunciam; com o botão podes pará-la e voltar a iniciá-la quando quiseres.
 2. Ao lado de cada dispositivo encontrado estão os botões das funções: ligá-lo na função de que precisas. Um dispositivo físico pode   preencher **várias funções ao mesmo tempo**: se o teu rolo também transmitir potência, cadência ou pulso, uma única ligação
    preenche todos os cartões (os cartões mostram a marca *dispositivo partilhado*). Dos dados dos sensores prevalece a fonte mais
    precisa (potência: o potenciómetro antes do rolo; cadência: CSC, depois o potenciómetro, depois o rolo; pulso: a cinta
    peitoral antes do rolo).
-3. O que não atualizou durante 3 segundos passa a “—”; quando a ligação cai, o programa tenta de novo três vezes.
-4. **Liga o rolo na função Rolo**: a função de potenciómetro só lê; o controlo (subidas, ERG) vem da
+3. **Linhas com a marca “Ligado”:** estes dispositivos já estão ligados ao computador ou ao telemóvel — normalmente
+   o rolo que o telemóvel religou sozinho, ou um que está preso a outra aplicação. Não se anunciam, por isso a
+   procura sozinha nunca os teria encontrado. Se a ligação está presa a **outra aplicação** (no Android dois clientes
+   GATT não cabem no mesmo dispositivo), a linha diz que é preciso soltá-lo lá; caso contrário, a linha dá um botão
+   de ligação normal. Num dispositivo sem nome também há um botão *Ligar como rolo* — a descoberta de serviços depois
+   de ligar decide se é mesmo um.
+4. O que não atualizou durante 3 segundos passa a “—”; quando a ligação cai, o programa tenta de novo três vezes.
+5. **Liga o rolo na função Rolo**: a função de potenciómetro só lê; o controlo (subidas, ERG) vem da
    função Rolo.
-5. **Ciclista simulado**: o primeiro item da lista, sempre presente, mesmo sem Bluetooth. No painel da esquerda podes definir
+6. **Ciclista simulado**: o primeiro item da lista, sempre presente, mesmo sem Bluetooth. No painel da esquerda podes definir
    os watts com um controlo deslizante (ou `↑`/`↓`, ±10 W); botões rápidos: Z2 – resistência 150 W, Z4 – limiar 250 W,
    Sprint 700 W, Livre 0 W. A cadência e o pulso seguem-no de forma credível.
 
@@ -84,9 +91,16 @@ rolo.
 
 ## Pedalar
 
-`Iniciar` (ou `Space`) começa a volta, `Pausa` pára-a (o tempo também pára), `Terminar` fecha-a. No fim do percurso, a
-volta **termina sozinha**. Antes de começar, podes saltar para qualquer ponto do percurso clicando no perfil; durante uma
-volta, isso não funciona. O programa mantém a máquina acordada enquanto pedalas (Windows, Linux, macOS; não no Android).
+`Iniciar` (ou `Space`) começa a volta, `Pausa` pára-a (o tempo também pára), `Terminar` fecha-a. **Chegar ao fim do
+percurso não termina a volta**: o programa avisa e ela continua — **num circuito parte uma volta nova do início; num
+percurso que não é circuito pedales para trás no mesmo traçado** (no fim do caminho de volta dá meia-volta outra vez,
+e assim até carregares em *Terminar*). Assim, um treino mais longo do que o percurso corre até ao fim, e em pedalada
+livre podes continuar o quanto quiseres. A distância, o percurso restante e o ETA referem-se ao **trecho** atual (no
+separador Pedalada do telemóvel, em cima, um indicador “*2. trecho*” diz onde estás); o resumo conta a volta inteira.
+O fantasma e os PR de subida só fazem sentido no primeiro trecho (as voltas seguintes entram no registo com as suas
+próprias marcas de tempo, mas a procura de PR não as considera). Antes de começar, podes saltar para qualquer ponto do
+percurso clicando no perfil; durante uma volta, isso não funciona. O programa mantém a máquina acordada enquanto
+pedalas (Windows, Linux, macOS; não no Android).
 
 A velocidade vem dos **watts** medidos, com o modelo de Martin validado com medições na estrada (gravidade, rolamento,
 atrito dos rolamentos, resistência do ar com os raios e inércia), a partir do teu peso corporal, do peso da bicicleta, do CdA e do Crr;
@@ -147,6 +161,19 @@ campo `sources` de `workouts.json`).
 - Durante uma volta, o rolo mantém os watts-alvo no **modo ERG**; o cartão *Treino* e a vista *Treino* do painel do perfil
   mostram o bloco, o tempo restante, o bloco seguinte e a **mensagem do treinador** (no momento certo do treino,
   durante 12 segundos, só ali, não como pop-up). A pausa e a saída também põem o rolo em neutro aqui.
+- **Intensidade a meio do treino.** Se o treino estiver demasiado fácil ou demasiado difícil, ajustas-no em
+  passos de ±5%, **entre 50% e 150%** — escala os alvos dos blocos restantes (o mostrador e o rolo recebem o
+  mesmo número). *No computador*, o stepper **−/+** da janela *Controlos* ou, com o ERG ativo, as **setas
+  `↑`/`↓`** (mantém premidas: avança passo a passo). *No telemóvel*, um **deslize para cima** (mais forte) ou
+  **para baixo** (mais suave) no separador Pedalada. Se o separador tiver deslocamento vertical, começa o gesto
+  sobre o indicador de potência. No início do treino a borda do ecrã
+  pisca (vermelha em cima, verde em baixo, com uma legenda curta de cada lado) para chamar a atenção para o
+  gesto. A definição não fica guardada: toda a volta começa nos 100%, e o cartão mostra quando não pedales aos
+  100%.
+- **No fim do treino.** Depois de o último bloco acabar, o rolo volta à simulação do terreno (o programa envia
+  isto de propósito duas vezes, porque alguns firmwares não largam o ERG com uma única escrita). Se o rolo
+  continuar agarrado ao último alvo, o botão **“Desligar ERG”** do cartão *Treino* (ao lado de “*Treino
+  concluído*”) reenvia a troca.
 - **O teu próprio treino:** *Importar um treino…* lê um ficheiro MyWhoosh ou Zwift (`.xml`, `.zwo`) e também a exportação JSON do MyWhoosh;
   vai para a pasta `workouts/` e, a partir daí, pode ser selecionado como os outros.
 - Durante uma volta não é possível mudar de treino.
@@ -337,7 +364,11 @@ Numa janela com menos de 1000 px aparece uma vista com separadores: em baixo **P
 grande fila de botões `Iniciar`/`Pausa`/`Terminar`. No separador **Pedalada** está tudo o que precisas durante uma volta num só ecrã: o
 bloco do treino (tempo restante, bloco seguinte, a mensagem do treinador), a potência medida em relação ao alvo (*no alvo / baixa /
 alta*), a barra das zonas, a cadência, o pulso, a velocidade, o declive e, por baixo, o perfil (arrastar para o lado alterna entre as suas
-vistas). No telemóvel, as janelas são de ecrã inteiro.
+vistas). No telemóvel, as janelas são de ecrã inteiro. **Durante um treino, desliza na vertical no separador
+Pedalada para ajustar a intensidade.** Se o separador tiver deslocamento vertical, começa o gesto sobre o
+indicador de potência. No início do treino a borda do ecrã pisca, vermelha em cima e verde em baixo. Depois do fim
+do percurso, um indicador
+“*2. trecho*” em cima mostra em que trecho da continuação vais.
 
 <p align="center">
   <img src="../../screenshots/phone-ride.png" width="280" alt="Disposição no telemóvel, separador Pedalada com um treino">
@@ -392,7 +423,7 @@ mais recente, a aplicação avisa e não escreve nada. No Android, esta parte ai
 | `X` | trocar o mapa e o Street View |
 | `W` | seletor de treinos |
 | `←` / `→` | mudanças virtuais: mais fácil / mais difícil |
-| `↑` / `↓` | potência do ciclista simulado ±10 W |
+| `↑` / `↓` | durante um treino, a **intensidade do treino** ±5%; sem treino, a potência do ciclista simulado ±10 W |
 | `F11` | ecrã inteiro |
 | `Esc` | fechar a janela, sair do ecrã inteiro |
 | `Ctrl+O` | abrir um GPX |
@@ -412,7 +443,8 @@ não consegue desenhar por cima de uma janela nativa); fechar o painel também f
 | Sintoma | O que fazer |
 |---|---|
 | O rolo não reage às subidas / ao treino | Na janela **Dispositivos** tem de estar ligado na função *Rolo* (a função de potenciómetro só lê). Vê o registo BLE (`ble.log`, como descrito no §11 de [`BLUETOOTH.md`](../../BLUETOOTH.md)); o Zwift ou uma aplicação do telemóvel não devem estar a ocupar o rolo. |
-| Não encontra o dispositivo | Liga o Bluetooth; no Windows a procura não filtra, por isso aparecem muitos dispositivos: vê as funções de cada dispositivo. No Android concede as permissões de Bluetooth (*Iniciar uma procura* volta a perguntar); no macOS o sistema pede permissão na primeira procura. |
+| **O rolo continua agarrado ao último alvo depois do treino** | O firmware não largou o ERG. Prime o botão **“Desligar ERG”** do cartão *Treino*; se não ajudar, sai do modo ERG pelo botão/ecrã do próprio rolo ou reinicia-o, e envia-nos o `ble.log`. |
+| Não encontra o dispositivo | Liga o Bluetooth; no Windows a procura não filtra, por isso aparecem muitos dispositivos: vê as funções de cada dispositivo. Se a lista tiver uma linha com a marca **“Ligado”**, é outra aplicação ou a religação automática do telemóvel que a tem: solta-o lá, ou reinicia o rolo e faz uma procura nova. No Android concede as permissões de Bluetooth (*Iniciar uma procura* volta a perguntar); no macOS o sistema pede permissão na primeira procura. |
 | O mapa está vazio ou cinzento | Não há rede e ainda não há nenhum tile em cache: o percurso e os números funcionam de qualquer maneira. |
 | O percurso não carrega | A mensagem de erro diz porquê (ficheiro danificado, link não suportado, sem rede para o BRouter). O link tem de conter a parte `lonlats=`. |
 | O perfil está plano | O ficheiro não tem dados de elevação e o Open-Meteo também não estava disponível. Carrega um GPX com elevação ou um link do bikerouter. |

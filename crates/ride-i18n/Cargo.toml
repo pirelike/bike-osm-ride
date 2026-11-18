@@ -8,7 +8,6 @@ publish = false
 description = "Language registry and text catalogs for bike-osm-ride"
 
 [dependencies]
-serde = { workspace = true }
 serde_json = { workspace = true }
 sys-locale = { workspace = true }
 

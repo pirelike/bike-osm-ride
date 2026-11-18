@@ -157,7 +157,7 @@ pub fn to_tcx(summary: &RideSummary, points: &[RecordPoint]) -> String {
     if !points.is_empty() {
         let start_dist = points
             .first()
-            .map(|p| p.dist)
+            .map(|p| p.odo)
             .filter(|d| d.is_finite())
             .unwrap_or(0.0);
         xml.push_str("        <Track>\n");
@@ -178,12 +178,13 @@ pub fn to_tcx(summary: &RideSummary, points: &[RecordPoint]) -> String {
                 "            <AltitudeMeters>{}</AltitudeMeters>",
                 num1(p.ele)
             );
-            // From the start of the activity, not the route position: a ride may start with a
-            // seek, and the lap total is the distance ridden.
+            // From the start of the activity, not the route position: a ride may start with
+            // a seek, and a ride that continued past the route end (laps, a turned-around
+            // route) keeps counting on the monotone `odo` instead of the wrapping `dist`.
             let _ = writeln!(
                 xml,
                 "            <DistanceMeters>{}</DistanceMeters>",
-                num1((p.dist - start_dist).max(0.0))
+                num1((p.odo - start_dist).max(0.0))
             );
             if let Some(hr) = p.hr_bpm.filter(|v| v.is_finite()) {
                 let _ = writeln!(
@@ -327,6 +328,7 @@ mod tests {
             t,
             unix_s: 1_790_000_000.0 + t,
             dist: t * 6.5,
+            odo: t * 6.5,
             lat: 47.4979,
             lon: 19.0402,
             ele: 120.0 + t * 0.1,

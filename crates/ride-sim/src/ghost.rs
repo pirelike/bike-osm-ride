@@ -18,6 +18,16 @@ use ride_model::{RecordPoint, Route};
 /// few centimetres short of the route end because of the integration, not because of the rider.
 pub const COVER_EPS_M: f64 = 1.0;
 
+/// The first traversal of the route. On later passes the odometer carries the completed
+/// distance as an offset ahead of the position on that pass.
+pub fn first_pass_points(points: &[RecordPoint]) -> &[RecordPoint] {
+    let end = points
+        .iter()
+        .position(|point| point.odo - point.dist > 1e-6)
+        .unwrap_or(points.len());
+    &points[..end]
+}
+
 /// The `(time, distance)` trace of a recorded ride.
 ///
 /// Both axes are non-decreasing: a sample that goes back in time is dropped, a sample that goes
@@ -33,7 +43,7 @@ impl Track {
     /// Builds the trace of a recording; `None` when it has fewer than two samples or covers no
     /// distance at all.
     pub fn from_points(points: &[RecordPoint]) -> Option<Self> {
-        Self::from_samples(points.iter().map(|point| (point.t, point.dist)))
+        Self::from_samples(first_pass_points(points).iter().map(|p| (p.t, p.dist)))
     }
 
     /// Builds a trace from parallel `(time, distance)` samples: a recording, or the route's own
@@ -220,6 +230,7 @@ mod tests {
             t,
             unix_s: 1_700_000_000.0 + t,
             dist,
+            odo: dist,
             lat: 47.5,
             lon: 19.0,
             ele: 100.0,

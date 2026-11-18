@@ -87,10 +87,16 @@ Die vollständige Beschreibung: **[Benutzerhandbuch](USER_GUIDE.md)**.
 - **FTMS-Trainer** (Anstiege und ERG), **Leistungsmesser** (CPS), **Tempo/Trittfrequenz** (CSC), **Pulssensor** (HR); ein
   physisches Gerät kann *mehrere Rollen* in einer einzigen Verbindung erfüllen; **Zwift Click/Play** als virtuelle Schaltung; **simulierter Fahrer**.
 - **Virtuelle Schaltung**: 2 × 12 Antrieb, 23 Gänge, verändert den Widerstand des Trainers.
+- **Das Ende der Route ist nicht das Ende der Fahrt**: eine Rundstrecke beginnt die nächste Runde, jede andere
+  wird auf der gleichen Strecke rückwärts gefahren — ein längeres Workout als die Route läuft vollständig aus,
+  und freies Fahren endet erst mit *Beenden*.
 
 **Workouts und Analyse**
 - 93 eingebaute Workouts in 12 Kategorien, mit Tags, einem zonenfarbenen Blockdiagramm und 943 zeitgesteuerten Coach-Nachrichten; Import von
   MyWhoosh- und Zwift-Workouts (`.zwo`, XML, JSON).
+- **Trainingsintensität während der Fahrt**: in 5 %-Schritten innerhalb von 50–150 % — der −/+-Stepper im Fenster
+  *Steuerung* oder die Tasten ↑/↓ am Desktop, am Telefon ein Wisch nach oben (härter) oder unten (leichter) auf
+  dem Fahr-Tab; beim Start eines Workouts blinken die Bildschirmränder auf, damit die Geste entdeckt wird.
 - Coggan-Zonen, NP, IF, TSS, kcal; Herzfrequenzzonen; Aufzeichnung pro Sekunde.
 - **Geist** (letzte Fahrt, beste, oder die eigenen Zeitstempel der GPX) und **lokale Abschnitte mit PR**.
 - **Übersicht und Vergleich von Fahrten**: die Fahrten auf derselben Route (höchstens vier) nebeneinander nach Leistung, Puls,
@@ -232,6 +238,7 @@ Wir verwenden bewusst nur Code mit permissiver Lizenz. Herkunft und Lizenz bleib
 | [`cycling-ble`](https://github.com/friedrichwilken/cycling-ble) | Apache-2.0 OR MIT | Auswerten der Daten von Leistungsmesser, Trittfrequenz- und Pulssensor (eingebaut, in den Quelldateien gekennzeichnet) |
 | [OsmolControl](https://github.com/Parapeth962/OsmolControl) | MIT | Trainerverbindung und Sicherheitsfilter für Befehle (übernommene Teile, gekennzeichnet) |
 | [iron-heart](https://github.com/nullstalgia/iron-heart) | MIT | Suche nach dem Pulssensor und erneutes Verbinden (Muster übernommen, kein Code, gekennzeichnet) |
+| [btleplug](https://github.com/deviceplug/btleplug) droidplug `Peripheral.java` | MIT OR Apache-2.0 (btleplugs eigene Datei) | die Java-Hälfte des Android-Bluetooth-Backends, in die APK kopiert und **beim Build gepatcht** (schließt ein GATT, das nach einem inaktiven Verbindungsabbruch offen blieb; sonst wird die nächste Verbindung ein zeitlich unbegrenzter Hintergrund-Auto-Connect): `packaging/android/patch_droidplug.py`, Details in [`NOTICE.md`](../../NOTICE.md) |
 | [Barlow und Barlow Condensed](https://github.com/jpt/barlow)-Schriften | SIL OFL 1.1 | Text und Zahlen der Oberfläche; **in das Programm eingebaut** (subsetierte WOFF2, Latin + Latin Extended, Ungarisch abgedeckt), damit sie ohne Netz funktionieren; der Lizenztext: [`crates/ride-ui-kit/assets/fonts/OFL.txt`](../../../crates/ride-ui-kit/assets/fonts/OFL.txt), Details in [`NOTICE.md`](../../../NOTICE.md) |
 | [virtual-cog](https://github.com/pymmog/virtual-cog) | Unlicense (Public Domain) | das BLE-Protokoll von Zwift Click/Play und Zwift Hub (in Rust neu geschrieben): das `zwift`-Modul von `ride-ble`, Details in [`NOTICE.md`](../../../NOTICE.md) |
 | [`p256`](https://github.com/RustCrypto/elliptic-curves), [`hkdf`](https://github.com/RustCrypto/KDFs), [`sha2`](https://github.com/RustCrypto/hashes), [`aes`](https://github.com/RustCrypto/block-ciphers), [`ccm`](https://github.com/RustCrypto/AEADs) (RustCrypto) | MIT / Apache-2.0 | der Schlüsselaustausch des Zwift Click (ECDH P-256, HKDF-SHA256) und die AES-CCM-Verschlüsselung |

@@ -135,6 +135,7 @@ impl MultiSession {
             TrainerCmd::Power(w) => self.control.set_target_power(w, now),
             TrainerCmd::Start => self.control.start(now),
             TrainerCmd::Pause => self.control.pause(now),
+            TrainerCmd::RelaxFromErg => self.control.relax_from_erg(now),
         }
     }
 

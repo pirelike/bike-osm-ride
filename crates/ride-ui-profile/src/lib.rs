@@ -476,7 +476,7 @@ pub fn ElevationProfile(
                         Pair {
                             label: t("ui_profile.szint").to_string(),
                             value: if show_rider {
-                                format!("+{} / {}", fmt_m(snap.ascent_done.max(0.0)), fmt_m(route_ref.ascent))
+                                format!("+{} / {}", fmt_m((route_ref.ascent - snap.ascent_left).max(0.0)), fmt_m(route_ref.ascent))
                             } else {
                                 format!("+{}", fmt_m(route_ref.ascent))
                             },
@@ -1014,6 +1014,7 @@ mod tests {
                     t,
                     unix_s: 1_700_000_000.0 + t,
                     dist: t * 7.0,
+                    odo: t * 7.0,
                     lat: 47.5,
                     lon: 19.0 + t / 75_000.0,
                     ele: 120.0 + t * 0.3,

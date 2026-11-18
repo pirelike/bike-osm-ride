@@ -255,6 +255,10 @@ fn FoundRow(
             &[("roles", &roles)],
         )
     };
+    // A device the OS reports as connected but cannot hand to us: another app owns the
+    // link (Android refuses a second GATT client). It is information, not a button.
+    let held_elsewhere = device.connected && !device.connectable;
+    let held_hint = t("ui_dialogs.devices.az_eszkoz_mar_kapcsolodik_ehhez_a_szamitoge");
 
     rsx! {
         li { class: "dlg-found", "data-state": tone,
@@ -264,6 +268,9 @@ fn FoundRow(
                     span { class: "dlg-found__name truncate", "{title}" }
                     if simulated {
                         span { class: "tag tag--solid", {t("ui_dialogs.devices.szimulalt")} }
+                    }
+                    if device.connected {
+                        span { class: "tag", {t("ui_dialogs.helpers.csatlakoztatva")} }
                     }
                     for kind in device.kinds.iter().copied() {
                         span { class: "tag", key: "role-{kind_label(kind)}", "{kind_label(kind)}" }
@@ -299,6 +306,8 @@ fn FoundRow(
                         Icon { name: IconName::Close, size: 13 }
                         {t("ui_dialogs.devices.levalasztas")}
                     }
+                } else if held_elsewhere {
+                    span { class: "dlg-found__held t-caption", "{held_hint}" }
                 } else if let Some(kind) = suggested {
                     button {
                         class: "btn btn--primary btn--sm",
@@ -310,6 +319,24 @@ fn FoundRow(
                         },
                         Icon { name: IconName::Bluetooth, size: 13 }
                         {t("ui_dialogs.devices.csatlakozas")}
+                    }
+                } else if !simulated {
+                    // Named but no recognised service: the name lists cannot know every
+                    // trainer. Connecting it as a trainer is verified by the service
+                    // discovery right after, and a wrong guess fails cleanly.
+                    button {
+                        class: "btn btn--ghost btn--sm",
+                        r#type: "button",
+                        title: t("ui_dialogs.devices.nem_hirdet_szolgaltatast_ha_trainer_az").to_string(),
+                        onclick: {
+                            let id = device.id.clone();
+                            move |_| on_command.call(SensorCommand::Connect {
+                                id: id.clone(),
+                                kind: DeviceKind::Trainer,
+                            })
+                        },
+                        Icon { name: IconName::Bluetooth, size: 13 }
+                        {t("ui_dialogs.devices.csatlakozas_trainerkent")}
                     }
                 }
                 if simulated {

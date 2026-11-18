@@ -294,6 +294,7 @@ mod tests {
                 t: f64::from(t),
                 unix_s: 1_700_000_000.0 + f64::from(t),
                 dist: f64::from(t) * 8.0,
+                odo: f64::from(t) * 8.0,
                 lat: 47.5 + f64::from(t) * 1e-5,
                 lon: 19.04,
                 ele: 120.0 + f64::from(t) * 0.2,

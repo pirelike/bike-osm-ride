@@ -66,6 +66,8 @@ fn sim_device() -> DeviceInfo {
             DeviceKind::HeartRate,
         ],
         rssi: None,
+        connected: false,
+        connectable: true,
     }
 }
 
@@ -141,6 +143,8 @@ impl Slot {
 }
 
 struct ScanHandle {
+    generation: u64,
+    running: bool,
     stop: watch::Sender<bool>,
     handle: JoinHandle<()>,
 }
@@ -269,6 +273,7 @@ impl<A: BleAdapter> Hub<A> {
                 }
             }
             SensorCommand::Disconnect(kind) => self.disconnect(kind).await,
+            SensorCommand::RelaxFromErg => self.to_trainer(TrainerCmd::RelaxFromErg),
             SensorCommand::SetSimulation(sim) => {
                 self.intent.target = Some(TrainerTarget::Sim(sim));
                 self.sim.set_terrain(sim);
@@ -331,20 +336,29 @@ impl<A: BleAdapter> Hub<A> {
 
     async fn start_scan(&mut self) {
         self.emit_discovered();
-        if self.scan.is_some() {
+        if let Some(scan) = &self.scan {
+            if scan.running {
+                self.emit(SensorEvent::Scanning(true));
+            }
             return;
         }
         let Some(adapter) = self.ensure_adapter().await else {
+            self.emit(SensorEvent::Scanning(false));
             return;
         };
         let (stop_tx, stop_rx) = watch::channel(false);
-        let handle = tokio::spawn(run_scan(
-            adapter,
-            self.int_tx.clone(),
-            self.cfg.clone(),
-            stop_rx,
-        ));
+        self.generation += 1;
+        let generation = self.generation;
+        let tx = self.int_tx.clone();
+        let cfg = self.cfg.clone();
+        let handle = tokio::spawn(async move {
+            let scan = run_scan(adapter, tx.clone(), cfg, stop_rx, generation);
+            let _ = std::panic::AssertUnwindSafe(scan).catch_unwind().await;
+            let _ = tx.send(Internal::ScanFinished(generation));
+        });
         self.scan = Some(ScanHandle {
+            generation,
+            running: false,
             stop: stop_tx,
             handle,
         });
@@ -360,6 +374,7 @@ impl<A: BleAdapter> Hub<A> {
                 // would keep running next to the one the next `StartScan` starts.
                 abort.abort();
             }
+            self.emit(SensorEvent::Scanning(false));
         }
     }
 
@@ -923,9 +938,23 @@ impl<A: BleAdapter> Hub<A> {
                     }
                 }
             }
-            Internal::Discovered(list) => {
-                self.scan_results = list;
-                self.emit_discovered();
+            Internal::Discovered(generation, list) => {
+                if self.scan.as_ref().is_some_and(|s| s.generation == generation) {
+                    self.scan_results = list;
+                    self.emit_discovered();
+                }
+            }
+            Internal::ScanStarted(generation) => {
+                if let Some(scan) = self.scan.as_mut().filter(|s| s.generation == generation) {
+                    scan.running = true;
+                    self.emit(SensorEvent::Scanning(true));
+                }
+            }
+            Internal::ScanFinished(generation) => {
+                if self.scan.as_ref().is_some_and(|s| s.generation == generation) {
+                    self.scan = None;
+                    self.emit(SensorEvent::Scanning(false));
+                }
             }
         }
     }

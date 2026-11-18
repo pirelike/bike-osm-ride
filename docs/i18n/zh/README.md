@@ -107,10 +107,12 @@ Android 发行版必须使用固定的发行签名密钥，缺少凭据时构建
 - **FTMS 骑行台**（爬坡和 ERG）、**功率计**（CPS）、**速度/踏频**（CSC）、**心率监测器**（HR），一个物理设备
   可以在一个连接上承担*多个角色*；**Zwift Click/Play** 虚拟变速；**模拟骑手**。
 - **虚拟变速**：2 × 12 传动，23 档，改变骑行台的阻力。
+- **路线的终点不是骑行的终点**：环线开始新的一圈，其他路线沿同一条轨迹折返 —— 比路线更长的训练能完整跑完，自由骑行只有按“结束”才停。
 
 **训练与分析**
 - 12 个类别共 93 个内置训练，带标签、按区间着色的区块图和 943 条带时间点的教练提示；可导入 MyWhoosh 和
   Zwift 的训练（`.zwo`、XML、JSON）。
+- **骑行中调节训练强度**：以 5 % 为步长，50–150 % 之间 —— 桌面上用“控制”窗口的 −/+ 或 ↑/↓ 键，手机上在骑行页上滑（更难）或下滑（更轻松）；训练开始时屏幕边缘会闪烁提示该手势。
 - Coggan 区间、NP、IF、TSS、kcal；心率区间；每秒记录。
 - **幽灵**（最近一次、最好的一次，或 GPX 自带的时间戳）和**带 PR 的本地赛段**。
 - **骑行回顾与比较**：同一路线上的骑行（最多四次）并排比较功率、心率、踏频、速度和时差；放大到某个路段
@@ -245,6 +247,7 @@ Claude Code 的项目说明：[`CLAUDE.md`](../../../CLAUDE.md)。
 | [`cycling-ble`](https://github.com/friedrichwilken/cycling-ble) | Apache-2.0 OR MIT | 解析功率计、踏频和心率传感器数据（已内置，源文件中有标注） |
 | [OsmolControl](https://github.com/Parapeth962/OsmolControl) | MIT | 骑行台连接和命令安全过滤器（移植的部分，已标注） |
 | [iron-heart](https://github.com/nullstalgia/iron-heart) | MIT | 心率监测器的搜索与重连（只作范例，未取代码，已标注） |
+| [btleplug](https://github.com/deviceplug/btleplug) droidplug `Peripheral.java` | MIT OR Apache-2.0（btleplug 自身文件） | Android 蓝牙后端的 Java 部分，复制到 APK 中并在构建时打补丁（关闭闲置断连后遗留的 GATT 连接，否则下一次连接会变成无时限的后台自动连接）：`packaging/android/patch_droidplug.py`，详情见 [`NOTICE.md`](../../NOTICE.md) |
 | [Barlow 和 Barlow Condensed](https://github.com/jpt/barlow) 字体 | SIL OFL 1.1 | 界面文字和数字；**内嵌**在程序中（子集化 WOFF2，latin + latin-ext，含匈牙利语 ő/ű），因此没有网络也能用；许可证文本：[`crates/ride-ui-kit/assets/fonts/OFL.txt`](../../../crates/ride-ui-kit/assets/fonts/OFL.txt)，细节见 [`NOTICE.md`](../../../NOTICE.md) |
 | [virtual-cog](https://github.com/pymmog/virtual-cog) | Unlicense（公有领域） | Zwift Click/Play 和 Zwift Hub 的 BLE 协议（改写成 Rust）：`ride-ble` 的 `zwift` 模块，细节见 [`NOTICE.md`](../../../NOTICE.md) |
 | [`p256`](https://github.com/RustCrypto/elliptic-curves)、[`hkdf`](https://github.com/RustCrypto/KDFs)、[`sha2`](https://github.com/RustCrypto/hashes)、[`aes`](https://github.com/RustCrypto/block-ciphers)、[`ccm`](https://github.com/RustCrypto/AEADs)（RustCrypto） | MIT / Apache-2.0 | Zwift Click 的密钥交换（ECDH P-256、HKDF-SHA256）和 AES-CCM 加密 |

@@ -141,6 +141,7 @@ fn riding_snapshot(dist: f64, inside: bool) -> RideSnapshot {
         next_climb_in: Some(if inside { 0.0 } else { 1_500.0 }),
         trainer_grade: if inside { 6.6 } else { 1.2 },
         workout: None,
+        pass: 0,
         ghost: None,
         segment: if inside {
             Some(ride_model::SegmentLive {

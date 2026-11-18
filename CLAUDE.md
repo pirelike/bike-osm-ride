@@ -161,13 +161,22 @@ version. Procedure and CI lessons: `docs/RELEASING.md`.
 
 Verified by automated tests and by running the app: route pipeline, physics, engine, workouts, ghost/PRs,
 TCX, the tiling dock, the UI crates, the FTMS control logic against the in-memory fake transport.
-**One real trainer** (the user's VE200) was captured (`ble.log.1`, 2026-11-01/02, about 3.3 h): ERG targets
+For 0.7.0, Windows WebView2 checks covered desktop and emulated phone sizes, intensity gestures and
+keyboard input, the map and profile through two turnarounds, and scan start, stop and restart with the
+Windows adapter. Automated tests cover connected-device refresh, odometer continuity and legacy
+records, and the ERG-exit handshake with a fake trainer. The VE200's response remains to be checked
+on hardware, along with the Android BLE lifecycle and touch input. The
+droidplug `Peripheral.java` patch is applied by `resoverlay.sh` and built into APKs by CI — **never run
+on a phone**. The 0.7.0 rider-document updates for en/es/pt/de/it/zh (README bullets, USER_GUIDE
+sections, the zh CHANGELOG) were translated with the catalogs' vocabulary but **no native speaker has
+reviewed them**. **One real trainer** (the user's VE200) was captured (`ble.log.1`, 2026-11-01/02, about 3.3 h): ERG targets
 were accepted 928 times, Request Control and Start work, and the trainer answers Stop/Pause with "op code
 not supported". The capture contains **no terrain simulation**: its only six Set Indoor Bike Simulation
 writes are neutral (0 %) grades sent right before a pause. That the trainer follows hills is therefore
 **not confirmed on hardware**. **Never verified:** real Google Street View (only a
 local mock), Android Bluetooth beyond one rider report (2026-11-08: a trainer was found and connected on a
-phone at the first try, a reconnect after a disconnect was unreliable; the fixes since are tested only against the
+phone at the first try, a reconnect after a disconnect was unreliable; the fixes since — including the
+droidplug stale-gatt patch — are tested only against the
 fake transport, `docs/BLUETOOTH.md` §7), the macOS and Linux apps at runtime (CI
 builds them and smoke-tests Linux for 20 s), any trainer other than the VE200, **a real Strava/Garmin export** on the review page's import (only synthetic files and the
 app's own TCX were read), and the estimated watts against a real power meter (checked only as a round trip through the

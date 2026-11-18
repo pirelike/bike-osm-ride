@@ -10,7 +10,7 @@ what is and is not known to work. Checked against the repository on 2026-11-04 (
 |---|---|
 | Builds in CI, installs, starts, phone layout | yes (the release workflow requires the stable release keystore; layout checked at 412 × 860) |
 | System file picker for GPX | implemented through JNI; found and fixed by running the APK, see the 0.3.0 commit message |
-| Bluetooth (`btleplug` droidplug backend, runtime permissions) | a rider reported (2026-11-08) finding a trainer and connecting it at the first try; **reconnecting after a disconnect was unreliable** (fixes for the app's own races are in, **not confirmed on a phone**; the droidplug stale-gatt problem is open, see [`BLUETOOTH.md`](BLUETOOTH.md) §7) |
+| Bluetooth (`btleplug` droidplug backend, runtime permissions) | a rider reported (2026-11-08) finding a trainer and connecting it at the first try; **reconnecting after a disconnect was unreliable** (fixes for the app's own races are in, and the **droidplug stale-gatt patch** of 0.7.0 is applied to the APK by `patch_droidplug.py`; **neither is confirmed on a phone yet**, see [`BLUETOOTH.md`](BLUETOOTH.md) §7) |
 | Keep the screen on while riding | implemented (`wake.rs` → `MainActivity.setKeepScreenOn` → `FLAG_KEEP_SCREEN_ON`, on while `Riding`, off when paused or finished), **not yet confirmed on a device** |
 | Browser panel (Firefox) | not available |
 
@@ -84,6 +84,16 @@ temporary files there); builds were done in a normal shell and in CI.
   APK, not only for the icon. The classes alone did not fix it on a phone: droidplug resolves them through the thread's
   context class loader, which on the natively attached hub thread is the system loader; `ride-ble`'s
   `android_ble.rs` now sets the activity's class loader on that thread before `btleplug::platform::init`.
+- **The stale-gatt patch (0.7.0).** Right after copying the sources, `resoverlay.sh` runs
+  `packaging/android/patch_droidplug.py` on `Peripheral.java`: droidplug left a `BluetoothGatt` open when a link was
+  lost while idle (or when `disconnect()` found `connected == false`), so the next `connect()` went through
+  Android's background auto-connect — no timeout, and it could complete *after* the app gave up, leaving the phone
+  attached to a trainer that stopped advertising. The patch closes the stale gatt in both paths (marked
+  "bike-osm-ride" inline, listed in `NOTICE.md`) and fails the build loudly when a droidplug upgrade moves its
+  anchors. Also `MainActivity.connectedBleDevices()` enumerates the phone's connected GATT devices for the devices
+  dialog (`ride-ble` reads it over JNI at every scan start): a trainer that holds a link does not advertise, and
+  Android would refuse a second client anyway, so such rows are information, not connect targets
+  ([`BLUETOOTH.md`](BLUETOOTH.md) §3, §7).
 
 ## 3. Surviving panics
 
