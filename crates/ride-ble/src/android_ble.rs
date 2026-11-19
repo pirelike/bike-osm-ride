@@ -112,9 +112,7 @@ pub fn connected_ble_devices() -> Vec<(String, Option<String>)> {
     };
     // SAFETY: the JavaVM pointer comes from the NDK context the webview runtime set up and
     // stays valid for the life of the process.
-    let Ok(vm) = (unsafe { jni::JavaVM::from_raw(context.vm().cast()) }) else {
-        return Vec::new();
-    };
+    let vm = unsafe { jni::JavaVM::from_raw(context.vm().cast()) };
     let activity = context.context();
     // The calling thread is not a Java thread: attach it for this call.
     let outcome: jni::errors::Result<Vec<(String, Option<String>)>> =
@@ -146,7 +144,7 @@ fn connected_via(
         Err(_) => {
             // A refused BLUETOOTH_CONNECT or a disappearing activity: swallow the pending
             // exception and answer with nothing.
-            if env.exception_check().unwrap_or(false) {
+            if env.exception_check() {
                 let _ = env.exception_clear();
             }
             return Ok(Vec::new());
@@ -154,7 +152,7 @@ fn connected_via(
     };
     let text = env.cast_local::<JString>(text)?;
     let text: String = String::from(text.mutf8_chars(env)?);
-    if env.exception_check().unwrap_or(false) {
+    if env.exception_check() {
         let _ = env.exception_clear();
     }
     Ok(parse_connected_devices(&text))
