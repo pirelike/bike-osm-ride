@@ -64,7 +64,7 @@ jobs:
       - name: Name the asset
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$(bash packaging/release_version.sh)"
           mkdir dist
           cp target/release/bike-osm-ride.exe "dist/bike-osm-ride-${version}-windows-x64.exe"
       - uses: actions/upload-artifact@v4
@@ -109,7 +109,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$(bash packaging/release_version.sh)"
           apk="$(find target/dx -name '*.apk' -path '*outputs*' | head -n 1)"
           test -n "$apk"
           mkdir dist
@@ -169,10 +169,10 @@ jobs:
         run: dx bundle --platform linux --package-types appimage --package-types deb --release
       - name: Fallback packaging when the Linux bundler fails
         if: steps.bundle.outcome == 'failure'
-        run: bash packaging/linux/fallback.sh "${GITHUB_REF_NAME#v}" dist
+        run: bash packaging/linux/fallback.sh "$(bash packaging/release_version.sh)" dist
       - name: Name the assets
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$(bash packaging/release_version.sh)"
           mkdir -p dist
           if [ "${{ steps.bundle.outcome }}" = success ] && [ -d target/dx ]; then
             appimage="$(find target/dx -name '*.AppImage' | head -n 1 || true)"
@@ -203,7 +203,7 @@ jobs:
           # The runner is arm64; the Intel half is cross-compiled and `lipo`ed in.
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - name: Universal .app and .dmg
-        run: bash packaging/macos/bundle.sh "${GITHUB_REF_NAME#v}" dist
+        run: bash packaging/macos/bundle.sh "$(bash packaging/release_version.sh)" dist
       # Without the usage description macOS kills the app the moment it touches CoreBluetooth.
       - name: The Bluetooth permission must be in the bundle
         run: |
@@ -213,7 +213,7 @@ jobs:
           test "$(lipo -archs dist/bike-osm-ride.app/Contents/MacOS/bike-osm-ride)" = "x86_64 arm64"
       - name: Name the asset
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$(bash packaging/release_version.sh)"
           mkdir -p dist/out
           mv "dist/bike-osm-ride-${version}-macos-universal.dmg" dist/out/
       - uses: actions/upload-artifact@v4

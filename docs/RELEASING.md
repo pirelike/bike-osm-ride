@@ -36,7 +36,8 @@ asset, verifies SHA-256, checks file magic and a minimum size. There is no publi
 6. GitHub → *Actions* → *release* → *Run workflow*, choosing the **tag** as the ref. The workflow is
    `workflow_dispatch` only; it has not been switched to `push: tags` yet (the comment in the file says to do that
    once a run has been checked end to end). A run on a branch builds the artifacts but publishes nothing: the
-   `release` job runs only when `github.ref` starts with `refs/tags/v`.
+   `release` job runs only when `github.ref` starts with `refs/tags/v`. Asset names use
+   `packaging/release_version.sh`, which refuses a tag that differs from the `Cargo.toml` version.
 7. When it is green, check the release has all six assets (five packages plus `SHA256SUMS`), then download and start the Windows exe once.
 
 **Never move or delete a pushed tag.** A fix after a pushed tag is a new patch version. (`v0.2.0` and `v0.2.2`
@@ -84,8 +85,10 @@ exist as tags without a release because their runs failed; removing a tag is the
 | 0.5.0 (the same dry run) | both macOS jobs ended after one second with no step: "The configuration 'macos-14-arm64-us-default' is not supported", GitHub had retired the image | `macos-15` for the `test` matrix and the `macos` job |
 
 Lesson: run the whole workflow on a branch (it builds everything and publishes nothing) before tagging. It was worth
-it for 0.4.0: Android code is never compiled by a local test run. One expected red on a branch: the Linux fallback
-packaging fails with `'Version' field value 'main'` because the version comes from the ref name; on a tag it is fine.
+it for 0.4.0: Android code is never compiled by a local test run. Until 0.7.0 a branch run always ended red on Linux:
+the fallback packaging failed with `'Version' field value 'main'` because the version came from the ref name. The
+version now comes from `packaging/release_version.sh`: the `Cargo.toml` version on a branch, the tag without its `v`
+on a tag, and a tag that does not match `Cargo.toml` stops the run before anything is published.
 
 ## 6. Known gaps
 
